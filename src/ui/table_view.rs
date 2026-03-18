@@ -165,6 +165,76 @@ pub fn draw_table(
             (state.scroll_x - scroll_delta.x).clamp(0.0, (total_col_width - view_width).max(0.0));
     });
 
+    // Arrow key navigation: move selected cell and auto-scroll into view
+    if state.editing_cell.is_none() {
+        let max_scroll_y = (total_content_height - view_height).max(0.0);
+        let max_scroll_x = (total_col_width - view_width).max(0.0);
+        let data_area_height = view_height - HEADER_HEIGHT - 1.0;
+
+        let arrow_up = ui.input(|i| i.key_pressed(egui::Key::ArrowUp));
+        let arrow_down = ui.input(|i| i.key_pressed(egui::Key::ArrowDown));
+        let arrow_left = ui.input(|i| i.key_pressed(egui::Key::ArrowLeft));
+        let arrow_right = ui.input(|i| i.key_pressed(egui::Key::ArrowRight));
+
+        if arrow_up || arrow_down || arrow_left || arrow_right {
+            let row_count = filtered_rows.len();
+            let col_count = table.col_count();
+            let (cur_row, cur_col) = state.selected_cell.unwrap_or((0, 0));
+
+            // Find display index for current row
+            let cur_display = filtered_rows
+                .iter()
+                .position(|&r| r == cur_row)
+                .unwrap_or(0);
+
+            let mut new_display = cur_display;
+            let mut new_col = cur_col;
+
+            if arrow_up && cur_display > 0 {
+                new_display = cur_display - 1;
+            }
+            if arrow_down && cur_display + 1 < row_count {
+                new_display = cur_display + 1;
+            }
+            if arrow_left && cur_col > 0 {
+                new_col = cur_col - 1;
+            }
+            if arrow_right && cur_col + 1 < col_count {
+                new_col = cur_col + 1;
+            }
+
+            let new_row = filtered_rows[new_display];
+            state.selected_cell = Some((new_row, new_col));
+            state.selected_rows.clear();
+            state.selected_cols.clear();
+
+            // Auto-scroll vertically to keep the selected row visible
+            let row_top = new_display as f32 * ROW_HEIGHT;
+            let row_bottom = row_top + ROW_HEIGHT;
+            if row_top < state.scroll_y {
+                state.scroll_y = row_top;
+            } else if row_bottom > state.scroll_y + data_area_height {
+                state.scroll_y = row_bottom - data_area_height;
+            }
+            state.scroll_y = state.scroll_y.clamp(0.0, max_scroll_y);
+
+            // Auto-scroll horizontally to keep the selected column visible
+            let col_left: f32 = state.col_widths[..new_col].iter().sum();
+            let col_right = col_left
+                + state
+                    .col_widths
+                    .get(new_col)
+                    .copied()
+                    .unwrap_or(DEFAULT_COL_WIDTH);
+            if col_left < state.scroll_x {
+                state.scroll_x = col_left;
+            } else if col_right > state.scroll_x + (view_width - ROW_NUMBER_WIDTH) {
+                state.scroll_x = col_right - (view_width - ROW_NUMBER_WIDTH);
+            }
+            state.scroll_x = state.scroll_x.clamp(0.0, max_scroll_x);
+        }
+    }
+
     // Ctrl+C / Ctrl+V
     let ctrl_held = ui.input(|i| i.modifiers.command);
     if ctrl_held && ui.input(|i| i.key_pressed(egui::Key::C)) {
