@@ -1,4 +1,13 @@
+pub mod arrow_ipc_reader;
+pub mod avro_reader;
+pub mod csv_reader;
+pub mod excel_reader;
+pub mod json_reader;
 pub mod parquet_reader;
+pub mod pdf_reader;
+pub mod toml_reader;
+pub mod xml_reader;
+pub mod yaml_reader;
 
 use crate::data::DataTable;
 use anyhow::Result;
@@ -27,6 +36,11 @@ pub trait FormatReader: Send + Sync {
     fn supports_write(&self) -> bool {
         false
     }
+
+    /// Whether this format is text-based (supports raw text view).
+    fn is_text_format(&self) -> bool {
+        false
+    }
 }
 
 /// Registry of all available format readers.
@@ -41,9 +55,19 @@ impl FormatRegistry {
         let mut registry = Self {
             readers: Vec::new(),
         };
-        // Register built-in formats here.
-        // To add a new format, just add another line:
+        // Register built-in formats
         registry.register(Box::new(parquet_reader::ParquetReader));
+        registry.register(Box::new(csv_reader::CsvReader));
+        registry.register(Box::new(csv_reader::TsvReader));
+        registry.register(Box::new(json_reader::JsonReader));
+        registry.register(Box::new(json_reader::JsonlReader));
+        registry.register(Box::new(excel_reader::ExcelReader));
+        registry.register(Box::new(avro_reader::AvroReader));
+        registry.register(Box::new(arrow_ipc_reader::ArrowIpcReader));
+        registry.register(Box::new(xml_reader::XmlFormatReader));
+        registry.register(Box::new(pdf_reader::PdfReader));
+        registry.register(Box::new(toml_reader::TomlReader));
+        registry.register(Box::new(yaml_reader::YamlReader));
         registry
     }
 
@@ -74,6 +98,14 @@ impl FormatRegistry {
                     r.extensions().iter().map(|e| e.to_string()).collect(),
                 )
             })
+            .collect()
+    }
+
+    /// Build a combined filter string with all supported extensions.
+    pub fn all_extensions(&self) -> Vec<String> {
+        self.readers
+            .iter()
+            .flat_map(|r| r.extensions().iter().map(|e| e.to_string()))
             .collect()
     }
 }

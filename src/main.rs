@@ -2,7 +2,7 @@ mod data;
 mod formats;
 mod ui;
 
-use data::DataTable;
+use data::{DataTable, ViewMode};
 use formats::FormatRegistry;
 use ui::table_view::TableViewState;
 use ui::theme::ThemeMode;
@@ -18,21 +18,21 @@ fn main() -> eframe::Result<()> {
             .with_inner_size([3840.0, 2160.0])
             .with_min_inner_size([800.0, 600.0])
             .with_maximized(true)
-            .with_title("Rusty Viewer"),
+            .with_title("Datox"),
         ..Default::default()
     };
 
     eframe::run_native(
-        "Rusty Viewer",
+        "Datox",
         options,
         Box::new(|cc| {
             ui::theme::apply_theme(&cc.egui_ctx, ThemeMode::Dark);
-            Ok(Box::new(RustyViewerApp::new()))
+            Ok(Box::new(DatoxApp::new()))
         }),
     )
 }
 
-struct RustyViewerApp {
+struct DatoxApp {
     table: DataTable,
     registry: FormatRegistry,
     theme_mode: ThemeMode,
@@ -57,6 +57,12 @@ struct RustyViewerApp {
     confirmed_close: bool,
     /// System clipboard handle (shared, lazily initialized)
     os_clipboard: Option<Arc<Mutex<arboard::Clipboard>>>,
+    /// Current view mode (Table or Raw)
+    view_mode: ViewMode,
+    /// Raw file content for text-based formats
+    raw_content: Option<String>,
+    /// Whether raw content has been modified
+    raw_content_modified: bool,
 }
 
 const COLUMN_TYPES: &[&str] = &[
@@ -68,7 +74,10 @@ const COLUMN_TYPES: &[&str] = &[
     "Timestamp(Microsecond, None)",
 ];
 
-impl RustyViewerApp {
+/// Maximum file size (in bytes) for which raw text content is loaded.
+const MAX_RAW_SIZE: u64 = 10 * 1024 * 1024; // 10 MB
+
+impl DatoxApp {
     fn new() -> Self {
         Self {
             table: DataTable::empty(),
@@ -90,6 +99,9 @@ impl RustyViewerApp {
             os_clipboard: arboard::Clipboard::new()
                 .ok()
                 .map(|c| Arc::new(Mutex::new(c))),
+            view_mode: ViewMode::Table,
+            raw_content: None,
+            raw_content_modified: false,
         }
     }
 
@@ -220,6 +232,12 @@ impl RustyViewerApp {
 
     fn open_file(&mut self) {
         let mut dialog = rfd::FileDialog::new();
+
+        // Add "All Supported" filter first
+        let all_exts = self.registry.all_extensions();
+        let all_ext_refs: Vec<&str> = all_exts.iter().map(|s| s.as_str()).collect();
+        dialog = dialog.add_filter("All Supported", &all_ext_refs);
+
         for (name, exts) in self.registry.format_descriptions() {
             let ext_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
             dialog = dialog.add_filter(&name, &ext_refs);
@@ -236,6 +254,16 @@ impl RustyViewerApp {
                         self.search_text.clear();
                         self.filter_dirty = true;
                         self.status_message = None;
+
+                        // Load raw content for text-based formats
+                        let metadata = std::fs::metadata(&path);
+                        if metadata.map(|m| m.len() <= MAX_RAW_SIZE).unwrap_or(false) {
+                            self.raw_content = std::fs::read_to_string(&path).ok();
+                        } else {
+                            self.raw_content = None;
+                        }
+                        self.view_mode = ViewMode::Table;
+                        self.raw_content_modified = false;
                     }
                     Err(e) => {
                         self.status_message = Some((
@@ -284,6 +312,29 @@ impl RustyViewerApp {
     }
 
     fn do_save(&mut self, path: std::path::PathBuf) {
+        // If raw content was modified, write it directly to the file
+        if self.raw_content_modified {
+            if let Some(ref content) = self.raw_content {
+                match std::fs::write(&path, content) {
+                    Ok(()) => {
+                        self.table.source_path = Some(path.to_string_lossy().to_string());
+                        self.raw_content_modified = false;
+                        self.status_message = Some((
+                            format!("Saved to {}", path.display()),
+                            std::time::Instant::now(),
+                        ));
+                    }
+                    Err(e) => {
+                        self.status_message = Some((
+                            format!("Error saving file: {}", e),
+                            std::time::Instant::now(),
+                        ));
+                    }
+                }
+                return;
+            }
+        }
+
         match self.registry.reader_for_path(&path) {
             Some(reader) => {
                 if !reader.supports_write() {
@@ -398,11 +449,11 @@ impl RustyViewerApp {
     }
 }
 
-impl eframe::App for RustyViewerApp {
+impl eframe::App for DatoxApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // --- Handle close request ---
         if ctx.input(|i| i.viewport().close_requested()) {
-            if self.table.is_modified() && !self.confirmed_close {
+            if (self.table.is_modified() || self.raw_content_modified) && !self.confirmed_close {
                 // Block the close and show our dialog
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 self.show_close_confirm = true;
@@ -432,6 +483,8 @@ impl eframe::App for RustyViewerApp {
                     self.table_state.selected_cell,
                     self.table.row_count(),
                     self.table.col_count(),
+                    self.view_mode,
+                    self.raw_content.is_some(),
                 );
 
                 if action.open_file {
@@ -449,6 +502,11 @@ impl eframe::App for RustyViewerApp {
                 }
                 if action.search_changed {
                     self.filter_dirty = true;
+                }
+
+                // --- View mode change ---
+                if let Some(new_mode) = action.view_mode_changed {
+                    self.view_mode = new_mode;
                 }
 
                 // --- Row operations ---
@@ -748,7 +806,7 @@ impl eframe::App for RustyViewerApp {
                 );
             });
 
-        // Central panel: table view
+        // Central panel: table view or raw text view
         egui::CentralPanel::default().show(ctx, |ui| {
             // Show status message if any
             if let Some((ref msg, instant)) = self.status_message {
@@ -772,6 +830,36 @@ impl eframe::App for RustyViewerApp {
                 self.recompute_filter();
             }
 
+            // --- Raw text view ---
+            if self.view_mode == ViewMode::Raw {
+                if let Some(ref mut content) = self.raw_content {
+                    let colors = ui::theme::ThemeColors::for_mode(self.theme_mode);
+                    egui::ScrollArea::both()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            let response = ui.add(
+                                egui::TextEdit::multiline(content)
+                                    .font(egui::FontId::new(13.0, egui::FontFamily::Monospace))
+                                    .desired_width(f32::INFINITY)
+                                    .text_color(colors.text_primary),
+                            );
+                            if response.changed() {
+                                self.raw_content_modified = true;
+                            }
+                        });
+                } else {
+                    ui.centered_and_justified(|ui| {
+                        ui.label(
+                            RichText::new("Raw text view is not available for binary formats")
+                                .size(16.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                    });
+                }
+                return;
+            }
+
+            // --- Table view ---
             let filtered = self.filtered_rows.clone();
             let os_has_clip = self.table_state.clipboard.is_some() || self.os_clipboard_has_text();
             let interaction = ui::table_view::draw_table(

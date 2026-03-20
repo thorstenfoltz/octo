@@ -1,6 +1,7 @@
 use egui::{Align, Layout, RichText, Ui};
 
 use super::theme::{ThemeColors, ThemeMode};
+use crate::data::ViewMode;
 
 pub struct ToolbarAction {
     pub open_file: bool,
@@ -19,6 +20,7 @@ pub struct ToolbarAction {
     pub sort_rows_asc_by: Option<usize>,
     pub sort_rows_desc_by: Option<usize>,
     pub discard_edits: bool,
+    pub view_mode_changed: Option<ViewMode>,
 }
 
 impl Default for ToolbarAction {
@@ -40,10 +42,12 @@ impl Default for ToolbarAction {
             sort_rows_asc_by: None,
             sort_rows_desc_by: None,
             discard_edits: false,
+            view_mode_changed: None,
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn draw_toolbar(
     ui: &mut Ui,
     theme_mode: ThemeMode,
@@ -54,6 +58,8 @@ pub fn draw_toolbar(
     selected_cell: Option<(usize, usize)>,
     row_count: usize,
     col_count: usize,
+    current_view_mode: ViewMode,
+    has_raw_content: bool,
 ) -> ToolbarAction {
     let mut action = ToolbarAction::default();
     let colors = ThemeColors::for_mode(theme_mode);
@@ -64,7 +70,7 @@ pub fn draw_toolbar(
 
         // App title
         ui.label(
-            RichText::new("Rusty Viewer")
+            RichText::new("Datox")
                 .strong()
                 .size(15.0)
                 .color(colors.accent),
@@ -190,6 +196,23 @@ pub fn draw_toolbar(
                         action.discard_edits = true;
                         ui.close_menu();
                     }
+                }
+            });
+
+            // --- View menu ---
+            ui.menu_button(RichText::new("View").color(colors.text_primary), |ui| {
+                let is_table = current_view_mode == ViewMode::Table;
+                let is_raw = current_view_mode == ViewMode::Raw;
+
+                if ui.radio(is_table, "Table View").clicked() {
+                    action.view_mode_changed = Some(ViewMode::Table);
+                    ui.close_menu();
+                }
+                let raw_btn =
+                    ui.add_enabled(has_raw_content, egui::RadioButton::new(is_raw, "Raw Text"));
+                if raw_btn.clicked() {
+                    action.view_mode_changed = Some(ViewMode::Raw);
+                    ui.close_menu();
                 }
             });
 

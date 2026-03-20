@@ -1,8 +1,12 @@
 [package]
-name = "rusty-viewer"
+name = "datox"
 version = "0.1.0"
 edition = "2021"
 description = "A modular multi-format data viewer and editor"
+
+[[bin]]
+name = "datox"
+path = "src/main.rs"
 
 [profile.release]
 lto = true
@@ -17,7 +21,15 @@ parquet = { version = "54", features = ["default"] }
 arrow = { version = "54", features = ["default"] }
 rfd = "0.15"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
+pdf-extract = "0.7"
+printpdf = "0.7"
 chrono = "0.4"
 anyhow = "1"
 arboard = "3"
+csv = "1"
+calamine = "0.26"
+apache-avro = "0.17"
+quick-xml = "0.37"
+toml = "0.8"
+serde_yaml = "0.9"

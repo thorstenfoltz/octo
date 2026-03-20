@@ -74,7 +74,7 @@ impl FormatReader for ParquetReader {
 }
 
 /// Convert an Arrow array value at a given index to a CellValue.
-fn arrow_value_to_cell(array: &dyn Array, idx: usize) -> CellValue {
+pub fn arrow_value_to_cell(array: &dyn Array, idx: usize) -> CellValue {
     if array.is_null(idx) {
         return CellValue::Null;
     }
@@ -232,7 +232,7 @@ fn arrow_value_to_cell(array: &dyn Array, idx: usize) -> CellValue {
 }
 
 /// Map a DataTable data_type string back to an Arrow DataType.
-fn data_type_from_string(s: &str) -> DataType {
+pub fn data_type_from_string(s: &str) -> DataType {
     match s.to_lowercase().as_str() {
         "boolean" | "bool" => DataType::Boolean,
         "int8" => DataType::Int8,
@@ -288,7 +288,7 @@ fn write_parquet(path: &Path, table: &DataTable) -> Result<()> {
 }
 
 /// Build an Arrow array from a column of the DataTable.
-fn build_arrow_array(
+pub fn build_arrow_array(
     arrow_type: &DataType,
     table: &DataTable,
     col_idx: usize,

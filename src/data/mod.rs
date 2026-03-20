@@ -1,6 +1,15 @@
 use std::collections::HashMap;
 use std::fmt;
 
+/// How to display the loaded file content.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewMode {
+    /// Structured tabular view (default).
+    Table,
+    /// Raw text view of the file content (like a text editor).
+    Raw,
+}
+
 /// Represents a single cell value in the data table.
 /// Supports structured (typed columns) and semi-structured (mixed types) data.
 #[derive(Debug, Clone, PartialEq)]
