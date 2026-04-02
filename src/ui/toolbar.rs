@@ -60,6 +60,8 @@ pub fn draw_toolbar(
     col_count: usize,
     current_view_mode: ViewMode,
     has_raw_content: bool,
+    has_pdf_pages: bool,
+    logo_texture: Option<&egui::TextureHandle>,
 ) -> ToolbarAction {
     let mut action = ToolbarAction::default();
     let colors = ThemeColors::for_mode(theme_mode);
@@ -68,9 +70,12 @@ pub fn draw_toolbar(
     ui.horizontal(|ui| {
         ui.add_space(4.0);
 
-        // App title
+        // App logo + title
+        if let Some(tex) = logo_texture {
+            ui.image(egui::load::SizedTexture::new(tex.id(), [20.0, 20.0]));
+        }
         ui.label(
-            RichText::new("Datox")
+            RichText::new("Octo")
                 .strong()
                 .size(15.0)
                 .color(colors.accent),
@@ -203,6 +208,7 @@ pub fn draw_toolbar(
             ui.menu_button(RichText::new("View").color(colors.text_primary), |ui| {
                 let is_table = current_view_mode == ViewMode::Table;
                 let is_raw = current_view_mode == ViewMode::Raw;
+                let is_pdf = current_view_mode == ViewMode::Pdf;
 
                 if ui.radio(is_table, "Table View").clicked() {
                     action.view_mode_changed = Some(ViewMode::Table);
@@ -213,6 +219,13 @@ pub fn draw_toolbar(
                 if raw_btn.clicked() {
                     action.view_mode_changed = Some(ViewMode::Raw);
                     ui.close_menu();
+                }
+                if has_pdf_pages {
+                    let pdf_btn = ui.radio(is_pdf, "PDF View");
+                    if pdf_btn.clicked() {
+                        action.view_mode_changed = Some(ViewMode::Pdf);
+                        ui.close_menu();
+                    }
                 }
             });
 

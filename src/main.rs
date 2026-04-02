@@ -12,27 +12,52 @@ use egui::RichText;
 
 use std::sync::{Arc, Mutex};
 
+const OCTO_SVG: &str = include_str!("../assets/octo.svg");
+
+fn render_icon() -> egui::IconData {
+    let opt = resvg::usvg::Options::default();
+    let tree = resvg::usvg::Tree::from_str(OCTO_SVG, &opt).expect("Failed to parse SVG");
+    let icon_size = 256u32;
+    let mut pixmap =
+        resvg::tiny_skia::Pixmap::new(icon_size, icon_size).expect("Failed to create pixmap");
+    let size = tree.size();
+    let sx = icon_size as f32 / size.width();
+    let sy = icon_size as f32 / size.height();
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::from_scale(sx, sy),
+        &mut pixmap.as_mut(),
+    );
+    egui::IconData {
+        rgba: pixmap.data().to_vec(),
+        width: icon_size,
+        height: icon_size,
+    }
+}
+
 fn main() -> eframe::Result<()> {
+    let icon = render_icon();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([3840.0, 2160.0])
             .with_min_inner_size([800.0, 600.0])
             .with_maximized(true)
-            .with_title("Datox"),
+            .with_title("Octo")
+            .with_icon(Arc::new(icon)),
         ..Default::default()
     };
 
     eframe::run_native(
-        "Datox",
+        "Octo",
         options,
         Box::new(|cc| {
-            ui::theme::apply_theme(&cc.egui_ctx, ThemeMode::Dark);
-            Ok(Box::new(DatoxApp::new()))
+            ui::theme::apply_theme(&cc.egui_ctx, ThemeMode::Light);
+            Ok(Box::new(OctoApp::new()))
         }),
     )
 }
 
-struct DatoxApp {
+struct OctoApp {
     table: DataTable,
     registry: FormatRegistry,
     theme_mode: ThemeMode,
@@ -57,12 +82,144 @@ struct DatoxApp {
     confirmed_close: bool,
     /// System clipboard handle (shared, lazily initialized)
     os_clipboard: Option<Arc<Mutex<arboard::Clipboard>>>,
-    /// Current view mode (Table or Raw)
+    /// Current view mode (Table, Raw, or Pdf)
     view_mode: ViewMode,
     /// Raw file content for text-based formats
     raw_content: Option<String>,
     /// Whether raw content has been modified
     raw_content_modified: bool,
+    /// Rendered PDF page images (loaded on file open, textures created lazily)
+    pdf_page_images: Vec<egui::ColorImage>,
+    /// Texture handles for rendered PDF pages
+    pdf_textures: Vec<egui::TextureHandle>,
+    /// Logo texture for toolbar
+    logo_texture: Option<egui::TextureHandle>,
+    /// Whether raw view shows aligned/formatted columns
+    raw_view_formatted: bool,
+    /// CSV delimiter used for current file
+    csv_delimiter: u8,
+    /// Background loading: shared buffer for incoming rows
+    bg_row_buffer: Option<Arc<Mutex<Vec<Vec<data::CellValue>>>>>,
+    /// Background loading: flag indicating loading is complete
+    bg_loading_done: Arc<std::sync::atomic::AtomicBool>,
+}
+
+/// Detect delimiter from file content (same logic as csv_reader but operates on a string).
+fn detect_delimiter_from_content(content: &str) -> u8 {
+    let lines: Vec<&str> = content.lines().take(20).collect();
+    if lines.is_empty() {
+        return b',';
+    }
+    let candidates: &[u8] = &[b',', b';', b'|', b'\t'];
+    let mut best: Option<(u8, usize)> = None;
+    for &delim in candidates {
+        let delim_char = delim as char;
+        let counts: Vec<usize> = lines.iter().map(|l| l.matches(delim_char).count()).collect();
+        if counts[0] == 0 {
+            continue;
+        }
+        let header_count = counts[0];
+        let consistent = counts.iter().all(|&c| c == header_count || c == 0);
+        if consistent {
+            if best.is_none() || header_count > best.unwrap().1 {
+                best = Some((delim, header_count));
+            }
+        }
+    }
+    best.map(|(d, _)| d).unwrap_or(b',')
+}
+
+/// Format delimited text by aligning columns with spaces.
+/// Background-load remaining Parquet rows after the initial batch.
+/// Writes batches of rows into the shared buffer, which the UI thread drains.
+fn load_remaining_parquet_rows(
+    path: &std::path::Path,
+    skip_rows: usize,
+    buffer: Arc<Mutex<Vec<Vec<data::CellValue>>>>,
+    done: Arc<std::sync::atomic::AtomicBool>,
+) -> anyhow::Result<()> {
+    use formats::parquet_reader::arrow_value_to_cell;
+    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+
+    let file = std::fs::File::open(path)?;
+    let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
+    let reader = builder.with_batch_size(8192).build()?;
+
+    let mut skipped = 0usize;
+    let flush_threshold = 50_000;
+
+    let mut batch_buf = Vec::with_capacity(flush_threshold);
+
+    for batch_result in reader {
+        let batch = batch_result?;
+        let num_rows = batch.num_rows();
+        let num_cols = batch.num_columns();
+
+        for row_idx in 0..num_rows {
+            if skipped < skip_rows {
+                skipped += 1;
+                continue;
+            }
+            let mut row = Vec::with_capacity(num_cols);
+            for col_idx in 0..num_cols {
+                let array = batch.column(col_idx);
+                row.push(arrow_value_to_cell(array, row_idx));
+            }
+            batch_buf.push(row);
+
+            if batch_buf.len() >= flush_threshold {
+                if let Ok(mut buf) = buffer.lock() {
+                    buf.append(&mut batch_buf);
+                }
+                batch_buf = Vec::with_capacity(flush_threshold);
+            }
+        }
+    }
+
+    // Flush remaining
+    if !batch_buf.is_empty() {
+        if let Ok(mut buf) = buffer.lock() {
+            buf.append(&mut batch_buf);
+        }
+    }
+
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
+fn format_delimited_text(content: &str, delimiter: char) -> String {
+    let lines: Vec<Vec<&str>> = content
+        .lines()
+        .map(|line| line.split(delimiter).collect())
+        .collect();
+    if lines.is_empty() {
+        return content.to_string();
+    }
+    let max_cols = lines.iter().map(|l| l.len()).max().unwrap_or(0);
+    let mut widths = vec![0usize; max_cols];
+    for line in &lines {
+        for (i, cell) in line.iter().enumerate() {
+            widths[i] = widths[i].max(cell.trim().len());
+        }
+    }
+    lines
+        .iter()
+        .map(|line| {
+            line.iter()
+                .enumerate()
+                .map(|(i, cell)| {
+                    let trimmed = cell.trim();
+                    if i < line.len() - 1 {
+                        format!("{:<width$}", trimmed, width = widths[i])
+                    } else {
+                        trimmed.to_string()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(&format!("{} ", delimiter))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 const COLUMN_TYPES: &[&str] = &[
@@ -74,15 +231,13 @@ const COLUMN_TYPES: &[&str] = &[
     "Timestamp(Microsecond, None)",
 ];
 
-/// Maximum file size (in bytes) for which raw text content is loaded.
-const MAX_RAW_SIZE: u64 = 10 * 1024 * 1024; // 10 MB
 
-impl DatoxApp {
+impl OctoApp {
     fn new() -> Self {
         Self {
             table: DataTable::empty(),
             registry: FormatRegistry::new(),
-            theme_mode: ThemeMode::Dark,
+            theme_mode: ThemeMode::Light,
             table_state: TableViewState::default(),
             search_text: String::new(),
             filtered_rows: Vec::new(),
@@ -102,6 +257,13 @@ impl DatoxApp {
             view_mode: ViewMode::Table,
             raw_content: None,
             raw_content_modified: false,
+            pdf_page_images: Vec::new(),
+            pdf_textures: Vec::new(),
+            logo_texture: None,
+            raw_view_formatted: false,
+            csv_delimiter: b',',
+            bg_row_buffer: None,
+            bg_loading_done: Arc::new(std::sync::atomic::AtomicBool::new(true)),
         }
     }
 
@@ -253,17 +415,70 @@ impl DatoxApp {
                         self.table_state = TableViewState::default();
                         self.search_text.clear();
                         self.filter_dirty = true;
-                        self.status_message = None;
+                        // Start background loading for remaining rows if truncated
+                        if let Some(total) = self.table.total_rows {
+                            let loaded = self.table.row_count();
+                            self.status_message = Some((
+                                format!(
+                                    "Loading... {} of {} rows loaded",
+                                    loaded, total
+                                ),
+                                std::time::Instant::now(),
+                            ));
+                            // Set up background loading
+                            let buffer = Arc::new(Mutex::new(Vec::<Vec<data::CellValue>>::new()));
+                            let done_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                            self.bg_row_buffer = Some(buffer.clone());
+                            self.bg_loading_done = done_flag.clone();
+                            let bg_path = path.clone();
+                            let skip_rows = loaded;
+                            std::thread::spawn(move || {
+                                if let Err(e) = load_remaining_parquet_rows(
+                                    &bg_path,
+                                    skip_rows,
+                                    buffer,
+                                    done_flag,
+                                ) {
+                                    eprintln!("Background loading error: {}", e);
+                                }
+                            });
+                        } else {
+                            self.status_message = None;
+                            self.bg_row_buffer = None;
+                            self.bg_loading_done
+                                .store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
+                        self.raw_view_formatted = false;
+
+                        // Detect and store CSV delimiter
+                        if self.table.format_name.as_deref() == Some("CSV") {
+                            self.csv_delimiter = detect_delimiter_from_content(
+                                &std::fs::read_to_string(&path).unwrap_or_default(),
+                            );
+                        } else if self.table.format_name.as_deref() == Some("TSV") {
+                            self.csv_delimiter = b'\t';
+                        }
 
                         // Load raw content for text-based formats
-                        let metadata = std::fs::metadata(&path);
-                        if metadata.map(|m| m.len() <= MAX_RAW_SIZE).unwrap_or(false) {
-                            self.raw_content = std::fs::read_to_string(&path).ok();
-                        } else {
-                            self.raw_content = None;
-                        }
-                        self.view_mode = ViewMode::Table;
+                        self.raw_content = std::fs::read_to_string(&path).ok();
                         self.raw_content_modified = false;
+
+                        // For PDFs, render pages visually and default to Pdf view
+                        self.pdf_page_images.clear();
+                        self.pdf_textures.clear();
+                        if self.table.format_name.as_deref() == Some("PDF") {
+                            match formats::pdf_reader::render_pdf_pages(&path, 2.0) {
+                                Ok(images) => {
+                                    self.pdf_page_images = images;
+                                    self.view_mode = ViewMode::Pdf;
+                                }
+                                Err(_) => {
+                                    self.view_mode = ViewMode::Table;
+                                }
+                            }
+                        } else {
+                            self.view_mode = ViewMode::Table;
+                        }
                     }
                     Err(e) => {
                         self.status_message = Some((
@@ -333,6 +548,28 @@ impl DatoxApp {
                 }
                 return;
             }
+        }
+
+        // For CSV files with a custom delimiter, use write_delimited directly
+        if self.table.format_name.as_deref() == Some("CSV") && self.csv_delimiter != b',' {
+            self.table.apply_edits();
+            match formats::csv_reader::write_delimited(&path, self.csv_delimiter, &self.table) {
+                Ok(()) => {
+                    self.table.source_path = Some(path.to_string_lossy().to_string());
+                    self.table.clear_modified();
+                    self.status_message = Some((
+                        format!("Saved to {}", path.display()),
+                        std::time::Instant::now(),
+                    ));
+                }
+                Err(e) => {
+                    self.status_message = Some((
+                        format!("Error saving file: {}", e),
+                        std::time::Instant::now(),
+                    ));
+                }
+            }
+            return;
         }
 
         match self.registry.reader_for_path(&path) {
@@ -449,7 +686,7 @@ impl DatoxApp {
     }
 }
 
-impl eframe::App for DatoxApp {
+impl eframe::App for OctoApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // --- Handle close request ---
         if ctx.input(|i| i.viewport().close_requested()) {
@@ -459,6 +696,48 @@ impl eframe::App for DatoxApp {
                 self.show_close_confirm = true;
             }
             // If confirmed_close is true, we just let it close
+        }
+
+        // Drain background-loaded rows into the table
+        if let Some(ref buffer) = self.bg_row_buffer {
+            let mut drained = false;
+            if let Ok(mut buf) = buffer.try_lock() {
+                if !buf.is_empty() {
+                    self.table.rows.append(&mut *buf);
+                    drained = true;
+                }
+            }
+            let loading_done = self
+                .bg_loading_done
+                .load(std::sync::atomic::Ordering::Relaxed);
+            if drained {
+                self.filter_dirty = true;
+                if let Some(total) = self.table.total_rows {
+                    if loading_done {
+                        self.status_message = Some((
+                            format!("Loaded all {} rows", self.table.row_count()),
+                            std::time::Instant::now(),
+                        ));
+                        self.table.total_rows = None;
+                    } else {
+                        self.status_message = Some((
+                            format!(
+                                "Loading... {} of {} rows",
+                                self.table.row_count(),
+                                total
+                            ),
+                            std::time::Instant::now(),
+                        ));
+                    }
+                }
+            }
+            if loading_done {
+                self.bg_row_buffer = None;
+            }
+            // Request repaint to keep draining
+            if !loading_done {
+                ctx.request_repaint();
+            }
         }
 
         // Recompute filter if needed
@@ -473,6 +752,27 @@ impl eframe::App for DatoxApp {
         egui::TopBottomPanel::top("toolbar")
             .exact_height(40.0)
             .show(ctx, |ui| {
+                // Lazily create logo texture
+                if self.logo_texture.is_none() {
+                    let opt = resvg::usvg::Options::default();
+                    if let Ok(tree) = resvg::usvg::Tree::from_str(OCTO_SVG, &opt) {
+                        let size = tree.size();
+                        let (w, h) = (size.width() as u32, size.height() as u32);
+                        if let Some(mut pixmap) = resvg::tiny_skia::Pixmap::new(w, h) {
+                            resvg::render(&tree, resvg::tiny_skia::Transform::default(), &mut pixmap.as_mut());
+                            let image = egui::ColorImage::from_rgba_unmultiplied(
+                                [w as usize, h as usize],
+                                pixmap.data(),
+                            );
+                            self.logo_texture = Some(ctx.load_texture(
+                                "octo_logo",
+                                image,
+                                egui::TextureOptions::LINEAR,
+                            ));
+                        }
+                    }
+                }
+
                 let action = ui::toolbar::draw_toolbar(
                     ui,
                     self.theme_mode,
@@ -485,6 +785,8 @@ impl eframe::App for DatoxApp {
                     self.table.col_count(),
                     self.view_mode,
                     self.raw_content.is_some(),
+                    !self.pdf_page_images.is_empty(),
+                    self.logo_texture.as_ref(),
                 );
 
                 if action.open_file {
@@ -830,22 +1132,169 @@ impl eframe::App for DatoxApp {
                 self.recompute_filter();
             }
 
-            // --- Raw text view ---
-            if self.view_mode == ViewMode::Raw {
-                if let Some(ref mut content) = self.raw_content {
+            // --- PDF rendered view ---
+            if self.view_mode == ViewMode::Pdf {
+                // Lazily create textures from rendered images
+                if self.pdf_textures.len() != self.pdf_page_images.len() {
+                    self.pdf_textures.clear();
+                    for (i, image) in self.pdf_page_images.iter().enumerate() {
+                        let texture = ctx.load_texture(
+                            format!("pdf_page_{}", i),
+                            image.clone(),
+                            egui::TextureOptions::LINEAR,
+                        );
+                        self.pdf_textures.push(texture);
+                    }
+                }
+
+                if self.pdf_textures.is_empty() {
+                    ui.centered_and_justified(|ui| {
+                        ui.label(
+                            RichText::new("No PDF pages to display")
+                                .size(16.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                    });
+                } else {
                     let colors = ui::theme::ThemeColors::for_mode(self.theme_mode);
                     egui::ScrollArea::both()
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            let response = ui.add(
-                                egui::TextEdit::multiline(content)
-                                    .font(egui::FontId::new(13.0, egui::FontFamily::Monospace))
-                                    .desired_width(f32::INFINITY)
-                                    .text_color(colors.text_primary),
-                            );
-                            if response.changed() {
-                                self.raw_content_modified = true;
+                            ui.vertical_centered(|ui| {
+                                for texture in &self.pdf_textures {
+                                    let size = texture.size_vec2();
+                                    // Add a subtle border/shadow around each page
+                                    egui::Frame::new()
+                                        .fill(egui::Color32::WHITE)
+                                        .shadow(egui::epaint::Shadow {
+                                            offset: [2, 2],
+                                            blur: 8,
+                                            spread: 0,
+                                            color: colors.border.gamma_multiply(0.5),
+                                        })
+                                        .show(ui, |ui| {
+                                            ui.image(egui::load::SizedTexture::new(
+                                                texture.id(),
+                                                size,
+                                            ));
+                                        });
+                                    ui.add_space(12.0);
+                                }
+                            });
+                        });
+                }
+                return;
+            }
+
+            // --- Raw text view ---
+            if self.view_mode == ViewMode::Raw {
+                if let Some(ref mut content) = self.raw_content {
+                    let colors = ui::theme::ThemeColors::for_mode(self.theme_mode);
+
+                    // Toolbar for CSV/TSV: align columns + delimiter selector
+                    let is_csv = self.table.format_name.as_deref() == Some("CSV");
+                    let is_tsv = self.table.format_name.as_deref() == Some("TSV");
+                    if is_csv || is_tsv {
+                        ui.horizontal(|ui| {
+                            if ui
+                                .checkbox(&mut self.raw_view_formatted, "Align Columns")
+                                .changed()
+                            {
+                                if self.raw_view_formatted {
+                                    let delim = self.csv_delimiter as char;
+                                    *content = format_delimited_text(content, delim);
+                                    self.raw_content_modified = true;
+                                }
                             }
+                            ui.add_space(16.0);
+                            if is_csv {
+                                ui.label("Delimiter:");
+                                let delim_label = match self.csv_delimiter {
+                                    b',' => "Comma (,)",
+                                    b';' => "Semicolon (;)",
+                                    b'|' => "Pipe (|)",
+                                    b'\t' => "Tab (\\t)",
+                                    _ => "Comma (,)",
+                                };
+                                egui::ComboBox::from_id_salt("csv_delimiter_combo")
+                                    .selected_text(delim_label)
+                                    .show_ui(ui, |ui| {
+                                        let options: &[(u8, &str)] = &[
+                                            (b',', "Comma (,)"),
+                                            (b';', "Semicolon (;)"),
+                                            (b'|', "Pipe (|)"),
+                                            (b'\t', "Tab (\\t)"),
+                                        ];
+                                        for &(delim, label) in options {
+                                            if ui
+                                                .selectable_value(
+                                                    &mut self.csv_delimiter,
+                                                    delim,
+                                                    label,
+                                                )
+                                                .clicked()
+                                            {
+                                                self.raw_content_modified = true;
+                                            }
+                                        }
+                                    });
+                            }
+                        });
+                        ui.add_space(2.0);
+                    }
+
+                    // Line numbers + text editor side by side
+                    let line_count = content.lines().count().max(1);
+                    let line_num_text: String = (1..=line_count)
+                        .map(|n| format!("{:>width$}", n, width = line_count.to_string().len()))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    let line_num_width =
+                        line_count.to_string().len() as f32 * 8.0 + 16.0;
+
+                    egui::ScrollArea::both()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.horizontal_top(|ui| {
+                                // Line numbers column (non-editable)
+                                ui.add_sized(
+                                    [line_num_width, ui.available_height()],
+                                    egui::TextEdit::multiline(&mut line_num_text.clone())
+                                        .font(egui::FontId::new(
+                                            13.0,
+                                            egui::FontFamily::Monospace,
+                                        ))
+                                        .interactive(false)
+                                        .desired_width(line_num_width)
+                                        .text_color(colors.text_muted)
+                                        .frame(false),
+                                );
+                                // Separator line
+                                ui.add_space(2.0);
+                                let sep_rect = egui::Rect::from_min_size(
+                                    ui.cursor().left_top(),
+                                    egui::vec2(1.0, ui.available_height()),
+                                );
+                                ui.painter().rect_filled(
+                                    sep_rect,
+                                    0.0,
+                                    colors.border,
+                                );
+                                ui.add_space(4.0);
+                                // Text editor
+                                let response = ui.add(
+                                    egui::TextEdit::multiline(content)
+                                        .font(egui::FontId::new(
+                                            13.0,
+                                            egui::FontFamily::Monospace,
+                                        ))
+                                        .desired_width(f32::INFINITY)
+                                        .text_color(colors.text_primary),
+                                );
+                                if response.changed() {
+                                    self.raw_content_modified = true;
+                                }
+                            });
                         });
                 } else {
                     ui.centered_and_justified(|ui| {
@@ -907,6 +1356,23 @@ impl eframe::App for DatoxApp {
                     self.table_state.col_widths.insert(to, w);
                 }
                 self.filter_dirty = true;
+            }
+
+            // Handle column rename
+            if let Some((col_idx, new_name)) = interaction.rename_column {
+                if col_idx < self.table.columns.len() && !new_name.is_empty() {
+                    self.table.columns[col_idx].name = new_name;
+                    self.table.structural_changes = true;
+                    self.table_state.widths_initialized = false;
+                }
+            }
+
+            // Handle column type change
+            if let Some((col_idx, new_type)) = interaction.change_col_type {
+                if col_idx < self.table.columns.len() {
+                    self.table.columns[col_idx].data_type = new_type;
+                    self.table.structural_changes = true;
+                }
             }
 
             // Sort rows by column (from table header arrows or context menu)

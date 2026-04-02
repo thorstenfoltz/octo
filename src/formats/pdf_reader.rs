@@ -3,6 +3,49 @@ use crate::formats::FormatReader;
 use anyhow::Result;
 use std::path::Path;
 
+/// Render all pages of a PDF to RGBA images for visual display.
+pub fn render_pdf_pages(path: &Path, scale: f32) -> Result<Vec<egui::ColorImage>> {
+    let path_str = path
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("Invalid path encoding"))?;
+    let doc = mupdf::Document::open(path_str)
+        .map_err(|e| anyhow::anyhow!("Failed to open PDF: {}", e))?;
+    let page_count = doc
+        .page_count()
+        .map_err(|e| anyhow::anyhow!("Failed to get page count: {}", e))?;
+
+    let mut images = Vec::with_capacity(page_count as usize);
+    let matrix = mupdf::Matrix::new_scale(scale, scale);
+
+    for i in 0..page_count {
+        let page = doc
+            .load_page(i)
+            .map_err(|e| anyhow::anyhow!("Failed to load page {}: {}", i, e))?;
+        let pixmap = page
+            .to_pixmap(&matrix, &mupdf::Colorspace::device_rgb(), false, true)
+            .map_err(|e| anyhow::anyhow!("Failed to render page {}: {}", i, e))?;
+
+        let width = pixmap.width() as usize;
+        let height = pixmap.height() as usize;
+        let samples = pixmap.samples();
+
+        // mupdf RGB pixmap: 3 bytes per pixel, convert to RGBA
+        let n = pixmap.n() as usize; // components per pixel
+        let mut rgba = Vec::with_capacity(width * height * 4);
+        for pixel in samples.chunks_exact(n) {
+            rgba.push(pixel[0]); // R
+            rgba.push(pixel[1]); // G
+            rgba.push(pixel[2]); // B
+            rgba.push(if n >= 4 { pixel[3] } else { 255 }); // A
+        }
+
+        let image = egui::ColorImage::from_rgba_unmultiplied([width, height], &rgba);
+        images.push(image);
+    }
+
+    Ok(images)
+}
+
 pub struct PdfReader;
 
 impl FormatReader for PdfReader {
@@ -54,6 +97,7 @@ impl FormatReader for PdfReader {
             source_path: Some(path.to_string_lossy().to_string()),
             format_name: Some("PDF".to_string()),
             structural_changes: false,
+            total_rows: None,
         })
     }
 
@@ -65,7 +109,7 @@ impl FormatReader for PdfReader {
         use printpdf::*;
 
         let (doc, page1, layer1) =
-            PdfDocument::new("Datox Export", Mm(210.0), Mm(297.0), "Layer 1");
+            PdfDocument::new("Octo Export", Mm(210.0), Mm(297.0), "Layer 1");
 
         let font = doc.add_builtin_font(BuiltinFont::Helvetica)?;
 

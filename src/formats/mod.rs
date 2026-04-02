@@ -115,3 +115,137 @@ impl Default for FormatRegistry {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_registry_has_readers() {
+        let reg = FormatRegistry::new();
+        assert!(!reg.readers.is_empty());
+    }
+
+    #[test]
+    fn test_reader_for_csv() {
+        let reg = FormatRegistry::new();
+        let reader = reg.reader_for_path(&PathBuf::from("data.csv"));
+        assert!(reader.is_some());
+        assert_eq!(reader.unwrap().name(), "CSV");
+    }
+
+    #[test]
+    fn test_reader_for_json() {
+        let reg = FormatRegistry::new();
+        let reader = reg.reader_for_path(&PathBuf::from("data.json"));
+        assert!(reader.is_some());
+        assert_eq!(reader.unwrap().name(), "JSON");
+    }
+
+    #[test]
+    fn test_reader_for_jsonl() {
+        let reg = FormatRegistry::new();
+        let reader = reg.reader_for_path(&PathBuf::from("data.jsonl"));
+        assert!(reader.is_some());
+        assert_eq!(reader.unwrap().name(), "JSON Lines");
+    }
+
+    #[test]
+    fn test_reader_for_parquet() {
+        let reg = FormatRegistry::new();
+        let reader = reg.reader_for_path(&PathBuf::from("data.parquet"));
+        assert!(reader.is_some());
+        assert_eq!(reader.unwrap().name(), "Parquet");
+    }
+
+    #[test]
+    fn test_reader_for_tsv() {
+        let reg = FormatRegistry::new();
+        let reader = reg.reader_for_path(&PathBuf::from("data.tsv"));
+        assert!(reader.is_some());
+        assert_eq!(reader.unwrap().name(), "TSV");
+    }
+
+    #[test]
+    fn test_reader_for_xlsx() {
+        let reg = FormatRegistry::new();
+        let reader = reg.reader_for_path(&PathBuf::from("data.xlsx"));
+        assert!(reader.is_some());
+        assert_eq!(reader.unwrap().name(), "Excel");
+    }
+
+    #[test]
+    fn test_reader_for_toml() {
+        let reg = FormatRegistry::new();
+        let reader = reg.reader_for_path(&PathBuf::from("config.toml"));
+        assert!(reader.is_some());
+        assert_eq!(reader.unwrap().name(), "TOML");
+    }
+
+    #[test]
+    fn test_reader_for_yaml() {
+        let reg = FormatRegistry::new();
+        for ext in &["data.yaml", "data.yml"] {
+            let reader = reg.reader_for_path(&PathBuf::from(ext));
+            assert!(reader.is_some(), "No reader for {}", ext);
+            assert_eq!(reader.unwrap().name(), "YAML");
+        }
+    }
+
+    #[test]
+    fn test_reader_for_xml() {
+        let reg = FormatRegistry::new();
+        let reader = reg.reader_for_path(&PathBuf::from("data.xml"));
+        assert!(reader.is_some());
+        assert_eq!(reader.unwrap().name(), "XML");
+    }
+
+    #[test]
+    fn test_reader_for_avro() {
+        let reg = FormatRegistry::new();
+        let reader = reg.reader_for_path(&PathBuf::from("data.avro"));
+        assert!(reader.is_some());
+        assert_eq!(reader.unwrap().name(), "Avro");
+    }
+
+    #[test]
+    fn test_reader_case_insensitive() {
+        let reg = FormatRegistry::new();
+        let reader = reg.reader_for_path(&PathBuf::from("DATA.CSV"));
+        assert!(reader.is_some());
+        assert_eq!(reader.unwrap().name(), "CSV");
+    }
+
+    #[test]
+    fn test_reader_unknown_extension() {
+        let reg = FormatRegistry::new();
+        assert!(reg.reader_for_path(&PathBuf::from("data.xyz")).is_none());
+    }
+
+    #[test]
+    fn test_reader_no_extension() {
+        let reg = FormatRegistry::new();
+        assert!(reg.reader_for_path(&PathBuf::from("noext")).is_none());
+    }
+
+    #[test]
+    fn test_all_extensions() {
+        let reg = FormatRegistry::new();
+        let exts = reg.all_extensions();
+        assert!(exts.contains(&"csv".to_string()));
+        assert!(exts.contains(&"json".to_string()));
+        assert!(exts.contains(&"parquet".to_string()));
+        assert!(exts.contains(&"xlsx".to_string()));
+    }
+
+    #[test]
+    fn test_format_descriptions() {
+        let reg = FormatRegistry::new();
+        let descs = reg.format_descriptions();
+        assert!(!descs.is_empty());
+        let names: Vec<&str> = descs.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(names.contains(&"CSV"));
+        assert!(names.contains(&"Parquet"));
+    }
+}

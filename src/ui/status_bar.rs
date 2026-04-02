@@ -38,7 +38,13 @@ pub fn draw_status_bar(
             }
 
             // Row/col count
-            let row_text = if search_active {
+            let row_text = if let Some(total) = table.total_rows {
+                if search_active {
+                    format!("{} / {} of {} rows", filtered_count, table.row_count(), total)
+                } else {
+                    format!("{} of {} rows (partial)", table.row_count(), total)
+                }
+            } else if search_active {
                 format!("{} / {} rows", filtered_count, table.row_count())
             } else {
                 format!("{} rows", table.row_count())

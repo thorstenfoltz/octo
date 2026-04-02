@@ -1,11 +1,11 @@
 [package]
-name = "datox"
+name = "octo"
 version = "0.1.0"
 edition = "2021"
 description = "A modular multi-format data viewer and editor"
 
 [[bin]]
-name = "datox"
+name = "octo"
 path = "src/main.rs"
 
 [profile.release]
@@ -33,3 +33,8 @@ apache-avro = "0.17"
 quick-xml = "0.37"
 toml = "0.8"
 serde_yaml = "0.9"
+mupdf = "0.6"
+resvg = "0.47"
+
+[dev-dependencies]
+tempfile = "3"

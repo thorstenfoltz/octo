@@ -84,7 +84,7 @@ impl ThemeColors {
             bg_secondary: Color32::from_rgb(39, 39, 42), // zinc-800
             bg_tertiary: Color32::from_rgb(52, 52, 56),  // zinc-700
             bg_header: Color32::from_rgb(30, 30, 35),
-            bg_selected: Color32::from_rgb(59, 130, 246), // blue-500 with alpha
+            bg_selected: Color32::from_rgba_unmultiplied(99, 102, 241, 40), // indigo-500 subtle
             bg_hover: Color32::from_rgb(45, 45, 50),
             bg_edited: Color32::from_rgb(50, 40, 20),
 

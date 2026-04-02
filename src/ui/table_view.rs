@@ -35,6 +35,10 @@ pub struct TableViewState {
     pub clipboard: Option<String>,
     /// Whether the OS clipboard currently has text content (set each frame by the app).
     pub os_clipboard_has_text: bool,
+    /// Column header being renamed: (col_idx, current_buffer).
+    pub editing_col_name: Option<(usize, String)>,
+    /// Whether the column name edit widget needs initial focus.
+    edit_col_needs_focus: bool,
 }
 
 const ROW_HEIGHT: f32 = 26.0;
@@ -97,6 +101,10 @@ pub struct TableInteraction {
     pub ctx_paste: bool,
     /// Text received from OS clipboard via Ctrl+V / Paste event
     pub paste_text: Option<String>,
+    /// Column rename: (col_idx, new_name).
+    pub rename_column: Option<(usize, String)>,
+    /// Change column data type: (col_idx, new_type).
+    pub change_col_type: Option<(usize, String)>,
 }
 
 impl Default for TableInteraction {
@@ -117,6 +125,8 @@ impl Default for TableInteraction {
             ctx_copy: false,
             ctx_paste: false,
             paste_text: None,
+            rename_column: None,
+            change_col_type: None,
         }
     }
 }
@@ -523,16 +533,50 @@ fn draw_header_direct(
         )
         .intersect(col_clip);
 
-        let name_galley = painter.layout_no_wrap(
-            col.name.clone(),
-            egui::FontId::new(12.0, egui::FontFamily::Proportional),
-            colors.text_header,
-        );
-        painter.with_clip_rect(cell_clip).galley(
-            egui::pos2(rect.left() + 6.0, content_top + 1.0),
-            name_galley,
-            Color32::TRANSPARENT,
-        );
+        // --- Column name: inline edit or label ---
+        let is_editing_name = state
+            .editing_col_name
+            .as_ref()
+            .map(|(idx, _)| *idx == col_idx)
+            .unwrap_or(false);
+
+        if is_editing_name {
+            let name_edit_rect = egui::Rect::from_min_max(
+                egui::pos2(rect.left() + 4.0, content_top),
+                egui::pos2(name_clip_right.max(rect.left() + 40.0), content_top + 18.0),
+            )
+            .intersect(col_clip);
+            if name_edit_rect.width() > 10.0 {
+                let edit_id = ui.id().with(("col_name_edit", col_idx));
+                if let Some((_, ref mut buf)) = state.editing_col_name {
+                    let edit = egui::TextEdit::singleline(buf)
+                        .id(edit_id)
+                        .font(egui::FontId::new(12.0, egui::FontFamily::Proportional))
+                        .frame(false)
+                        .desired_width(name_edit_rect.width());
+                    let edit_response = ui.put(name_edit_rect, edit);
+                    if state.edit_col_needs_focus {
+                        edit_response.request_focus();
+                        state.edit_col_needs_focus = false;
+                    }
+                    if edit_response.lost_focus() {
+                        interaction.rename_column = Some((col_idx, buf.clone()));
+                        state.editing_col_name = None;
+                    }
+                }
+            }
+        } else {
+            let name_galley = painter.layout_no_wrap(
+                col.name.clone(),
+                egui::FontId::new(12.0, egui::FontFamily::Proportional),
+                colors.text_header,
+            );
+            painter.with_clip_rect(cell_clip).galley(
+                egui::pos2(rect.left() + 6.0, content_top + 1.0),
+                name_galley,
+                Color32::TRANSPARENT,
+            );
+        }
 
         // Data type subtitle
         let type_galley = painter.layout_no_wrap(
@@ -650,6 +694,11 @@ fn draw_header_direct(
                 ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
             }
 
+            if header_response.double_clicked() && state.dragging_col.is_none() {
+                state.editing_col_name = Some((col_idx, col.name.clone()));
+                state.edit_col_needs_focus = true;
+            }
+
             if header_response.clicked() && state.dragging_col.is_none() {
                 interaction.header_col_clicked = Some(col_idx);
                 state.selected_cell = state.selected_cell.map(|(r, _)| (r, col_idx));
@@ -724,6 +773,35 @@ fn draw_header_direct(
                     interaction.ctx_delete_column = true;
                     ui.close_menu();
                 }
+                ui.menu_button("Change Type", |ui| {
+                    let types = &[
+                        "String",
+                        "Int64",
+                        "Float64",
+                        "Boolean",
+                        "Date32",
+                        "Timestamp(Microsecond, None)",
+                    ];
+                    for &t in types {
+                        let is_current = col.data_type == t;
+                        let can_convert = is_current || table.can_convert_column(col_idx, t);
+                        let label = if is_current {
+                            format!("{} (current)", t)
+                        } else {
+                            t.to_string()
+                        };
+                        let btn = ui.add_enabled(!is_current && can_convert, egui::Button::new(label));
+                        let btn = if !can_convert && !is_current {
+                            btn.on_disabled_hover_text("Not all values can be converted to this type")
+                        } else {
+                            btn
+                        };
+                        if btn.clicked() {
+                            interaction.change_col_type = Some((col_idx, t.to_string()));
+                            ui.close_menu();
+                        }
+                    }
+                });
                 ui.separator();
                 if col_idx > 0 {
                     if ui.button("Move Left").clicked() {
@@ -1014,9 +1092,16 @@ fn draw_data_row_direct(
                 if response.clicked() {
                     state.selected_cell = Some((actual_row, col_idx));
                     state.editing_cell = None;
-                    // Clear multi-selections on regular cell click (unless Ctrl held)
                     let modifiers = ui.input(|i| i.modifiers);
-                    if !modifiers.command {
+                    if modifiers.command {
+                        // Ctrl+click: toggle row in multi-selection
+                        if state.selected_rows.contains(&actual_row) {
+                            state.selected_rows.remove(&actual_row);
+                        } else {
+                            state.selected_rows.insert(actual_row);
+                        }
+                        state.selected_cols.clear();
+                    } else {
                         state.selected_rows.clear();
                         state.selected_cols.clear();
                     }

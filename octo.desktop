@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Octo
+Comment=Multi-format data viewer and editor
+Exec=octo %F
+Icon=octo
+Terminal=false
+Type=Application
+Categories=Utility;DataVisualization;
+MimeType=text/csv;application/json;application/x-parquet;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/xml;application/toml;application/x-yaml;application/avro;

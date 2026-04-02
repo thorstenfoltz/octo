@@ -200,6 +200,7 @@ fn xml_elements_to_table(elements: &[XmlElement], path: &Path) -> Result<DataTab
         source_path: Some(path.to_string_lossy().to_string()),
         format_name: Some("XML".to_string()),
         structural_changes: false,
+        total_rows: None,
     })
 }
 
