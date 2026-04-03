@@ -85,6 +85,7 @@ pub fn draw_toolbar(
 
         // --- File menu ---
         ui.menu_button(RichText::new("File").color(colors.text_primary), |ui| {
+            ui.set_min_width(120.0);
             if ui.button("Open...").clicked() {
                 action.open_file = true;
                 ui.close_menu();

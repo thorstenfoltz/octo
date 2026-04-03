@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Octo
 Comment=Multi-format data viewer and editor
-Exec=/home/thorsten/dev/private/octo/target/release/octo %F
+Exec=octo %F
 Icon=octo
 Terminal=false
 Type=Application

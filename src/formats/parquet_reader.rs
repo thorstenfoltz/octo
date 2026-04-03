@@ -611,6 +611,16 @@ pub fn build_arrow_array(
             }
             Arc::new(builder.finish())
         }
+        DataType::LargeUtf8 | DataType::LargeBinary => {
+            let mut builder = LargeStringBuilder::with_capacity(num_rows, num_rows * 32);
+            for row in 0..num_rows {
+                match table.get(row, col_idx) {
+                    Some(CellValue::Null) | None => builder.append_null(),
+                    Some(v) => builder.append_value(v.to_string()),
+                }
+            }
+            Arc::new(builder.finish())
+        }
         _ => {
             // Default: write as Utf8 string
             let mut builder = StringBuilder::with_capacity(num_rows, num_rows * 32);

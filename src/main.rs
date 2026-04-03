@@ -124,6 +124,10 @@ struct OctoApp {
     bg_file_exhausted: Arc<std::sync::atomic::AtomicBool>,
     /// File path passed via command line (loaded on first frame)
     initial_file: Option<std::path::PathBuf>,
+    /// Pending file to open after unsaved-changes dialog resolves
+    pending_open_file: bool,
+    /// Show unsaved-changes dialog before opening a new file
+    show_open_confirm: bool,
 }
 
 /// Detect delimiter from a file by reading only the first few KB.
@@ -313,6 +317,8 @@ impl OctoApp {
             bg_can_load_more: false,
             bg_file_exhausted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             initial_file,
+            pending_open_file: false,
+            show_open_confirm: false,
         }
     }
 
@@ -442,6 +448,16 @@ impl OctoApp {
     }
 
     fn open_file(&mut self) {
+        // If current file has unsaved changes, prompt before opening
+        if self.table.is_modified() || self.raw_content_modified {
+            self.pending_open_file = true;
+            self.show_open_confirm = true;
+            return;
+        }
+        self.do_open_file_dialog();
+    }
+
+    fn do_open_file_dialog(&mut self) {
         let mut dialog = rfd::FileDialog::new();
 
         // Add "All Supported" filter first
@@ -1161,6 +1177,40 @@ impl eframe::App for OctoApp {
                         }
                         if ui.button("Cancel").clicked() {
                             self.show_close_confirm = false;
+                        }
+                    });
+                });
+        }
+
+        // --- Unsaved changes before opening new file ---
+        if self.show_open_confirm {
+            egui::Window::new("Unsaved Changes")
+                .id(egui::Id::new("open_confirm"))
+                .resizable(false)
+                .collapsible(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label("You have unsaved changes. What would you like to do?");
+                    ui.add_space(12.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("Save").clicked() {
+                            self.show_open_confirm = false;
+                            if self.table.source_path.is_some() {
+                                self.save_file();
+                            } else {
+                                self.save_file_as();
+                            }
+                            self.do_open_file_dialog();
+                        }
+                        if ui.button("Don't Save").clicked() {
+                            self.show_open_confirm = false;
+                            self.table.clear_modified();
+                            self.raw_content_modified = false;
+                            self.do_open_file_dialog();
+                        }
+                        if ui.button("Cancel").clicked() {
+                            self.show_open_confirm = false;
+                            self.pending_open_file = false;
                         }
                     });
                 });
