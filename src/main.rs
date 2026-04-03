@@ -128,6 +128,8 @@ struct OctoApp {
     pending_open_file: bool,
     /// Show unsaved-changes dialog before opening a new file
     show_open_confirm: bool,
+    /// Cache for commonmark rendering
+    commonmark_cache: egui_commonmark::CommonMarkCache,
 }
 
 /// Detect delimiter from a file by reading only the first few KB.
@@ -319,6 +321,7 @@ impl OctoApp {
             initial_file,
             pending_open_file: false,
             show_open_confirm: false,
+            commonmark_cache: egui_commonmark::CommonMarkCache::default(),
         }
     }
 
@@ -469,6 +472,7 @@ impl OctoApp {
             let ext_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
             dialog = dialog.add_filter(&name, &ext_refs);
         }
+        dialog = dialog.add_filter("All Files", &["*"]);
 
         if let Some(path) = dialog.pick_file() {
             self.load_file(path);
@@ -489,7 +493,7 @@ impl OctoApp {
                         self.status_message = Some((
                             format!(
                                 "Loaded {} rows (scroll down to load more)",
-                                loaded
+                                ui::status_bar::format_number(loaded)
                             ),
                             std::time::Instant::now(),
                         ));
@@ -541,6 +545,10 @@ impl OctoApp {
                                 self.view_mode = ViewMode::Table;
                             }
                         }
+                    } else if self.table.format_name.as_deref() == Some("Markdown") {
+                        self.view_mode = ViewMode::Markdown;
+                    } else if self.table.format_name.as_deref() == Some("Text") {
+                        self.view_mode = ViewMode::Raw;
                     } else {
                         self.view_mode = ViewMode::Table;
                     }
@@ -757,6 +765,25 @@ impl eframe::App for OctoApp {
             self.load_file(path);
         }
 
+        // --- Global keyboard shortcuts ---
+        let ctrl_held = ctx.input(|i| i.modifiers.command);
+        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::S)) {
+            if self.table.source_path.is_some() {
+                self.save_file();
+            } else if self.table.col_count() > 0 {
+                self.save_file_as();
+            }
+        }
+        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::A)) {
+            if self.table.col_count() > 0 && self.table.row_count() > 0 {
+                self.table_state.selected_rows.clear();
+                self.table_state.selected_cols.clear();
+                for r in 0..self.table.row_count() {
+                    self.table_state.selected_rows.insert(r);
+                }
+            }
+        }
+
         // --- Handle close request ---
         if ctx.input(|i| i.viewport().close_requested()) {
             if (self.table.is_modified() || self.raw_content_modified) && !self.confirmed_close {
@@ -786,9 +813,10 @@ impl eframe::App for OctoApp {
                     .load(std::sync::atomic::Ordering::Relaxed);
                 if self.table.total_rows.is_some() {
                     let total_loaded = self.table.row_offset + self.table.row_count();
+                    let total_fmt = ui::status_bar::format_number(total_loaded);
                     if loading_done && file_exhausted {
                         self.status_message = Some((
-                            format!("Loaded all {} rows", total_loaded),
+                            format!("Loaded all {} rows", total_fmt),
                             std::time::Instant::now(),
                         ));
                         self.table.total_rows = None;
@@ -797,7 +825,7 @@ impl eframe::App for OctoApp {
                         self.status_message = Some((
                             format!(
                                 "Loaded {} rows (scroll down to load more)",
-                                total_loaded
+                                total_fmt
                             ),
                             std::time::Instant::now(),
                         ));
@@ -806,7 +834,7 @@ impl eframe::App for OctoApp {
                         self.status_message = Some((
                             format!(
                                 "Loading... {} rows so far",
-                                total_loaded
+                                total_fmt
                             ),
                             std::time::Instant::now(),
                         ));
@@ -874,6 +902,7 @@ impl eframe::App for OctoApp {
                     self.view_mode,
                     self.raw_content.is_some(),
                     !self.pdf_page_images.is_empty(),
+                    self.table.format_name.as_deref() == Some("Markdown"),
                     self.logo_texture.as_ref(),
                 );
 
@@ -1304,6 +1333,35 @@ impl eframe::App for OctoApp {
                                 }
                             });
                         });
+                }
+                return;
+            }
+
+            // --- Markdown rendered view ---
+            if self.view_mode == ViewMode::Markdown {
+                if let Some(ref content) = self.raw_content {
+                    let md_content = content.clone();
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.add_space(8.0);
+                            ui.horizontal(|ui| {
+                                ui.add_space(16.0);
+                                ui.vertical(|ui| {
+                                    ui.set_max_width(900.0);
+                                    egui_commonmark::CommonMarkViewer::new()
+                                        .show(ui, &mut self.commonmark_cache, &md_content);
+                                });
+                            });
+                        });
+                } else {
+                    ui.centered_and_justified(|ui| {
+                        ui.label(
+                            RichText::new("Markdown content not available")
+                                .size(16.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                    });
                 }
                 return;
             }

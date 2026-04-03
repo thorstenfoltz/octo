@@ -17,10 +17,6 @@ impl FormatReader for XmlFormatReader {
         &["xml"]
     }
 
-    fn is_text_format(&self) -> bool {
-        true
-    }
-
     fn read_file(&self, path: &Path) -> Result<DataTable> {
         let content = std::fs::read_to_string(path)?;
         parse_xml_to_table(&content, path)

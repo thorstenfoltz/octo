@@ -10,6 +10,8 @@ pub enum ViewMode {
     Raw,
     /// Rendered PDF page view (like Adobe Reader).
     Pdf,
+    /// Rendered Markdown view.
+    Markdown,
 }
 
 /// Represents a single cell value in the data table.

@@ -18,10 +18,6 @@ impl FormatReader for CsvReader {
         true
     }
 
-    fn is_text_format(&self) -> bool {
-        true
-    }
-
     fn read_file(&self, path: &Path) -> Result<DataTable> {
         let delimiter = detect_delimiter(path).unwrap_or(b',');
         read_delimited(path, delimiter, "CSV")
@@ -44,10 +40,6 @@ impl FormatReader for TsvReader {
     }
 
     fn supports_write(&self) -> bool {
-        true
-    }
-
-    fn is_text_format(&self) -> bool {
         true
     }
 

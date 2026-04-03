@@ -16,10 +16,6 @@ impl FormatReader for JsonReader {
         &["json", "geojson"]
     }
 
-    fn is_text_format(&self) -> bool {
-        true
-    }
-
     fn read_file(&self, path: &Path) -> Result<DataTable> {
         let content = std::fs::read_to_string(path)?;
         let value: Value = serde_json::from_str(&content)?;
@@ -36,10 +32,6 @@ impl FormatReader for JsonlReader {
 
     fn extensions(&self) -> &[&str] {
         &["jsonl", "ndjson"]
-    }
-
-    fn is_text_format(&self) -> bool {
-        true
     }
 
     fn read_file(&self, path: &Path) -> Result<DataTable> {

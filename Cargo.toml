@@ -1,8 +1,13 @@
 [package]
 name = "octo"
-version = "0.1.0"
+version = "0.0.0-dev"
 edition = "2021"
 description = "A modular multi-format data viewer and editor"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/tfoltz/octo"
+keywords = ["data-viewer", "parquet", "csv", "gui", "egui"]
+categories = ["visualization", "gui"]
 
 [[bin]]
 name = "octo"
@@ -35,6 +40,7 @@ toml = "0.8"
 serde_yaml = "0.9"
 mupdf = "0.6"
 resvg = "0.47"
+egui_commonmark = "0.20"
 
 [dev-dependencies]
 tempfile = "3"

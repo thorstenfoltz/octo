@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version in Cargo.toml
+        run: |
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION#v}"
+          sed -i "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libfontconfig1-dev libfreetype6-dev libharfbuzz-dev libfribidi-dev libjpeg-dev libopenjp2-7-dev libgumbo-dev libjbig2dec0-dev libmujs-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Run tests
+        run: cargo test
+
+      - name: Package Linux release
+        run: |
+          mkdir -p octo-${{ inputs.version }}-linux-x86_64
+          cp target/release/octo octo-${{ inputs.version }}-linux-x86_64/
+          cp install.sh octo-${{ inputs.version }}-linux-x86_64/
+          cp octo.desktop octo-${{ inputs.version }}-linux-x86_64/
+          cp -r assets octo-${{ inputs.version }}-linux-x86_64/
+          cp README.md octo-${{ inputs.version }}-linux-x86_64/
+          cp LICENSE octo-${{ inputs.version }}-linux-x86_64/ 2>/dev/null || true
+          tar czf octo-${{ inputs.version }}-linux-x86_64.tar.gz octo-${{ inputs.version }}-linux-x86_64/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release
+          path: octo-${{ inputs.version }}-linux-x86_64.tar.gz
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version in Cargo.toml
+        shell: pwsh
+        run: |
+          $version = "${{ inputs.version }}" -replace '^v', ''
+          (Get-Content Cargo.toml) -replace '^version = .*', "version = `"$version`"" | Set-Content Cargo.toml
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Run tests
+        run: cargo test
+
+      - name: Package Windows release
+        shell: pwsh
+        run: |
+          $dir = "octo-${{ inputs.version }}-windows-x86_64"
+          New-Item -ItemType Directory -Path $dir -Force
+          Copy-Item "target\release\octo.exe" "$dir\"
+          Copy-Item "install.bat" "$dir\"
+          Copy-Item -Recurse "assets" "$dir\"
+          Copy-Item "README.md" "$dir\"
+          if (Test-Path "LICENSE") { Copy-Item "LICENSE" "$dir\" }
+          Compress-Archive -Path "$dir\*" -DestinationPath "octo-${{ inputs.version }}-windows-x86_64.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: octo-${{ inputs.version }}-windows-x86_64.zip
+
+  publish:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          name: Octo ${{ inputs.version }}
+          generate_release_notes: true
+          files: |
+            artifacts/linux-release/*.tar.gz
+            artifacts/windows-release/*.zip

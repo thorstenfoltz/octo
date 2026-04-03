@@ -14,10 +14,6 @@ impl FormatReader for TomlReader {
         &["toml"]
     }
 
-    fn is_text_format(&self) -> bool {
-        true
-    }
-
     fn read_file(&self, path: &Path) -> Result<DataTable> {
         let content = std::fs::read_to_string(path)?;
         let value: toml::Value = content.parse()?;

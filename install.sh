@@ -6,17 +6,30 @@ BIN_DIR="$PREFIX/bin"
 ICON_DIR="$PREFIX/share/icons/hicolor/scalable/apps"
 DESKTOP_DIR="$PREFIX/share/applications"
 
-echo "Building Octo (release)..."
-cargo build --release
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# If a pre-built binary exists next to this script, use it; otherwise build from source
+if [[ -f "$SCRIPT_DIR/octo" ]]; then
+    BINARY="$SCRIPT_DIR/octo"
+    echo "Using pre-built binary."
+elif command -v cargo &>/dev/null; then
+    echo "Building Octo (release)..."
+    cargo build --release
+    BINARY="$SCRIPT_DIR/target/release/octo"
+else
+    echo "Error: No pre-built binary found and cargo is not installed."
+    echo "Install Rust from https://rustup.rs/ or download a pre-built release."
+    exit 1
+fi
 
 echo "Installing binary to $BIN_DIR..."
-install -Dm755 target/release/octo "$BIN_DIR/octo"
+install -Dm755 "$BINARY" "$BIN_DIR/octo"
 
 echo "Installing icon to $ICON_DIR..."
-install -Dm644 assets/octo.svg "$ICON_DIR/octo.svg"
+install -Dm644 "$SCRIPT_DIR/assets/octo.svg" "$ICON_DIR/octo.svg"
 
 echo "Installing desktop entry to $DESKTOP_DIR..."
-install -Dm644 octo.desktop "$DESKTOP_DIR/octo.desktop"
+install -Dm644 "$SCRIPT_DIR/octo.desktop" "$DESKTOP_DIR/octo.desktop"
 
 echo "Updating icon cache..."
 if command -v gtk-update-icon-cache &>/dev/null; then

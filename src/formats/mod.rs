@@ -3,8 +3,10 @@ pub mod avro_reader;
 pub mod csv_reader;
 pub mod excel_reader;
 pub mod json_reader;
+pub mod markdown_reader;
 pub mod parquet_reader;
 pub mod pdf_reader;
+pub mod text_reader;
 pub mod toml_reader;
 pub mod xml_reader;
 pub mod yaml_reader;
@@ -36,11 +38,6 @@ pub trait FormatReader: Send + Sync {
     fn supports_write(&self) -> bool {
         false
     }
-
-    /// Whether this format is text-based (supports raw text view).
-    fn is_text_format(&self) -> bool {
-        false
-    }
 }
 
 /// Registry of all available format readers.
@@ -68,6 +65,8 @@ impl FormatRegistry {
         registry.register(Box::new(pdf_reader::PdfReader));
         registry.register(Box::new(toml_reader::TomlReader));
         registry.register(Box::new(yaml_reader::YamlReader));
+        registry.register(Box::new(markdown_reader::MarkdownReader));
+        registry.register(Box::new(text_reader::TextReader));
         registry
     }
 
@@ -77,14 +76,24 @@ impl FormatRegistry {
     }
 
     /// Find a reader that can handle the given file path based on extension.
+    /// Falls back to the Text reader for unknown extensions.
     pub fn reader_for_path(&self, path: &Path) -> Option<&dyn FormatReader> {
         let ext = path
             .extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())?;
+            .map(|e| e.to_lowercase());
+        if let Some(ref ext) = ext {
+            if let Some(reader) = self.readers
+                .iter()
+                .find(|r| r.extensions().contains(&ext.as_str()))
+            {
+                return Some(reader.as_ref());
+            }
+        }
+        // Fallback: use Text reader for unknown/missing extensions
         self.readers
             .iter()
-            .find(|r| r.extensions().contains(&ext.as_str()))
+            .find(|r| r.name() == "Text")
             .map(|r| r.as_ref())
     }
 
@@ -218,15 +227,19 @@ mod tests {
     }
 
     #[test]
-    fn test_reader_unknown_extension() {
+    fn test_reader_unknown_extension_falls_back_to_text() {
         let reg = FormatRegistry::new();
-        assert!(reg.reader_for_path(&PathBuf::from("data.xyz")).is_none());
+        let reader = reg.reader_for_path(&PathBuf::from("data.xyz"));
+        assert!(reader.is_some());
+        assert_eq!(reader.unwrap().name(), "Text");
     }
 
     #[test]
-    fn test_reader_no_extension() {
+    fn test_reader_no_extension_falls_back_to_text() {
         let reg = FormatRegistry::new();
-        assert!(reg.reader_for_path(&PathBuf::from("noext")).is_none());
+        let reader = reg.reader_for_path(&PathBuf::from("noext"));
+        assert!(reader.is_some());
+        assert_eq!(reader.unwrap().name(), "Text");
     }
 
     #[test]
@@ -247,5 +260,75 @@ mod tests {
         let names: Vec<&str> = descs.iter().map(|(n, _)| n.as_str()).collect();
         assert!(names.contains(&"CSV"));
         assert!(names.contains(&"Parquet"));
+    }
+
+    #[test]
+    fn test_reader_for_markdown() {
+        let reg = FormatRegistry::new();
+        for ext in &["doc.md", "doc.markdown", "doc.mdown", "doc.mkd"] {
+            let reader = reg.reader_for_path(&PathBuf::from(ext));
+            assert!(reader.is_some(), "No reader for {}", ext);
+            assert_eq!(reader.unwrap().name(), "Markdown");
+        }
+    }
+
+    #[test]
+    fn test_reader_for_text() {
+        let reg = FormatRegistry::new();
+        for ext in &["file.txt", "file.log", "file.cfg", "file.ini", "file.conf"] {
+            let reader = reg.reader_for_path(&PathBuf::from(ext));
+            assert!(reader.is_some(), "No reader for {}", ext);
+            assert_eq!(reader.unwrap().name(), "Text");
+        }
+    }
+
+    #[test]
+    fn test_reader_for_arrow_ipc() {
+        let reg = FormatRegistry::new();
+        for ext in &["data.arrow", "data.ipc", "data.feather"] {
+            let reader = reg.reader_for_path(&PathBuf::from(ext));
+            assert!(reader.is_some(), "No reader for {}", ext);
+            assert_eq!(reader.unwrap().name(), "Arrow IPC");
+        }
+    }
+
+    #[test]
+    fn test_reader_for_pdf() {
+        let reg = FormatRegistry::new();
+        let reader = reg.reader_for_path(&PathBuf::from("report.pdf"));
+        assert!(reader.is_some());
+        assert_eq!(reader.unwrap().name(), "PDF");
+    }
+
+    #[test]
+    fn test_all_extensions_includes_new_formats() {
+        let reg = FormatRegistry::new();
+        let exts = reg.all_extensions();
+        assert!(exts.contains(&"txt".to_string()));
+        assert!(exts.contains(&"md".to_string()));
+        assert!(exts.contains(&"log".to_string()));
+    }
+
+    #[test]
+    fn test_format_descriptions_includes_all() {
+        let reg = FormatRegistry::new();
+        let descs = reg.format_descriptions();
+        let names: Vec<&str> = descs.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(names.contains(&"Text"));
+        assert!(names.contains(&"Markdown"));
+        assert!(names.contains(&"Parquet"));
+        assert!(names.contains(&"CSV"));
+        assert!(names.contains(&"JSON"));
+        assert!(names.contains(&"Excel"));
+    }
+
+    #[test]
+    fn test_fallback_various_unknown_extensions() {
+        let reg = FormatRegistry::new();
+        for ext in &["data.xyz", "file.zzz", "test.banana", "doc.rs"] {
+            let reader = reg.reader_for_path(&PathBuf::from(ext));
+            assert!(reader.is_some(), "No fallback reader for {}", ext);
+            assert_eq!(reader.unwrap().name(), "Text", "Wrong fallback for {}", ext);
+        }
     }
 }

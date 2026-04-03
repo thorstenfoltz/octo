@@ -57,10 +57,6 @@ impl FormatReader for PdfReader {
         &["pdf"]
     }
 
-    fn is_text_format(&self) -> bool {
-        true
-    }
-
     fn read_file(&self, path: &Path) -> Result<DataTable> {
         let text = pdf_extract::extract_text(path)
             .map_err(|e| anyhow::anyhow!("Failed to extract PDF text: {}", e))?;

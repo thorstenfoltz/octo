@@ -61,6 +61,7 @@ pub fn draw_toolbar(
     current_view_mode: ViewMode,
     has_raw_content: bool,
     has_pdf_pages: bool,
+    has_markdown: bool,
     logo_texture: Option<&egui::TextureHandle>,
 ) -> ToolbarAction {
     let mut action = ToolbarAction::default();
@@ -220,6 +221,14 @@ pub fn draw_toolbar(
                 if raw_btn.clicked() {
                     action.view_mode_changed = Some(ViewMode::Raw);
                     ui.close_menu();
+                }
+                if has_markdown {
+                    let is_md = current_view_mode == ViewMode::Markdown;
+                    let md_btn = ui.radio(is_md, "Markdown View");
+                    if md_btn.clicked() {
+                        action.view_mode_changed = Some(ViewMode::Markdown);
+                        ui.close_menu();
+                    }
                 }
                 if has_pdf_pages {
                     let pdf_btn = ui.radio(is_pdf, "PDF View");

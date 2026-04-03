@@ -2,18 +2,29 @@
 setlocal
 
 set "INSTALL_DIR=%ProgramFiles%\Octo"
+set "SCRIPT_DIR=%~dp0"
 
-echo Building Octo (release)...
-cargo build --release
-if errorlevel 1 (
-    echo Build failed.
-    exit /b 1
+:: Check for pre-built binary first, then build from source
+if exist "%SCRIPT_DIR%octo.exe" (
+    echo Using pre-built binary.
+    set "BINARY=%SCRIPT_DIR%octo.exe"
+) else if exist "%SCRIPT_DIR%target\release\octo.exe" (
+    echo Using previously built binary.
+    set "BINARY=%SCRIPT_DIR%target\release\octo.exe"
+) else (
+    echo Building Octo (release)...
+    cargo build --release
+    if errorlevel 1 (
+        echo Build failed. Install Rust from https://rustup.rs/ or download a pre-built release.
+        exit /b 1
+    )
+    set "BINARY=%SCRIPT_DIR%target\release\octo.exe"
 )
 
 echo Installing to %INSTALL_DIR%...
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
-copy /y "target\release\octo.exe" "%INSTALL_DIR%\octo.exe"
-copy /y "assets\octo.svg" "%INSTALL_DIR%\octo.svg"
+copy /y "%BINARY%" "%INSTALL_DIR%\octo.exe"
+copy /y "%SCRIPT_DIR%assets\octo.svg" "%INSTALL_DIR%\octo.svg"
 
 :: Add to PATH via registry (current user)
 echo Adding %INSTALL_DIR% to user PATH...

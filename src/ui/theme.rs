@@ -164,8 +164,14 @@ pub fn apply_theme(ctx: &egui::Context, mode: ThemeMode) {
     // Override specific colors
     visuals.window_fill = colors.bg_primary;
     visuals.panel_fill = colors.bg_primary;
-    visuals.extreme_bg_color = colors.bg_secondary;
-    visuals.faint_bg_color = colors.bg_tertiary;
+    visuals.extreme_bg_color = match mode {
+        ThemeMode::Dark => colors.bg_secondary,
+        ThemeMode::Light => Color32::from_rgb(230, 233, 240),
+    };
+    visuals.faint_bg_color = match mode {
+        ThemeMode::Dark => colors.bg_tertiary,
+        ThemeMode::Light => Color32::from_rgb(237, 240, 245),
+    };
     visuals.window_stroke = Stroke::new(1.0, colors.border);
 
     // Widget visuals

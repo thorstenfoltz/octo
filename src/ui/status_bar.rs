@@ -4,6 +4,19 @@ use super::table_view::TableViewState;
 use super::theme::{ThemeColors, ThemeMode};
 use crate::data::DataTable;
 
+/// Format a number with comma thousand separators (e.g. 1234567 -> "1,234,567").
+pub fn format_number(n: usize) -> String {
+    let s = n.to_string();
+    let mut result = String::with_capacity(s.len() + s.len() / 3);
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i) % 3 == 0 {
+            result.push(',');
+        }
+        result.push(c);
+    }
+    result
+}
+
 pub fn draw_status_bar(
     ui: &mut Ui,
     table: &DataTable,
@@ -41,14 +54,14 @@ pub fn draw_status_bar(
             let row_text = if table.total_rows.is_some() {
                 let loaded = table.row_offset + table.row_count();
                 if search_active {
-                    format!("{} / {}+ rows (partial)", filtered_count, loaded)
+                    format!("{} / {}+ rows (partial)", format_number(filtered_count), format_number(loaded))
                 } else {
-                    format!("{}+ rows (scroll to load more)", loaded)
+                    format!("{}+ rows (scroll to load more)", format_number(loaded))
                 }
             } else if search_active {
-                format!("{} / {} rows", filtered_count, table.row_count())
+                format!("{} / {} rows", format_number(filtered_count), format_number(table.row_count()))
             } else {
-                format!("{} rows", table.row_count())
+                format!("{} rows", format_number(table.row_count()))
             };
             ui.label(
                 RichText::new(row_text)
@@ -57,7 +70,7 @@ pub fn draw_status_bar(
             );
             ui.separator();
             ui.label(
-                RichText::new(format!("{} cols", table.col_count()))
+                RichText::new(format!("{} cols", format_number(table.col_count())))
                     .size(11.0)
                     .color(colors.text_secondary),
             );
@@ -119,4 +132,36 @@ pub fn draw_status_bar(
             );
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_number_zero() {
+        assert_eq!(format_number(0), "0");
+    }
+
+    #[test]
+    fn test_format_number_small() {
+        assert_eq!(format_number(1), "1");
+        assert_eq!(format_number(12), "12");
+        assert_eq!(format_number(999), "999");
+    }
+
+    #[test]
+    fn test_format_number_thousands() {
+        assert_eq!(format_number(1_000), "1,000");
+        assert_eq!(format_number(1_234), "1,234");
+        assert_eq!(format_number(12_345), "12,345");
+        assert_eq!(format_number(999_999), "999,999");
+    }
+
+    #[test]
+    fn test_format_number_millions() {
+        assert_eq!(format_number(1_000_000), "1,000,000");
+        assert_eq!(format_number(1_234_567), "1,234,567");
+        assert_eq!(format_number(123_456_789), "123,456,789");
+    }
 }
