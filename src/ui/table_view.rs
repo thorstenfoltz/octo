@@ -38,7 +38,7 @@ pub struct TableViewState {
     /// Column header being renamed: (col_idx, current_buffer).
     pub editing_col_name: Option<(usize, String)>,
     /// Whether the column name edit widget needs initial focus.
-    edit_col_needs_focus: bool,
+    pub edit_col_needs_focus: bool,
 }
 
 const ROW_HEIGHT: f32 = 26.0;
@@ -105,6 +105,10 @@ pub struct TableInteraction {
     pub rename_column: Option<(usize, String)>,
     /// Change column data type: (col_idx, new_type).
     pub change_col_type: Option<(usize, String)>,
+    /// Copy just the selected cell's value (not row/column selection).
+    pub ctx_copy_cell: bool,
+    /// Signal that more rows should be loaded (scroll near bottom with truncated data).
+    pub needs_more_rows: bool,
 }
 
 impl Default for TableInteraction {
@@ -127,6 +131,8 @@ impl Default for TableInteraction {
             paste_text: None,
             rename_column: None,
             change_col_type: None,
+            ctx_copy_cell: false,
+            needs_more_rows: false,
         }
     }
 }
@@ -248,12 +254,17 @@ pub fn draw_table(
     // Ctrl+C / Ctrl+V
     let ctrl_held = ui.input(|i| i.modifiers.command);
     if ctrl_held && ui.input(|i| i.key_pressed(egui::Key::C)) {
-        // Don't copy if we're currently editing a cell (let the text edit handle it)
         if state.editing_cell.is_none() {
             interaction.ctx_copy = true;
         }
     }
-    // Detect paste from OS clipboard via egui's Paste event
+    if ctrl_held && ui.input(|i| i.key_pressed(egui::Key::V)) {
+        if state.editing_cell.is_none() && !interaction.ctx_paste {
+            interaction.ctx_paste = true;
+            // paste_text = None signals main.rs to read from OS clipboard
+        }
+    }
+    // Also detect paste from egui's Paste event (carries clipboard text directly)
     let paste_from_event: Option<String> = ui.input(|i| {
         i.events.iter().find_map(|e| {
             if let egui::Event::Paste(text) = e {
@@ -434,6 +445,13 @@ pub fn draw_table(
                     (click_fraction * total_col_width - view_width / 2.0).clamp(0.0, max_scroll);
             }
         }
+    }
+
+    // Signal that more rows should be loaded when scrolled near the bottom
+    if table.total_rows.is_some()
+        && state.scroll_y + view_height >= total_content_height - ROW_HEIGHT * 100.0
+    {
+        interaction.needs_more_rows = true;
     }
 
     interaction
@@ -737,6 +755,12 @@ fn draw_header_direct(
                         .strong()
                         .size(11.0),
                 );
+                ui.separator();
+                if ui.button("Rename").clicked() {
+                    state.editing_col_name = Some((col_idx, col.name.clone()));
+                    state.edit_col_needs_focus = true;
+                    ui.close_menu();
+                }
                 ui.separator();
                 ui.label(RichText::new("Clipboard").strong().size(11.0));
                 if ui.button("Copy Column").clicked() {
@@ -1123,6 +1147,10 @@ fn draw_data_row_direct(
 
                     // --- Copy / Paste ---
                     ui.label(RichText::new("Clipboard").strong().size(11.0));
+                    if ui.button("Copy Cell").clicked() {
+                        interaction.ctx_copy_cell = true;
+                        ui.close_menu();
+                    }
                     if ui.button("Copy").clicked() {
                         interaction.ctx_copy = true;
                         ui.close_menu();
@@ -1159,6 +1187,11 @@ fn draw_data_row_direct(
 
                     ui.separator();
                     ui.label(RichText::new("Column").strong().size(11.0));
+                    if ui.button("Rename Column").clicked() {
+                        state.editing_col_name = Some((col_idx, table.columns[col_idx].name.clone()));
+                        state.edit_col_needs_focus = true;
+                        ui.close_menu();
+                    }
                     if ui.button("Insert Column...").clicked() {
                         interaction.header_col_clicked = Some(col_idx);
                         interaction.ctx_insert_column = true;
@@ -1208,7 +1241,7 @@ fn draw_data_row_direct(
     painter.text(
         rn_rect.center(),
         Align2::CENTER_CENTER,
-        format!("{}", actual_row + 1),
+        format!("{}", actual_row + 1 + table.row_offset),
         egui::FontId::new(11.0, egui::FontFamily::Monospace),
         colors.row_number_text,
     );

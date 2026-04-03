@@ -83,6 +83,7 @@ pub fn json_to_table(value: Value, path: &Path, format_name: &str) -> Result<Dat
             format_name: Some(format_name.to_string()),
             structural_changes: false,
             total_rows: None,
+            row_offset: 0,
         });
     }
 
@@ -171,6 +172,7 @@ pub fn json_to_table(value: Value, path: &Path, format_name: &str) -> Result<Dat
         format_name: Some(format_name.to_string()),
         structural_changes: false,
         total_rows: None,
+        row_offset: 0,
     })
 }
 

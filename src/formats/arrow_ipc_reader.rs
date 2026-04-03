@@ -57,6 +57,7 @@ impl FormatReader for ArrowIpcReader {
             format_name: Some("Arrow IPC".to_string()),
             structural_changes: false,
             total_rows: None,
+            row_offset: 0,
         })
     }
 

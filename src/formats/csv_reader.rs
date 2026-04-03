@@ -95,7 +95,9 @@ fn detect_delimiter(path: &Path) -> Option<u8> {
     best.map(|(d, _)| d)
 }
 
-fn infer_cell_value(s: &str) -> CellValue {
+const MAX_ROWS: usize = 1_000_000;
+
+pub fn infer_cell_value(s: &str) -> CellValue {
     if s.is_empty() {
         return CellValue::Null;
     }
@@ -115,6 +117,17 @@ fn infer_cell_value(s: &str) -> CellValue {
     }
     if chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S").is_ok()
         || chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S").is_ok()
+        || chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f").is_ok()
+        || chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f").is_ok()
+    {
+        return CellValue::DateTime(s.to_string());
+    }
+    // Timezone-aware timestamps (RFC3339, ISO8601 with offset)
+    if chrono::DateTime::parse_from_rfc3339(s).is_ok()
+        || chrono::DateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%z").is_ok()
+        || chrono::DateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f%z").is_ok()
+        || chrono::DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%z").is_ok()
+        || chrono::DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f%z").is_ok()
     {
         return CellValue::DateTime(s.to_string());
     }
@@ -139,7 +152,12 @@ fn read_delimited(path: &Path, delimiter: u8, format_name: &str) -> Result<DataT
 
     let col_count = columns.len();
     let mut rows: Vec<Vec<CellValue>> = Vec::new();
+    let mut truncated = false;
     for result in rdr.records() {
+        if rows.len() >= MAX_ROWS {
+            truncated = true;
+            break;
+        }
         let record = result?;
         let mut row: Vec<CellValue> = (0..col_count)
             .map(|i| {
@@ -152,6 +170,13 @@ fn read_delimited(path: &Path, delimiter: u8, format_name: &str) -> Result<DataT
         row.resize(col_count, CellValue::Null);
         rows.push(row);
     }
+
+    // If truncated, signal that more rows are available without reading the rest
+    let total_rows = if truncated {
+        Some(usize::MAX) // sentinel: unknown total, more rows available
+    } else {
+        None
+    };
 
     // Refine column types based on actual data
     let mut refined_columns = columns;
@@ -199,8 +224,76 @@ fn read_delimited(path: &Path, delimiter: u8, format_name: &str) -> Result<DataT
         source_path: Some(path.to_string_lossy().to_string()),
         format_name: Some(format_name.to_string()),
         structural_changes: false,
-        total_rows: None,
+        total_rows,
+        row_offset: 0,
     })
+}
+
+/// Load a chunk of CSV/TSV rows in the background.
+/// Skips `skip_rows` data records, then reads up to `max_rows` records.
+/// Pushes rows into `buffer` in batches. Sets `done` to true when finished.
+pub fn load_csv_rows_chunk(
+    path: &Path,
+    delimiter: u8,
+    skip_rows: usize,
+    max_rows: usize,
+    num_cols: usize,
+    buffer: std::sync::Arc<std::sync::Mutex<Vec<Vec<CellValue>>>>,
+    done: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    exhausted: std::sync::Arc<std::sync::atomic::AtomicBool>,
+) -> Result<()> {
+    let mut rdr = csv::ReaderBuilder::new()
+        .delimiter(delimiter)
+        .has_headers(true)
+        .flexible(true)
+        .from_path(path)?;
+
+    let flush_threshold = 50_000;
+    let mut batch_buf = Vec::with_capacity(flush_threshold);
+    let mut skipped = 0usize;
+    let mut loaded = 0usize;
+
+    for result in rdr.records() {
+        let record = result?;
+        if skipped < skip_rows {
+            skipped += 1;
+            continue;
+        }
+        if loaded >= max_rows {
+            break;
+        }
+        let mut row: Vec<CellValue> = (0..num_cols)
+            .map(|i| {
+                record
+                    .get(i)
+                    .map(infer_cell_value)
+                    .unwrap_or(CellValue::Null)
+            })
+            .collect();
+        row.resize(num_cols, CellValue::Null);
+        batch_buf.push(row);
+        loaded += 1;
+
+        if batch_buf.len() >= flush_threshold {
+            if let Ok(mut buf) = buffer.lock() {
+                buf.append(&mut batch_buf);
+            }
+            batch_buf = Vec::with_capacity(flush_threshold);
+        }
+    }
+
+    // Flush remaining
+    if !batch_buf.is_empty() {
+        if let Ok(mut buf) = buffer.lock() {
+            buf.append(&mut batch_buf);
+        }
+    }
+
+    if loaded < max_rows {
+        exhausted.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
 }
 
 pub fn write_delimited(path: &Path, delimiter: u8, table: &DataTable) -> Result<()> {
@@ -278,6 +371,38 @@ mod tests {
         assert_eq!(
             infer_cell_value("2024-01-15T10:30:00"),
             CellValue::DateTime("2024-01-15T10:30:00".into())
+        );
+    }
+
+    #[test]
+    fn test_infer_datetime_with_timezone() {
+        assert_eq!(
+            infer_cell_value("2024-01-15T10:30:00Z"),
+            CellValue::DateTime("2024-01-15T10:30:00Z".into())
+        );
+        assert_eq!(
+            infer_cell_value("2024-01-15T10:30:00+01:00"),
+            CellValue::DateTime("2024-01-15T10:30:00+01:00".into())
+        );
+        assert_eq!(
+            infer_cell_value("2024-01-15T10:30:00.123Z"),
+            CellValue::DateTime("2024-01-15T10:30:00.123Z".into())
+        );
+        assert_eq!(
+            infer_cell_value("2024-01-15T10:30:00.123+05:30"),
+            CellValue::DateTime("2024-01-15T10:30:00.123+05:30".into())
+        );
+    }
+
+    #[test]
+    fn test_infer_datetime_with_fractional_seconds() {
+        assert_eq!(
+            infer_cell_value("2024-01-15 10:30:00.123"),
+            CellValue::DateTime("2024-01-15 10:30:00.123".into())
+        );
+        assert_eq!(
+            infer_cell_value("2024-01-15T10:30:00.456789"),
+            CellValue::DateTime("2024-01-15T10:30:00.456789".into())
         );
     }
 

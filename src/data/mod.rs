@@ -411,6 +411,25 @@ impl DataTable {
         true
     }
 
+    /// Evict the first `count` rows from the table, incrementing row_offset.
+    /// Remaps edits: subtracts `count` from row indices, discards edits in evicted range.
+    pub fn evict_front_rows(&mut self, count: usize) {
+        let count = count.min(self.rows.len());
+        if count == 0 {
+            return;
+        }
+        self.rows.drain(..count);
+        self.row_offset += count;
+        let mut new_edits = HashMap::new();
+        for (&(r, c), v) in &self.edits {
+            if r >= count {
+                new_edits.insert((r - count, c), v.clone());
+            }
+            // Edits in evicted range (r < count) are discarded
+        }
+        self.edits = new_edits;
+    }
+
     /// Reset the modification tracking (call after saving).
     pub fn clear_modified(&mut self) {
         self.structural_changes = false;

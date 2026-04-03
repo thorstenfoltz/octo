@@ -38,11 +38,12 @@ pub fn draw_status_bar(
             }
 
             // Row/col count
-            let row_text = if let Some(total) = table.total_rows {
+            let row_text = if table.total_rows.is_some() {
+                let loaded = table.row_offset + table.row_count();
                 if search_active {
-                    format!("{} / {} of {} rows", filtered_count, table.row_count(), total)
+                    format!("{} / {}+ rows (partial)", filtered_count, loaded)
                 } else {
-                    format!("{} of {} rows (partial)", table.row_count(), total)
+                    format!("{}+ rows (scroll to load more)", loaded)
                 }
             } else if search_active {
                 format!("{} / {} rows", filtered_count, table.row_count())
@@ -70,9 +71,14 @@ pub fn draw_status_bar(
                     .map(|c| c.name.as_str())
                     .unwrap_or("?");
                 ui.label(
-                    RichText::new(format!("Cell: R{}:C{} ({})", row + 1, col + 1, col_name))
-                        .size(11.0)
-                        .color(colors.text_secondary),
+                    RichText::new(format!(
+                        "Cell: R{}:C{} ({})",
+                        row + 1 + table.row_offset,
+                        col + 1,
+                        col_name
+                    ))
+                    .size(11.0)
+                    .color(colors.text_secondary),
                 );
 
                 if let Some(val) = table.get(row, col) {

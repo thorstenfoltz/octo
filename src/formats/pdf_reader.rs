@@ -98,6 +98,7 @@ impl FormatReader for PdfReader {
             format_name: Some("PDF".to_string()),
             structural_changes: false,
             total_rows: None,
+            row_offset: 0,
         })
     }
 

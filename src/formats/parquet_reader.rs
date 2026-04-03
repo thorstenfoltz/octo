@@ -454,6 +454,7 @@ mod tests {
             format_name: None,
             structural_changes: false,
             total_rows: None,
+            row_offset: 0,
         };
 
         let f = tempfile::NamedTempFile::with_suffix(".parquet").unwrap();

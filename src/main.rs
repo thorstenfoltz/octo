@@ -36,13 +36,29 @@ fn render_icon() -> egui::IconData {
 }
 
 fn main() -> eframe::Result<()> {
+    // Parse CLI arguments: octo [file_path]
+    let initial_file = std::env::args()
+        .nth(1)
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.exists());
+
+    let title = match &initial_file {
+        Some(p) => format!(
+            "Octo - {}",
+            p.file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default()
+        ),
+        None => "Octo".to_string(),
+    };
+
     let icon = render_icon();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([3840.0, 2160.0])
             .with_min_inner_size([800.0, 600.0])
             .with_maximized(true)
-            .with_title("Octo")
+            .with_title(&title)
             .with_icon(Arc::new(icon)),
         ..Default::default()
     };
@@ -50,9 +66,9 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "Octo",
         options,
-        Box::new(|cc| {
+        Box::new(move |cc| {
             ui::theme::apply_theme(&cc.egui_ctx, ThemeMode::Light);
-            Ok(Box::new(OctoApp::new()))
+            Ok(Box::new(OctoApp::new(initial_file)))
         }),
     )
 }
@@ -102,6 +118,26 @@ struct OctoApp {
     bg_row_buffer: Option<Arc<Mutex<Vec<Vec<data::CellValue>>>>>,
     /// Background loading: flag indicating loading is complete
     bg_loading_done: Arc<std::sync::atomic::AtomicBool>,
+    /// Whether more rows can be loaded on demand (file has more rows than currently loaded)
+    bg_can_load_more: bool,
+    /// Set by background loader when file has no more rows
+    bg_file_exhausted: Arc<std::sync::atomic::AtomicBool>,
+    /// File path passed via command line (loaded on first frame)
+    initial_file: Option<std::path::PathBuf>,
+}
+
+/// Detect delimiter from a file by reading only the first few KB.
+fn detect_delimiter_from_file(path: &std::path::Path) -> u8 {
+    use std::io::Read;
+    let mut buf = vec![0u8; 1_048_576]; // 1 MB
+    let content = match std::fs::File::open(path) {
+        Ok(mut f) => match f.read(&mut buf) {
+            Ok(n) => String::from_utf8_lossy(&buf[..n]).to_string(),
+            Err(_) => return b',',
+        },
+        Err(_) => return b',',
+    };
+    detect_delimiter_from_content(&content)
 }
 
 /// Detect delimiter from file content (same logic as csv_reader but operates on a string).
@@ -135,8 +171,10 @@ fn detect_delimiter_from_content(content: &str) -> u8 {
 fn load_remaining_parquet_rows(
     path: &std::path::Path,
     skip_rows: usize,
+    max_rows: usize,
     buffer: Arc<Mutex<Vec<Vec<data::CellValue>>>>,
     done: Arc<std::sync::atomic::AtomicBool>,
+    exhausted: Arc<std::sync::atomic::AtomicBool>,
 ) -> anyhow::Result<()> {
     use formats::parquet_reader::arrow_value_to_cell;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
@@ -146,11 +184,12 @@ fn load_remaining_parquet_rows(
     let reader = builder.with_batch_size(8192).build()?;
 
     let mut skipped = 0usize;
+    let mut loaded = 0usize;
     let flush_threshold = 50_000;
 
     let mut batch_buf = Vec::with_capacity(flush_threshold);
 
-    for batch_result in reader {
+    'outer: for batch_result in reader {
         let batch = batch_result?;
         let num_rows = batch.num_rows();
         let num_cols = batch.num_columns();
@@ -160,12 +199,16 @@ fn load_remaining_parquet_rows(
                 skipped += 1;
                 continue;
             }
+            if loaded >= max_rows {
+                break 'outer;
+            }
             let mut row = Vec::with_capacity(num_cols);
             for col_idx in 0..num_cols {
                 let array = batch.column(col_idx);
                 row.push(arrow_value_to_cell(array, row_idx));
             }
             batch_buf.push(row);
+            loaded += 1;
 
             if batch_buf.len() >= flush_threshold {
                 if let Ok(mut buf) = buffer.lock() {
@@ -183,6 +226,9 @@ fn load_remaining_parquet_rows(
         }
     }
 
+    if loaded < max_rows {
+        exhausted.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
     done.store(true, std::sync::atomic::Ordering::Relaxed);
     Ok(())
 }
@@ -233,7 +279,7 @@ const COLUMN_TYPES: &[&str] = &[
 
 
 impl OctoApp {
-    fn new() -> Self {
+    fn new(initial_file: Option<std::path::PathBuf>) -> Self {
         Self {
             table: DataTable::empty(),
             registry: FormatRegistry::new(),
@@ -264,6 +310,9 @@ impl OctoApp {
             csv_delimiter: b',',
             bg_row_buffer: None,
             bg_loading_done: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            bg_can_load_more: false,
+            bg_file_exhausted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            initial_file,
         }
     }
 
@@ -405,99 +454,98 @@ impl OctoApp {
             dialog = dialog.add_filter(&name, &ext_refs);
         }
 
-        let file = dialog.pick_file();
+        if let Some(path) = dialog.pick_file() {
+            self.load_file(path);
+        }
+    }
 
-        if let Some(path) = file {
-            match self.registry.reader_for_path(&path) {
-                Some(reader) => match reader.read_file(&path) {
-                    Ok(table) => {
-                        self.table = table;
-                        self.table_state = TableViewState::default();
-                        self.search_text.clear();
-                        self.filter_dirty = true;
-                        // Start background loading for remaining rows if truncated
-                        if let Some(total) = self.table.total_rows {
-                            let loaded = self.table.row_count();
-                            self.status_message = Some((
-                                format!(
-                                    "Loading... {} of {} rows loaded",
-                                    loaded, total
-                                ),
-                                std::time::Instant::now(),
-                            ));
-                            // Set up background loading
-                            let buffer = Arc::new(Mutex::new(Vec::<Vec<data::CellValue>>::new()));
-                            let done_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
-                            self.bg_row_buffer = Some(buffer.clone());
-                            self.bg_loading_done = done_flag.clone();
-                            let bg_path = path.clone();
-                            let skip_rows = loaded;
-                            std::thread::spawn(move || {
-                                if let Err(e) = load_remaining_parquet_rows(
-                                    &bg_path,
-                                    skip_rows,
-                                    buffer,
-                                    done_flag,
-                                ) {
-                                    eprintln!("Background loading error: {}", e);
-                                }
-                            });
-                        } else {
-                            self.status_message = None;
-                            self.bg_row_buffer = None;
-                            self.bg_loading_done
-                                .store(true, std::sync::atomic::Ordering::Relaxed);
-                        }
-                        self.raw_view_formatted = false;
-
-                        // Detect and store CSV delimiter
-                        if self.table.format_name.as_deref() == Some("CSV") {
-                            self.csv_delimiter = detect_delimiter_from_content(
-                                &std::fs::read_to_string(&path).unwrap_or_default(),
-                            );
-                        } else if self.table.format_name.as_deref() == Some("TSV") {
-                            self.csv_delimiter = b'\t';
-                        }
-
-                        // Load raw content for text-based formats
-                        self.raw_content = std::fs::read_to_string(&path).ok();
-                        self.raw_content_modified = false;
-
-                        // For PDFs, render pages visually and default to Pdf view
-                        self.pdf_page_images.clear();
-                        self.pdf_textures.clear();
-                        if self.table.format_name.as_deref() == Some("PDF") {
-                            match formats::pdf_reader::render_pdf_pages(&path, 2.0) {
-                                Ok(images) => {
-                                    self.pdf_page_images = images;
-                                    self.view_mode = ViewMode::Pdf;
-                                }
-                                Err(_) => {
-                                    self.view_mode = ViewMode::Table;
-                                }
-                            }
-                        } else {
-                            self.view_mode = ViewMode::Table;
-                        }
-                    }
-                    Err(e) => {
+    fn load_file(&mut self, path: std::path::PathBuf) {
+        match self.registry.reader_for_path(&path) {
+            Some(reader) => match reader.read_file(&path) {
+                Ok(table) => {
+                    self.table = table;
+                    self.table_state = TableViewState::default();
+                    self.search_text.clear();
+                    self.filter_dirty = true;
+                    // Set up on-demand loading state for truncated files
+                    if self.table.total_rows.is_some() {
+                        let loaded = self.table.row_count();
                         self.status_message = Some((
-                            format!("Error reading file: {}", e),
+                            format!(
+                                "Loaded {} rows (scroll down to load more)",
+                                loaded
+                            ),
                             std::time::Instant::now(),
                         ));
+                        self.bg_can_load_more = true;
+                        self.bg_row_buffer = None;
+                        self.bg_loading_done
+                            .store(true, std::sync::atomic::Ordering::Relaxed);
+                        self.bg_file_exhausted
+                            .store(false, std::sync::atomic::Ordering::Relaxed);
+                    } else {
+                        self.status_message = None;
+                        self.bg_row_buffer = None;
+                        self.bg_loading_done
+                            .store(true, std::sync::atomic::Ordering::Relaxed);
+                        self.bg_can_load_more = false;
+                        self.bg_file_exhausted
+                            .store(false, std::sync::atomic::Ordering::Relaxed);
                     }
-                },
-                None => {
+                    self.raw_view_formatted = false;
+
+                    // Detect and store CSV delimiter (read only first few KB)
+                    if self.table.format_name.as_deref() == Some("CSV") {
+                        self.csv_delimiter = detect_delimiter_from_file(&path);
+                    } else if self.table.format_name.as_deref() == Some("TSV") {
+                        self.csv_delimiter = b'\t';
+                    }
+
+                    // Load raw content for text-based formats (skip for large files)
+                    let file_size = std::fs::metadata(&path)
+                        .map(|m| m.len())
+                        .unwrap_or(0);
+                    if file_size <= 500_000_000 { // 500 MB
+                        self.raw_content = std::fs::read_to_string(&path).ok();
+                    } else {
+                        self.raw_content = None;
+                    }
+                    self.raw_content_modified = false;
+
+                    // For PDFs, render pages visually and default to Pdf view
+                    self.pdf_page_images.clear();
+                    self.pdf_textures.clear();
+                    if self.table.format_name.as_deref() == Some("PDF") {
+                        match formats::pdf_reader::render_pdf_pages(&path, 2.0) {
+                            Ok(images) => {
+                                self.pdf_page_images = images;
+                                self.view_mode = ViewMode::Pdf;
+                            }
+                            Err(_) => {
+                                self.view_mode = ViewMode::Table;
+                            }
+                        }
+                    } else {
+                        self.view_mode = ViewMode::Table;
+                    }
+                }
+                Err(e) => {
                     self.status_message = Some((
-                        format!(
-                            "No reader available for: {}",
-                            path.extension()
-                                .map(|e| e.to_string_lossy().to_string())
-                                .unwrap_or_default()
-                        ),
+                        format!("Error reading file: {}", e),
                         std::time::Instant::now(),
                     ));
                 }
+            },
+            None => {
+                self.status_message = Some((
+                    format!(
+                        "No reader available for: {}",
+                        path.extension()
+                            .map(|e| e.to_string_lossy().to_string())
+                            .unwrap_or_default()
+                    ),
+                    std::time::Instant::now(),
+                ));
             }
         }
     }
@@ -688,6 +736,11 @@ impl OctoApp {
 
 impl eframe::App for OctoApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // --- Load file from CLI on first frame ---
+        if let Some(path) = self.initial_file.take() {
+            self.load_file(path);
+        }
+
         // --- Handle close request ---
         if ctx.input(|i| i.viewport().close_requested()) {
             if (self.table.is_modified() || self.raw_content_modified) && !self.confirmed_close {
@@ -712,23 +765,42 @@ impl eframe::App for OctoApp {
                 .load(std::sync::atomic::Ordering::Relaxed);
             if drained {
                 self.filter_dirty = true;
-                if let Some(total) = self.table.total_rows {
-                    if loading_done {
+                let file_exhausted = self
+                    .bg_file_exhausted
+                    .load(std::sync::atomic::Ordering::Relaxed);
+                if self.table.total_rows.is_some() {
+                    let total_loaded = self.table.row_offset + self.table.row_count();
+                    if loading_done && file_exhausted {
                         self.status_message = Some((
-                            format!("Loaded all {} rows", self.table.row_count()),
+                            format!("Loaded all {} rows", total_loaded),
                             std::time::Instant::now(),
                         ));
                         self.table.total_rows = None;
+                        self.bg_can_load_more = false;
+                    } else if loading_done {
+                        self.status_message = Some((
+                            format!(
+                                "Loaded {} rows (scroll down to load more)",
+                                total_loaded
+                            ),
+                            std::time::Instant::now(),
+                        ));
+                        self.bg_can_load_more = true;
                     } else {
                         self.status_message = Some((
                             format!(
-                                "Loading... {} of {} rows",
-                                self.table.row_count(),
-                                total
+                                "Loading... {} rows so far",
+                                total_loaded
                             ),
                             std::time::Instant::now(),
                         ));
                     }
+                }
+                // Evict front rows if we have too many in memory
+                if self.table.rows.len() > 3_000_000 {
+                    let evict_count = self.table.rows.len() - 2_000_000;
+                    self.table.evict_front_rows(evict_count);
+                    self.filter_dirty = true;
                 }
             }
             if loading_done {
@@ -1461,11 +1533,86 @@ impl eframe::App for OctoApp {
             }
 
             // --- Copy / Paste ---
+            if interaction.ctx_copy_cell {
+                if let Some((row, col)) = self.table_state.selected_cell {
+                    let text = self
+                        .table
+                        .get(row, col)
+                        .map(|v| v.to_string())
+                        .unwrap_or_default();
+                    self.table_state.clipboard = Some(text.clone());
+                    if let Some(ref cb) = self.os_clipboard {
+                        if let Ok(mut cb) = cb.lock() {
+                            let _ = cb.set_text(&text);
+                        }
+                    }
+                }
+            }
             if interaction.ctx_copy {
                 self.do_copy();
             }
             if interaction.ctx_paste {
                 self.do_paste(interaction.paste_text);
+            }
+
+            // --- Lazy loading: load more rows on demand ---
+            if interaction.needs_more_rows
+                && self.bg_can_load_more
+                && self.bg_row_buffer.is_none()
+                && self.table.total_rows.is_some()
+            {
+                self.bg_can_load_more = false;
+                let buffer = Arc::new(Mutex::new(Vec::<Vec<data::CellValue>>::new()));
+                let done_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                let exhausted_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                self.bg_row_buffer = Some(buffer.clone());
+                self.bg_loading_done = done_flag.clone();
+                self.bg_file_exhausted = exhausted_flag.clone();
+
+                let skip_rows = self.table.row_offset + self.table.row_count();
+                let max_chunk = 1_000_000usize;
+
+                if let Some(ref source_path) = self.table.source_path.clone() {
+                    let path = std::path::PathBuf::from(source_path);
+                    let format_name = self.table.format_name.clone().unwrap_or_default();
+                    let num_cols = self.table.col_count();
+                    let csv_delimiter = self.csv_delimiter;
+
+                    if format_name == "Parquet" {
+                        std::thread::spawn(move || {
+                            if let Err(e) = load_remaining_parquet_rows(
+                                &path,
+                                skip_rows,
+                                max_chunk,
+                                buffer.clone(),
+                                done_flag,
+                                exhausted_flag,
+                            ) {
+                                eprintln!("Background loading error: {}", e);
+                            }
+                        });
+                    } else if format_name == "CSV" || format_name == "TSV" {
+                        let delimiter = if format_name == "TSV" {
+                            b'\t'
+                        } else {
+                            csv_delimiter
+                        };
+                        std::thread::spawn(move || {
+                            if let Err(e) = formats::csv_reader::load_csv_rows_chunk(
+                                &path,
+                                delimiter,
+                                skip_rows,
+                                max_chunk,
+                                num_cols,
+                                buffer,
+                                done_flag,
+                                exhausted_flag,
+                            ) {
+                                eprintln!("Background CSV loading error: {}", e);
+                            }
+                        });
+                    }
+                }
             }
         });
     }

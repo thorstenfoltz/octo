@@ -68,6 +68,7 @@ impl FormatReader for AvroReader {
             format_name: Some("Avro".to_string()),
             structural_changes: false,
             total_rows: None,
+            row_offset: 0,
         })
     }
 }

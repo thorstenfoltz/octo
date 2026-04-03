@@ -119,6 +119,7 @@ impl FormatReader for ExcelReader {
             format_name: Some("Excel".to_string()),
             structural_changes: false,
             total_rows: None,
+            row_offset: 0,
         })
     }
 }
