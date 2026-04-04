@@ -1,0 +1,35 @@
+default: openai
+language: en
+style: professional
+emoji: true
+conventional: true
+branch_context: false
+load_tokens_from: /home/thorsten/.config/cai/tokens.yml
+prompt_file: ''
+squash_prompt_file: ''
+token_logging: true
+measure_time: true
+anthropic:
+  model: claude-haiku-4-5
+  temperature: 0
+deepseek:
+  model: deepseek-chat
+  temperature: 0
+gemini:
+  model: gemini-2.5-flash
+  temperature: 0
+groq:
+  model: moonshotai/kimi-k2-instruct
+  temperature: 0
+mistral:
+  model: codestral-2508
+  temperature: 0
+ollama:
+  model: llama3.1
+  temperature: 0
+openai:
+  model: gpt-5.4
+  temperature: 0
+xai:
+  model: grok-4-1-fast-reasoning
+  temperature: 0
