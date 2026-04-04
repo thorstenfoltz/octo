@@ -1,0 +1,19 @@
+# Accepts log level: "error", "warn", "info", "debug", "trace"
+verbose = "info"
+
+# Don't show interactive progress bar while checking links.
+no_progress = true
+
+accept = ["200", "429"]
+
+exclude = [
+    "https://megalinter.io/configuration/",
+    "file:///tmp/lint/dwh/models/logo.png"
+    ]
+
+exclude_path = [
+    "logs",
+    "megalinter-reports",
+    ".venv",
+    ".github/workflows",
+    ]

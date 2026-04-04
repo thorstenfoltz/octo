@@ -1,6 +1,10 @@
 # Octo
 
-A native desktop application for viewing and editing tabular data files. Built with Rust and [egui](https://github.com/emilk/egui).
+<p align="center">
+  <img src="assets/octo.svg" alt="Octo" width="128" height="128">
+</p>
+
+A native desktop application for viewing and editing data files.
 
 ## Supported Formats
 
@@ -8,13 +12,13 @@ A native desktop application for viewing and editing tabular data files. Built w
 |--------|------|-------|
 | Parquet | Yes | Yes |
 | CSV / TSV | Yes | Yes |
-| JSON / JSON Lines | Yes | No |
-| Excel (.xlsx, .xls) | Yes | No |
+| JSON / JSON Lines | Yes | Yes |
+| Excel (.xlsx, .xls) | Yes | Yes |
 | Arrow IPC / Feather | Yes | Yes |
-| Avro | Yes | No |
-| XML | Yes | No |
-| TOML | Yes | No |
-| YAML | Yes | No |
+| Avro | Yes | Yes |
+| XML | Yes | Yes |
+| TOML | Yes | Yes |
+| YAML | Yes | Yes |
 | PDF | Yes | Yes |
 | Markdown | Yes | Yes |
 | Plain Text | Yes | Yes |
@@ -27,8 +31,9 @@ Unknown file extensions are opened as plain text.
 - Lazy row loading for Parquet files (millions of rows)
 - Inline cell editing with type-aware parsing
 - Column resize, drag-and-drop reorder, and sorting
-- Multi-cell, multi-row, and multi-column selection
-- Copy/paste with OS clipboard integration (tab-separated)
+- Cell, row, and column selection with copy/paste
+- Color marking for cells, rows, and columns
+- Undo/redo support (Ctrl+Z / Ctrl+Y)
 - Row and column insert, delete, and move operations
 - Search/filter across all columns
 - Raw text view with line numbers for text-based formats
@@ -72,6 +77,10 @@ This installs the binary, SVG icon, and desktop entry so Octo appears in your ap
 ### Windows
 
 Run `install.bat` as Administrator. This builds a release binary, copies it to `%ProgramFiles%\Octo`, adds it to your PATH, and creates a Start Menu shortcut.
+
+### Arch Linux
+
+A `PKGBUILD` is available in `.github/aur/` for building an Arch Linux package.
 
 ## Testing
 

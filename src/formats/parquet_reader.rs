@@ -95,6 +95,9 @@ impl FormatReader for ParquetReader {
                 None
             },
             row_offset: 0,
+            marks: std::collections::HashMap::new(),
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         })
     }
 }
@@ -455,6 +458,9 @@ mod tests {
             structural_changes: false,
             total_rows: None,
             row_offset: 0,
+            marks: HashMap::new(),
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         };
 
         let f = tempfile::NamedTempFile::with_suffix(".parquet").unwrap();

@@ -97,17 +97,31 @@ impl FormatRegistry {
             .map(|r| r.as_ref())
     }
 
-    /// Get reader names and their extensions for display.
+    /// Get format filter labels and their extensions for file dialogs.
+    /// Labels use dotted extensions (e.g. ".csv, .tsv") instead of format names.
     pub fn format_descriptions(&self) -> Vec<(String, Vec<String>)> {
         self.readers
             .iter()
             .map(|r| {
-                (
-                    r.name().to_string(),
-                    r.extensions().iter().map(|e| e.to_string()).collect(),
-                )
+                let exts: Vec<String> = r.extensions().iter().map(|e| e.to_string()).collect();
+                let label = exts.iter().map(|e| format!(".{}", e)).collect::<Vec<_>>().join(", ");
+                (label, exts)
             })
             .collect()
+    }
+
+    /// Get individual extension filters for save dialogs.
+    /// Each extension is its own entry (e.g. ".csv", ".json", ".xlsx" separately).
+    pub fn save_format_descriptions(&self) -> Vec<(String, Vec<String>)> {
+        let mut result = Vec::new();
+        for r in &self.readers {
+            if r.supports_write() {
+                for ext in r.extensions() {
+                    result.push((format!(".{}", ext), vec![ext.to_string()]));
+                }
+            }
+        }
+        result
     }
 
     /// Build a combined filter string with all supported extensions.
@@ -257,9 +271,10 @@ mod tests {
         let reg = FormatRegistry::new();
         let descs = reg.format_descriptions();
         assert!(!descs.is_empty());
-        let names: Vec<&str> = descs.iter().map(|(n, _)| n.as_str()).collect();
-        assert!(names.contains(&"CSV"));
-        assert!(names.contains(&"Parquet"));
+        // Labels should now be dotted extensions
+        let labels: Vec<&str> = descs.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(labels.iter().any(|l| l.contains(".csv")));
+        assert!(labels.iter().any(|l| l.contains(".parquet")));
     }
 
     #[test]
@@ -313,13 +328,13 @@ mod tests {
     fn test_format_descriptions_includes_all() {
         let reg = FormatRegistry::new();
         let descs = reg.format_descriptions();
-        let names: Vec<&str> = descs.iter().map(|(n, _)| n.as_str()).collect();
-        assert!(names.contains(&"Text"));
-        assert!(names.contains(&"Markdown"));
-        assert!(names.contains(&"Parquet"));
-        assert!(names.contains(&"CSV"));
-        assert!(names.contains(&"JSON"));
-        assert!(names.contains(&"Excel"));
+        let labels: Vec<&str> = descs.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(labels.iter().any(|l| l.contains(".txt")));
+        assert!(labels.iter().any(|l| l.contains(".md")));
+        assert!(labels.iter().any(|l| l.contains(".parquet")));
+        assert!(labels.iter().any(|l| l.contains(".csv")));
+        assert!(labels.iter().any(|l| l.contains(".json")));
+        assert!(labels.iter().any(|l| l.contains(".xlsx")));
     }
 
     #[test]

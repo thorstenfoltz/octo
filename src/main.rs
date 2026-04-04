@@ -583,9 +583,9 @@ impl OctoApp {
 
     fn save_file_as(&mut self) {
         let mut dialog = rfd::FileDialog::new();
-        for (name, exts) in self.registry.format_descriptions() {
+        for (label, exts) in self.registry.save_format_descriptions() {
             let ext_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
-            dialog = dialog.add_filter(&name, &ext_refs);
+            dialog = dialog.add_filter(&label, &ext_refs);
         }
         if let Some(ref source) = self.table.source_path {
             if let Some(name) = std::path::Path::new(source).file_name() {
@@ -1661,6 +1661,26 @@ impl eframe::App for OctoApp {
             }
             if interaction.ctx_paste {
                 self.do_paste(interaction.paste_text);
+            }
+
+            // --- Undo / Redo ---
+            if interaction.undo {
+                self.table.undo();
+                self.filter_dirty = true;
+                self.table_state.widths_initialized = false;
+            }
+            if interaction.redo {
+                self.table.redo();
+                self.filter_dirty = true;
+                self.table_state.widths_initialized = false;
+            }
+
+            // --- Color marks ---
+            if let Some((key, color)) = interaction.set_mark {
+                self.table.set_mark(key, color);
+            }
+            if let Some(key) = interaction.clear_mark {
+                self.table.clear_mark(key);
             }
 
             // --- Lazy loading: load more rows on demand ---

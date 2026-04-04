@@ -218,6 +218,9 @@ fn read_delimited(path: &Path, delimiter: u8, format_name: &str) -> Result<DataT
         structural_changes: false,
         total_rows,
         row_offset: 0,
+        marks: std::collections::HashMap::new(),
+        undo_stack: Vec::new(),
+        redo_stack: Vec::new(),
     })
 }
 

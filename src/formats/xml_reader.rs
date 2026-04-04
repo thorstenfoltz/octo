@@ -21,6 +21,50 @@ impl FormatReader for XmlFormatReader {
         let content = std::fs::read_to_string(path)?;
         parse_xml_to_table(&content, path)
     }
+
+    fn supports_write(&self) -> bool {
+        true
+    }
+
+    fn write_file(&self, path: &Path, table: &DataTable) -> Result<()> {
+        use std::io::Write;
+        let mut out = String::new();
+        out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<data>\n");
+        for row_idx in 0..table.row_count() {
+            out.push_str("  <row");
+            let mut child_elements = Vec::new();
+            for (col_idx, col) in table.columns.iter().enumerate() {
+                let val = table
+                    .get(row_idx, col_idx)
+                    .map(|v| v.to_string())
+                    .unwrap_or_default();
+                if val.is_empty() {
+                    continue;
+                }
+                let escaped = quick_xml::escape::escape(&val);
+                if col.name.starts_with('@') {
+                    let attr_name = quick_xml::escape::escape(&col.name[1..]);
+                    out.push_str(&format!(" {}=\"{}\"", attr_name, escaped));
+                } else {
+                    child_elements.push((col.name.clone(), escaped.into_owned()));
+                }
+            }
+            if child_elements.is_empty() {
+                out.push_str("/>\n");
+            } else {
+                out.push_str(">\n");
+                for (name, val) in &child_elements {
+                    let escaped_name = quick_xml::escape::escape(name);
+                    out.push_str(&format!("    <{}>{}</{}>\n", escaped_name, val, escaped_name));
+                }
+                out.push_str("  </row>\n");
+            }
+        }
+        out.push_str("</data>\n");
+        let mut file = std::fs::File::create(path)?;
+        file.write_all(out.as_bytes())?;
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -198,6 +242,9 @@ fn xml_elements_to_table(elements: &[XmlElement], path: &Path) -> Result<DataTab
         structural_changes: false,
         total_rows: None,
         row_offset: 0,
+        marks: std::collections::HashMap::new(),
+        undo_stack: Vec::new(),
+        redo_stack: Vec::new(),
     })
 }
 

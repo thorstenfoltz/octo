@@ -20,6 +20,45 @@ impl FormatReader for TomlReader {
         let json_value = toml_to_json(&value);
         crate::formats::json_reader::json_to_table(json_value, path, "TOML")
     }
+
+    fn supports_write(&self) -> bool {
+        true
+    }
+
+    fn write_file(&self, path: &Path, table: &DataTable) -> Result<()> {
+        let json = crate::formats::json_reader::table_to_json_array(table);
+        let toml_value = json_to_toml(&json);
+        let content = toml::to_string_pretty(&toml_value)?;
+        std::fs::write(path, content)?;
+        Ok(())
+    }
+}
+
+fn json_to_toml(value: &serde_json::Value) -> toml::Value {
+    match value {
+        serde_json::Value::Null => toml::Value::String(String::new()),
+        serde_json::Value::Bool(b) => toml::Value::Boolean(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                toml::Value::Integer(i)
+            } else if let Some(f) = n.as_f64() {
+                toml::Value::Float(f)
+            } else {
+                toml::Value::String(n.to_string())
+            }
+        }
+        serde_json::Value::String(s) => toml::Value::String(s.clone()),
+        serde_json::Value::Array(arr) => {
+            toml::Value::Array(arr.iter().map(json_to_toml).collect())
+        }
+        serde_json::Value::Object(map) => {
+            let table: toml::map::Map<String, toml::Value> = map
+                .iter()
+                .map(|(k, v)| (k.clone(), json_to_toml(v)))
+                .collect();
+            toml::Value::Table(table)
+        }
+    }
 }
 
 fn toml_to_json(value: &toml::Value) -> serde_json::Value {

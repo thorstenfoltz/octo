@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use egui::{Align2, Color32, CursorIcon, RichText, Sense, Ui, Vec2};
 
 use super::theme::{ThemeColors, ThemeMode};
-use crate::data::DataTable;
+use crate::data::{DataTable, MarkColor, MarkKey};
 
 /// State for the table view (selection, editing).
 #[derive(Default)]
@@ -109,6 +109,13 @@ pub struct TableInteraction {
     pub ctx_copy_cell: bool,
     /// Signal that more rows should be loaded (scroll near bottom with truncated data).
     pub needs_more_rows: bool,
+    /// Undo/redo signals
+    pub undo: bool,
+    pub redo: bool,
+    /// Set a color mark
+    pub set_mark: Option<(MarkKey, MarkColor)>,
+    /// Clear a color mark
+    pub clear_mark: Option<MarkKey>,
 }
 
 impl Default for TableInteraction {
@@ -133,6 +140,10 @@ impl Default for TableInteraction {
             change_col_type: None,
             ctx_copy_cell: false,
             needs_more_rows: false,
+            undo: false,
+            redo: false,
+            set_mark: None,
+            clear_mark: None,
         }
     }
 }
@@ -251,17 +262,21 @@ pub fn draw_table(
         }
     }
 
-    // Ctrl+C / Ctrl+V
-    let ctrl_held = ui.input(|i| i.modifiers.command);
-    if ctrl_held && ui.input(|i| i.key_pressed(egui::Key::C)) {
-        if state.editing_cell.is_none() {
+    // Ctrl+C / Ctrl+V / Ctrl+Z / Ctrl+Y
+    // Use consume_key to prevent egui from handling these shortcuts itself
+    if state.editing_cell.is_none() {
+        let cmd = egui::Modifiers::COMMAND;
+        if ui.input_mut(|i| i.consume_key(cmd, egui::Key::C)) {
             interaction.ctx_copy = true;
         }
-    }
-    if ctrl_held && ui.input(|i| i.key_pressed(egui::Key::V)) {
-        if state.editing_cell.is_none() && !interaction.ctx_paste {
+        if ui.input_mut(|i| i.consume_key(cmd, egui::Key::V)) {
             interaction.ctx_paste = true;
-            // paste_text = None signals main.rs to read from OS clipboard
+        }
+        if ui.input_mut(|i| i.consume_key(cmd, egui::Key::Z)) {
+            interaction.undo = true;
+        }
+        if ui.input_mut(|i| i.consume_key(cmd, egui::Key::Y)) {
+            interaction.redo = true;
         }
     }
     // Also detect paste from egui's Paste event (carries clipboard text directly)
@@ -763,8 +778,7 @@ fn draw_header_direct(
                 }
                 ui.separator();
                 ui.label(RichText::new("Clipboard").strong().size(11.0));
-                if ui.button("Copy Column").clicked() {
-                    // Select this column for copy
+                if ui.button("Copy").clicked() {
                     if !state.selected_cols.contains(&col_idx) {
                         state.selected_cols.clear();
                         state.selected_cols.insert(col_idx);
@@ -778,6 +792,8 @@ fn draw_header_direct(
                         ui.close_menu();
                     }
                 }
+                ui.separator();
+                mark_submenu(ui, MarkKey::Column(col_idx), table, interaction);
                 ui.separator();
                 if ui.button("Sort A-Z").clicked() {
                     interaction.sort_rows_asc_by = Some(col_idx);
@@ -970,13 +986,9 @@ fn draw_data_row_direct(
     panel_rect: egui::Rect,
     interaction: &mut TableInteraction,
 ) {
-    let is_selected_row = state
-        .selected_cell
-        .map(|(r, _)| r == actual_row)
-        .unwrap_or(false);
     let is_multi_selected_row = state.selected_rows.contains(&actual_row);
 
-    let row_bg = if is_selected_row || is_multi_selected_row {
+    let row_bg = if is_multi_selected_row {
         colors.bg_selected
     } else if display_idx % 2 == 0 {
         colors.row_even
@@ -1022,10 +1034,13 @@ fn draw_data_row_direct(
             let is_edited = table.is_edited(actual_row, col_idx);
             let is_col_selected = state.selected_cols.contains(&col_idx);
 
+            let mark_color = table.get_mark_color(actual_row, col_idx);
             let cell_bg = if is_selected {
                 colors.bg_selected
             } else if is_multi_selected_row || is_col_selected {
                 colors.bg_selected
+            } else if let Some(mc) = mark_color {
+                colors.mark_color(mc)
             } else if is_edited {
                 colors.bg_edited
             } else {
@@ -1116,19 +1131,9 @@ fn draw_data_row_direct(
                 if response.clicked() {
                     state.selected_cell = Some((actual_row, col_idx));
                     state.editing_cell = None;
-                    let modifiers = ui.input(|i| i.modifiers);
-                    if modifiers.command {
-                        // Ctrl+click: toggle row in multi-selection
-                        if state.selected_rows.contains(&actual_row) {
-                            state.selected_rows.remove(&actual_row);
-                        } else {
-                            state.selected_rows.insert(actual_row);
-                        }
-                        state.selected_cols.clear();
-                    } else {
-                        state.selected_rows.clear();
-                        state.selected_cols.clear();
-                    }
+                    // Single click selects just the cell; clear row/col multi-selection
+                    state.selected_rows.clear();
+                    state.selected_cols.clear();
                 }
                 if response.double_clicked() {
                     state.selected_cell = Some((actual_row, col_idx));
@@ -1142,15 +1147,10 @@ fn draw_data_row_direct(
 
                 // Right-click context menu on cell
                 response.context_menu(|ui| {
-                    // Ensure this cell is selected for operations
                     state.selected_cell = Some((actual_row, col_idx));
 
                     // --- Copy / Paste ---
                     ui.label(RichText::new("Clipboard").strong().size(11.0));
-                    if ui.button("Copy Cell").clicked() {
-                        interaction.ctx_copy_cell = true;
-                        ui.close_menu();
-                    }
                     if ui.button("Copy").clicked() {
                         interaction.ctx_copy = true;
                         ui.close_menu();
@@ -1161,6 +1161,10 @@ fn draw_data_row_direct(
                             ui.close_menu();
                         }
                     }
+                    ui.separator();
+
+                    // --- Mark ---
+                    mark_submenu(ui, MarkKey::Cell(actual_row, col_idx), table, interaction);
                     ui.separator();
 
                     ui.label(RichText::new("Row").strong().size(11.0));
@@ -1299,7 +1303,7 @@ fn draw_data_row_direct(
             }
 
             ui.label(RichText::new("Clipboard").strong().size(11.0));
-            if ui.button("Copy Row").clicked() {
+            if ui.button("Copy").clicked() {
                 interaction.ctx_copy = true;
                 ui.close_menu();
             }
@@ -1309,6 +1313,9 @@ fn draw_data_row_direct(
                     ui.close_menu();
                 }
             }
+            ui.separator();
+
+            mark_submenu(ui, MarkKey::Row(actual_row), table, interaction);
             ui.separator();
 
             ui.label(RichText::new("Row").strong().size(11.0));
@@ -1334,4 +1341,35 @@ fn draw_data_row_direct(
             }
         });
     }
+}
+
+fn mark_submenu(
+    ui: &mut Ui,
+    key: MarkKey,
+    table: &DataTable,
+    interaction: &mut TableInteraction,
+) {
+    let current_mark = table.marks.get(&key).copied();
+    ui.menu_button("Mark", |ui| {
+        for &color in MarkColor::ALL {
+            let swatch = ThemeColors::mark_swatch(color);
+            let label = if current_mark == Some(color) {
+                format!("{} (current)", color.label())
+            } else {
+                color.label().to_string()
+            };
+            let btn = egui::Button::new(RichText::new(label).color(swatch));
+            if ui.add(btn).clicked() {
+                interaction.set_mark = Some((key.clone(), color));
+                ui.close_menu();
+            }
+        }
+        if current_mark.is_some() {
+            ui.separator();
+            if ui.button("Clear").clicked() {
+                interaction.clear_mark = Some(key.clone());
+                ui.close_menu();
+            }
+        }
+    });
 }

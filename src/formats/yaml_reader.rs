@@ -20,6 +20,17 @@ impl FormatReader for YamlReader {
         let json_value = yaml_to_json(&value);
         crate::formats::json_reader::json_to_table(json_value, path, "YAML")
     }
+
+    fn supports_write(&self) -> bool {
+        true
+    }
+
+    fn write_file(&self, path: &Path, table: &DataTable) -> Result<()> {
+        let json = crate::formats::json_reader::table_to_json_array(table);
+        let content = serde_yaml::to_string(&json)?;
+        std::fs::write(path, content)?;
+        Ok(())
+    }
 }
 
 fn yaml_to_json(value: &serde_yaml::Value) -> serde_json::Value {

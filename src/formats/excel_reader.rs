@@ -2,6 +2,7 @@ use crate::data::{CellValue, ColumnInfo, DataTable};
 use crate::formats::FormatReader;
 use anyhow::Result;
 use calamine::{open_workbook_auto, Data, Reader};
+use rust_xlsxwriter::Workbook;
 use std::path::Path;
 
 pub struct ExcelReader;
@@ -120,6 +121,50 @@ impl FormatReader for ExcelReader {
             structural_changes: false,
             total_rows: None,
             row_offset: 0,
+            marks: std::collections::HashMap::new(),
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         })
+    }
+
+    fn supports_write(&self) -> bool {
+        true
+    }
+
+    fn write_file(&self, path: &Path, table: &DataTable) -> Result<()> {
+        let mut workbook = Workbook::new();
+        let worksheet = workbook.add_worksheet();
+
+        // Write headers
+        for (col_idx, col) in table.columns.iter().enumerate() {
+            worksheet.write_string(0, col_idx as u16, &col.name)?;
+        }
+
+        // Write data rows
+        for row_idx in 0..table.row_count() {
+            let xlsx_row = (row_idx + 1) as u32;
+            for col_idx in 0..table.col_count() {
+                if let Some(cell) = table.get(row_idx, col_idx) {
+                    match cell {
+                        CellValue::Int(i) => {
+                            worksheet.write_number(xlsx_row, col_idx as u16, *i as f64)?;
+                        }
+                        CellValue::Float(f) => {
+                            worksheet.write_number(xlsx_row, col_idx as u16, *f)?;
+                        }
+                        CellValue::Bool(b) => {
+                            worksheet.write_boolean(xlsx_row, col_idx as u16, *b)?;
+                        }
+                        CellValue::Null => {}
+                        other => {
+                            worksheet.write_string(xlsx_row, col_idx as u16, &other.to_string())?;
+                        }
+                    }
+                }
+            }
+        }
+
+        workbook.save(path)?;
+        Ok(())
     }
 }

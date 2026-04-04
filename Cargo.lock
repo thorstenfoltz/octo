@@ -3427,6 +3427,7 @@ dependencies = [
  "quick-xml 0.37.5",
  "resvg",
  "rfd",
+ "rust_xlsxwriter",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -4140,6 +4141,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "rust_xlsxwriter"
+version = "0.82.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d61a82de4e7b30fc427909f2c5aafaada88cc7ae8316edabae435f74341f9278"
+dependencies = [
+ "zip",
 ]
 
 [[package]]

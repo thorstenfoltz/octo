@@ -3,6 +3,7 @@ use crate::formats::FormatReader;
 use anyhow::Result;
 use apache_avro::types::Value as AvroValue;
 use apache_avro::Reader as AvroFileReader;
+use apache_avro::Writer as AvroFileWriter;
 use std::path::Path;
 
 pub struct AvroReader;
@@ -69,7 +70,107 @@ impl FormatReader for AvroReader {
             structural_changes: false,
             total_rows: None,
             row_offset: 0,
+            marks: std::collections::HashMap::new(),
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         })
+    }
+
+    fn supports_write(&self) -> bool {
+        true
+    }
+
+    fn write_file(&self, path: &Path, table: &DataTable) -> Result<()> {
+        let fields: Vec<apache_avro::schema::RecordField> = table
+            .columns
+            .iter()
+            .enumerate()
+            .map(|(i, col)| {
+                let schema = data_type_to_avro_schema(&col.data_type);
+                // Wrap in Union with Null to allow nulls
+                let nullable = apache_avro::Schema::Union(
+                    apache_avro::schema::UnionSchema::new(vec![
+                        apache_avro::Schema::Null,
+                        schema,
+                    ])
+                    .unwrap(),
+                );
+                apache_avro::schema::RecordField {
+                    name: col.name.clone(),
+                    doc: None,
+                    aliases: None,
+                    default: Some(serde_json::Value::Null),
+                    schema: nullable,
+                    order: apache_avro::schema::RecordFieldOrder::Ascending,
+                    position: i,
+                    custom_attributes: Default::default(),
+                }
+            })
+            .collect();
+
+        let schema = apache_avro::Schema::Record(apache_avro::schema::RecordSchema {
+            name: apache_avro::schema::Name {
+                name: "Row".to_string(),
+                namespace: None,
+            },
+            aliases: None,
+            doc: None,
+            fields,
+            lookup: {
+                let mut map = std::collections::BTreeMap::new();
+                for (i, col) in table.columns.iter().enumerate() {
+                    map.insert(col.name.clone(), i);
+                }
+                map
+            },
+            attributes: Default::default(),
+        });
+
+        let file = std::fs::File::create(path)?;
+        let mut writer = AvroFileWriter::new(&schema, file);
+
+        for row_idx in 0..table.row_count() {
+            let mut record_fields: Vec<(String, AvroValue)> = Vec::new();
+            for (col_idx, col) in table.columns.iter().enumerate() {
+                let cell = table.get(row_idx, col_idx).cloned().unwrap_or(CellValue::Null);
+                let avro_val = cell_to_avro(&cell);
+                // Wrap in Union (index 0 = Null, index 1 = value)
+                let union_val = match avro_val {
+                    AvroValue::Null => AvroValue::Union(0, Box::new(AvroValue::Null)),
+                    other => AvroValue::Union(1, Box::new(other)),
+                };
+                record_fields.push((col.name.clone(), union_val));
+            }
+            writer.append(AvroValue::Record(record_fields))?;
+        }
+        writer.flush()?;
+        Ok(())
+    }
+}
+
+fn data_type_to_avro_schema(data_type: &str) -> apache_avro::Schema {
+    match data_type {
+        "Boolean" => apache_avro::Schema::Boolean,
+        "Int32" => apache_avro::Schema::Int,
+        "Int64" => apache_avro::Schema::Long,
+        "Float32" => apache_avro::Schema::Float,
+        "Float64" => apache_avro::Schema::Double,
+        "Binary" => apache_avro::Schema::Bytes,
+        _ => apache_avro::Schema::String,
+    }
+}
+
+fn cell_to_avro(cell: &CellValue) -> AvroValue {
+    match cell {
+        CellValue::Null => AvroValue::Null,
+        CellValue::Bool(b) => AvroValue::Boolean(*b),
+        CellValue::Int(i) => AvroValue::Long(*i),
+        CellValue::Float(f) => AvroValue::Double(*f),
+        CellValue::String(s) => AvroValue::String(s.clone()),
+        CellValue::Date(s) => AvroValue::String(s.clone()),
+        CellValue::DateTime(s) => AvroValue::String(s.clone()),
+        CellValue::Binary(b) => AvroValue::Bytes(b.clone()),
+        CellValue::Nested(s) => AvroValue::String(s.clone()),
     }
 }
 

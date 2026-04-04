@@ -21,6 +21,17 @@ impl FormatReader for JsonReader {
         let value: Value = serde_json::from_str(&content)?;
         json_to_table(value, path, "JSON")
     }
+
+    fn supports_write(&self) -> bool {
+        true
+    }
+
+    fn write_file(&self, path: &Path, table: &DataTable) -> Result<()> {
+        let json = table_to_json_array(table);
+        let content = serde_json::to_string_pretty(&json)?;
+        std::fs::write(path, content)?;
+        Ok(())
+    }
 }
 
 pub struct JsonlReader;
@@ -42,6 +53,22 @@ impl FormatReader for JsonlReader {
             .map(serde_json::from_str)
             .collect::<Result<_, _>>()?;
         json_to_table(Value::Array(values), path, "JSONL")
+    }
+
+    fn supports_write(&self) -> bool {
+        true
+    }
+
+    fn write_file(&self, path: &Path, table: &DataTable) -> Result<()> {
+        let json = table_to_json_array(table);
+        let lines: Vec<String> = json
+            .as_array()
+            .unwrap_or(&vec![])
+            .iter()
+            .map(|v| serde_json::to_string(v).unwrap_or_default())
+            .collect();
+        std::fs::write(path, lines.join("\n"))?;
+        Ok(())
     }
 }
 
@@ -76,6 +103,9 @@ pub fn json_to_table(value: Value, path: &Path, format_name: &str) -> Result<Dat
             structural_changes: false,
             total_rows: None,
             row_offset: 0,
+            marks: std::collections::HashMap::new(),
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         });
     }
 
@@ -165,6 +195,9 @@ pub fn json_to_table(value: Value, path: &Path, format_name: &str) -> Result<Dat
         structural_changes: false,
         total_rows: None,
         row_offset: 0,
+        marks: std::collections::HashMap::new(),
+        undo_stack: Vec::new(),
+        redo_stack: Vec::new(),
     })
 }
 
@@ -193,6 +226,34 @@ fn flatten_value(prefix: &str, value: &Value, out: &mut Vec<(String, Value)>) {
             };
             out.push((key, value.clone()));
         }
+    }
+}
+
+/// Convert a DataTable back to a JSON array of objects.
+pub fn table_to_json_array(table: &DataTable) -> Value {
+    let mut records = Vec::new();
+    for row_idx in 0..table.row_count() {
+        let mut obj = serde_json::Map::new();
+        for (col_idx, col) in table.columns.iter().enumerate() {
+            let val = table.get(row_idx, col_idx).cloned().unwrap_or(CellValue::Null);
+            obj.insert(col.name.clone(), cell_to_json_value(&val));
+        }
+        records.push(Value::Object(obj));
+    }
+    Value::Array(records)
+}
+
+fn cell_to_json_value(cell: &CellValue) -> Value {
+    match cell {
+        CellValue::Null => Value::Null,
+        CellValue::Bool(b) => Value::Bool(*b),
+        CellValue::Int(i) => serde_json::json!(*i),
+        CellValue::Float(f) => serde_json::json!(*f),
+        CellValue::String(s) => Value::String(s.clone()),
+        CellValue::Date(s) => Value::String(s.clone()),
+        CellValue::DateTime(s) => Value::String(s.clone()),
+        CellValue::Binary(b) => Value::String(format!("<{} bytes>", b.len())),
+        CellValue::Nested(s) => serde_json::from_str(s).unwrap_or_else(|_| Value::String(s.clone())),
     }
 }
 

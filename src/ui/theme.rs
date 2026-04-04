@@ -1,3 +1,4 @@
+use crate::data::MarkColor;
 use egui::{Color32, CornerRadius, FontFamily, FontId, Stroke, Style, TextStyle, Visuals};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -71,6 +72,30 @@ pub struct ThemeColors {
 }
 
 impl ThemeColors {
+    /// Get the background color for a mark highlight.
+    pub fn mark_color(&self, mark: MarkColor) -> Color32 {
+        match mark {
+            MarkColor::Red => Color32::from_rgba_unmultiplied(239, 68, 68, 50),
+            MarkColor::Orange => Color32::from_rgba_unmultiplied(249, 115, 22, 50),
+            MarkColor::Yellow => Color32::from_rgba_unmultiplied(234, 179, 8, 50),
+            MarkColor::Green => Color32::from_rgba_unmultiplied(34, 197, 94, 50),
+            MarkColor::Blue => Color32::from_rgba_unmultiplied(59, 130, 246, 50),
+            MarkColor::Purple => Color32::from_rgba_unmultiplied(168, 85, 247, 50),
+        }
+    }
+
+    /// Get a solid color swatch for the color picker.
+    pub fn mark_swatch(mark: MarkColor) -> Color32 {
+        match mark {
+            MarkColor::Red => Color32::from_rgb(239, 68, 68),
+            MarkColor::Orange => Color32::from_rgb(249, 115, 22),
+            MarkColor::Yellow => Color32::from_rgb(234, 179, 8),
+            MarkColor::Green => Color32::from_rgb(34, 197, 94),
+            MarkColor::Blue => Color32::from_rgb(59, 130, 246),
+            MarkColor::Purple => Color32::from_rgb(168, 85, 247),
+        }
+    }
+
     pub fn for_mode(mode: ThemeMode) -> Self {
         match mode {
             ThemeMode::Dark => Self::dark(),
@@ -191,12 +216,28 @@ pub fn apply_theme(ctx: &egui::Context, mode: ThemeMode) {
     visuals.widgets.hovered.corner_radius = CornerRadius::same(4);
 
     visuals.widgets.active.bg_fill = colors.accent;
-    visuals.widgets.active.fg_stroke = Stroke::new(1.0, Color32::WHITE);
+    visuals.widgets.active.fg_stroke = Stroke::new(
+        1.0,
+        match mode {
+            ThemeMode::Dark => Color32::WHITE,
+            ThemeMode::Light => colors.text_primary,
+        },
+    );
     visuals.widgets.active.bg_stroke = Stroke::new(1.0, colors.accent);
     visuals.widgets.active.corner_radius = CornerRadius::same(4);
 
     visuals.selection.bg_fill = colors.bg_selected;
     visuals.selection.stroke = Stroke::new(1.0, colors.accent);
+
+    // Ensure strong text, hyperlinks, and code have good contrast in both modes
+    visuals.hyperlink_color = colors.accent;
+    visuals.warn_fg_color = colors.warning;
+    visuals.error_fg_color = colors.error;
+    visuals.code_bg_color = match mode {
+        ThemeMode::Dark => Color32::from_rgb(40, 40, 48),
+        ThemeMode::Light => Color32::from_rgb(230, 233, 240),
+    };
+    visuals.override_text_color = None;
 
     style.visuals = visuals;
 

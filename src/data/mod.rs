@@ -99,6 +99,89 @@ pub struct ColumnInfo {
     pub data_type: String,
 }
 
+/// Available highlight colors for marking cells, rows, and columns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum MarkColor {
+    Red,
+    Orange,
+    Yellow,
+    Green,
+    Blue,
+    Purple,
+}
+
+impl MarkColor {
+    pub const ALL: &'static [MarkColor] = &[
+        MarkColor::Red,
+        MarkColor::Orange,
+        MarkColor::Yellow,
+        MarkColor::Green,
+        MarkColor::Blue,
+        MarkColor::Purple,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            MarkColor::Red => "Red",
+            MarkColor::Orange => "Orange",
+            MarkColor::Yellow => "Yellow",
+            MarkColor::Green => "Green",
+            MarkColor::Blue => "Blue",
+            MarkColor::Purple => "Purple",
+        }
+    }
+}
+
+/// An undoable action on the data table.
+#[derive(Debug, Clone)]
+pub enum UndoAction {
+    CellEdit {
+        row: usize,
+        col: usize,
+        old_value: CellValue,
+        new_value: CellValue,
+    },
+    InsertRow {
+        index: usize,
+    },
+    DeleteRow {
+        index: usize,
+        data: Vec<CellValue>,
+    },
+    InsertColumn {
+        index: usize,
+        name: String,
+        data_type: String,
+    },
+    DeleteColumn {
+        index: usize,
+        name: String,
+        data_type: String,
+        data: Vec<CellValue>,
+    },
+    MoveRow {
+        from: usize,
+        to: usize,
+    },
+    MoveColumn {
+        from: usize,
+        to: usize,
+    },
+    SetMark {
+        key: MarkKey,
+        old_color: Option<MarkColor>,
+        new_color: Option<MarkColor>,
+    },
+}
+
+/// Key identifying what is marked (cell, row, or column).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum MarkKey {
+    Cell(usize, usize),
+    Row(usize),
+    Column(usize),
+}
+
 /// The core data model: an unbounded table of cells.
 /// Rows and columns are stored as a flat Vec-of-Vecs (row-major).
 /// Edits are tracked separately so the original data is preserved.
@@ -118,6 +201,12 @@ pub struct DataTable {
     pub total_rows: Option<usize>,
     /// File-level index of the first loaded row (for windowed loading)
     pub row_offset: usize,
+    /// Color marks on cells, rows, and columns
+    pub marks: HashMap<MarkKey, MarkColor>,
+    /// Undo stack
+    pub undo_stack: Vec<UndoAction>,
+    /// Redo stack (cleared on new action)
+    pub redo_stack: Vec<UndoAction>,
 }
 
 impl DataTable {
@@ -131,6 +220,9 @@ impl DataTable {
             structural_changes: false,
             total_rows: None,
             row_offset: 0,
+            marks: HashMap::new(),
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         }
     }
 
@@ -150,10 +242,17 @@ impl DataTable {
         self.rows.get(row).and_then(|r| r.get(col))
     }
 
-    /// Set a cell value (tracked as an edit).
+    /// Set a cell value (tracked as an edit), with undo support.
     pub fn set(&mut self, row: usize, col: usize, value: CellValue) {
-        // Ensure the row exists
         if row < self.rows.len() && col < self.columns.len() {
+            let old_value = self.get(row, col).cloned().unwrap_or(CellValue::Null);
+            self.undo_stack.push(UndoAction::CellEdit {
+                row,
+                col,
+                old_value,
+                new_value: value.clone(),
+            });
+            self.redo_stack.clear();
             self.edits.insert((row, col), value);
         }
     }
@@ -174,6 +273,8 @@ impl DataTable {
         self.structural_changes = true;
         let row = vec![CellValue::Null; self.columns.len()];
         let idx = index.min(self.rows.len());
+        self.undo_stack.push(UndoAction::InsertRow { index: idx });
+        self.redo_stack.clear();
         self.rows.insert(idx, row);
         // Shift edits at or after the insertion point down by 1
         let mut new_edits = HashMap::new();
@@ -185,12 +286,34 @@ impl DataTable {
             }
         }
         self.edits = new_edits;
+        // Shift row marks
+        let mark_keys: Vec<MarkKey> = self.marks.keys().cloned().collect();
+        let mut new_marks = HashMap::new();
+        for key in mark_keys {
+            let color = self.marks.remove(&key).unwrap();
+            let new_key = match key {
+                MarkKey::Row(r) if r >= idx => MarkKey::Row(r + 1),
+                MarkKey::Cell(r, c) if r >= idx => MarkKey::Cell(r + 1, c),
+                other => other,
+            };
+            new_marks.insert(new_key, color);
+        }
+        self.marks = new_marks;
     }
 
     /// Delete a row by index.
     pub fn delete_row(&mut self, index: usize) {
         self.structural_changes = true;
         if index < self.rows.len() {
+            // Build the full row data (with edits applied) for undo
+            let row_data: Vec<CellValue> = (0..self.columns.len())
+                .map(|c| self.get(index, c).cloned().unwrap_or(CellValue::Null))
+                .collect();
+            self.undo_stack.push(UndoAction::DeleteRow {
+                index,
+                data: row_data,
+            });
+            self.redo_stack.clear();
             self.rows.remove(index);
             // Clean up edits referencing this row or higher
             let mut new_edits = HashMap::new();
@@ -200,9 +323,22 @@ impl DataTable {
                 } else if r > index {
                     new_edits.insert((r - 1, c), v.clone());
                 }
-                // r == index: dropped
             }
             self.edits = new_edits;
+            // Shift row marks
+            let mark_keys: Vec<MarkKey> = self.marks.keys().cloned().collect();
+            let mut new_marks = HashMap::new();
+            for key in mark_keys {
+                let color = self.marks.remove(&key).unwrap();
+                match key {
+                    MarkKey::Row(r) if r == index => continue,
+                    MarkKey::Cell(r, _) if r == index => continue,
+                    MarkKey::Row(r) if r > index => { new_marks.insert(MarkKey::Row(r - 1), color); }
+                    MarkKey::Cell(r, c) if r > index => { new_marks.insert(MarkKey::Cell(r - 1, c), color); }
+                    other => { new_marks.insert(other, color); }
+                }
+            }
+            self.marks = new_marks;
         }
     }
 
@@ -211,6 +347,12 @@ impl DataTable {
     pub fn insert_column(&mut self, index: usize, name: String, data_type: String) {
         self.structural_changes = true;
         let idx = index.min(self.columns.len());
+        self.undo_stack.push(UndoAction::InsertColumn {
+            index: idx,
+            name: name.clone(),
+            data_type: data_type.clone(),
+        });
+        self.redo_stack.clear();
         self.columns.insert(idx, ColumnInfo { name, data_type });
         for row in &mut self.rows {
             row.insert(idx, CellValue::Null);
@@ -225,19 +367,42 @@ impl DataTable {
             }
         }
         self.edits = new_edits;
+        // Shift column marks
+        let mark_keys: Vec<MarkKey> = self.marks.keys().cloned().collect();
+        let mut new_marks = HashMap::new();
+        for key in mark_keys {
+            let color = self.marks.remove(&key).unwrap();
+            let new_key = match key {
+                MarkKey::Column(c) if c >= idx => MarkKey::Column(c + 1),
+                MarkKey::Cell(r, c) if c >= idx => MarkKey::Cell(r, c + 1),
+                other => other,
+            };
+            new_marks.insert(new_key, color);
+        }
+        self.marks = new_marks;
     }
 
     /// Delete a column by index.
     pub fn delete_column(&mut self, col_idx: usize) {
         self.structural_changes = true;
         if col_idx < self.columns.len() {
+            let col_info = &self.columns[col_idx];
+            let col_data: Vec<CellValue> = (0..self.rows.len())
+                .map(|r| self.get(r, col_idx).cloned().unwrap_or(CellValue::Null))
+                .collect();
+            self.undo_stack.push(UndoAction::DeleteColumn {
+                index: col_idx,
+                name: col_info.name.clone(),
+                data_type: col_info.data_type.clone(),
+                data: col_data,
+            });
+            self.redo_stack.clear();
             self.columns.remove(col_idx);
             for row in &mut self.rows {
                 if col_idx < row.len() {
                     row.remove(col_idx);
                 }
             }
-            // Clean up edits: remove edits for the deleted column, shift higher columns down
             let mut new_edits = HashMap::new();
             for (&(r, c), v) in &self.edits {
                 if c < col_idx {
@@ -245,9 +410,22 @@ impl DataTable {
                 } else if c > col_idx {
                     new_edits.insert((r, c - 1), v.clone());
                 }
-                // c == col_idx: dropped
             }
             self.edits = new_edits;
+            // Shift column marks
+            let mark_keys: Vec<MarkKey> = self.marks.keys().cloned().collect();
+            let mut new_marks = HashMap::new();
+            for key in mark_keys {
+                let color = self.marks.remove(&key).unwrap();
+                match key {
+                    MarkKey::Column(c) if c == col_idx => continue,
+                    MarkKey::Cell(_, c) if c == col_idx => continue,
+                    MarkKey::Column(c) if c > col_idx => { new_marks.insert(MarkKey::Column(c - 1), color); }
+                    MarkKey::Cell(r, c) if c > col_idx => { new_marks.insert(MarkKey::Cell(r, c - 1), color); }
+                    other => { new_marks.insert(other, color); }
+                }
+            }
+            self.marks = new_marks;
         }
     }
 
@@ -257,6 +435,8 @@ impl DataTable {
             return;
         }
         self.structural_changes = true;
+        self.undo_stack.push(UndoAction::MoveRow { from, to });
+        self.redo_stack.clear();
         let row = self.rows.remove(from);
         self.rows.insert(to, row);
         // Remap edits
@@ -290,6 +470,8 @@ impl DataTable {
             return;
         }
         self.structural_changes = true;
+        self.undo_stack.push(UndoAction::MoveColumn { from, to });
+        self.redo_stack.clear();
         let col_info = self.columns.remove(from);
         self.columns.insert(to, col_info);
         for row in &mut self.rows {
@@ -437,9 +619,258 @@ impl DataTable {
         self.structural_changes = false;
         // edits are already cleared by apply_edits
     }
+
+    /// Set a color mark on a cell, row, or column.
+    pub fn set_mark(&mut self, key: MarkKey, color: MarkColor) {
+        let old_color = self.marks.get(&key).copied();
+        self.undo_stack.push(UndoAction::SetMark {
+            key: key.clone(),
+            old_color,
+            new_color: Some(color),
+        });
+        self.redo_stack.clear();
+        self.marks.insert(key, color);
+    }
+
+    /// Remove a color mark.
+    pub fn clear_mark(&mut self, key: MarkKey) {
+        let old_color = self.marks.get(&key).copied();
+        if old_color.is_some() {
+            self.undo_stack.push(UndoAction::SetMark {
+                key: key.clone(),
+                old_color,
+                new_color: None,
+            });
+            self.redo_stack.clear();
+            self.marks.remove(&key);
+        }
+    }
+
+    /// Get the effective mark color for a cell (cell mark > row mark > column mark).
+    pub fn get_mark_color(&self, row: usize, col: usize) -> Option<MarkColor> {
+        if let Some(&c) = self.marks.get(&MarkKey::Cell(row, col)) {
+            return Some(c);
+        }
+        if let Some(&c) = self.marks.get(&MarkKey::Row(row)) {
+            return Some(c);
+        }
+        if let Some(&c) = self.marks.get(&MarkKey::Column(col)) {
+            return Some(c);
+        }
+        None
+    }
+
+    /// Undo the last action. Returns true if something was undone.
+    pub fn undo(&mut self) -> bool {
+        if let Some(action) = self.undo_stack.pop() {
+            match action.clone() {
+                UndoAction::CellEdit { row, col, old_value, .. } => {
+                    self.edits.insert((row, col), old_value);
+                }
+                UndoAction::InsertRow { index } => {
+                    if index < self.rows.len() {
+                        self.rows.remove(index);
+                        // Shift edits back
+                        let mut new_edits = HashMap::new();
+                        for (&(r, c), v) in &self.edits {
+                            if r < index {
+                                new_edits.insert((r, c), v.clone());
+                            } else if r > index {
+                                new_edits.insert((r - 1, c), v.clone());
+                            }
+                        }
+                        self.edits = new_edits;
+                    }
+                }
+                UndoAction::DeleteRow { index, data } => {
+                    self.rows.insert(index, data);
+                    // Shift edits forward
+                    let mut new_edits = HashMap::new();
+                    for (&(r, c), v) in &self.edits {
+                        if r < index {
+                            new_edits.insert((r, c), v.clone());
+                        } else {
+                            new_edits.insert((r + 1, c), v.clone());
+                        }
+                    }
+                    self.edits = new_edits;
+                }
+                UndoAction::InsertColumn { index, .. } => {
+                    if index < self.columns.len() {
+                        self.columns.remove(index);
+                        for row in &mut self.rows {
+                            if index < row.len() {
+                                row.remove(index);
+                            }
+                        }
+                        let mut new_edits = HashMap::new();
+                        for (&(r, c), v) in &self.edits {
+                            if c < index {
+                                new_edits.insert((r, c), v.clone());
+                            } else if c > index {
+                                new_edits.insert((r, c - 1), v.clone());
+                            }
+                        }
+                        self.edits = new_edits;
+                    }
+                }
+                UndoAction::DeleteColumn { index, name, data_type, data } => {
+                    self.columns.insert(index, ColumnInfo { name, data_type });
+                    for (row_idx, row) in self.rows.iter_mut().enumerate() {
+                        let val = data.get(row_idx).cloned().unwrap_or(CellValue::Null);
+                        let ins = index.min(row.len());
+                        row.insert(ins, val);
+                    }
+                    let mut new_edits = HashMap::new();
+                    for (&(r, c), v) in &self.edits {
+                        if c < index {
+                            new_edits.insert((r, c), v.clone());
+                        } else {
+                            new_edits.insert((r, c + 1), v.clone());
+                        }
+                    }
+                    self.edits = new_edits;
+                }
+                UndoAction::MoveRow { from, to } => {
+                    // Reverse the move
+                    if to < self.rows.len() && from < self.rows.len() {
+                        let row = self.rows.remove(to);
+                        self.rows.insert(from, row);
+                    }
+                }
+                UndoAction::MoveColumn { from, to } => {
+                    if to < self.columns.len() && from < self.columns.len() {
+                        let col = self.columns.remove(to);
+                        self.columns.insert(from, col);
+                        for row in &mut self.rows {
+                            if to < row.len() {
+                                let val = row.remove(to);
+                                let ins = from.min(row.len());
+                                row.insert(ins, val);
+                            }
+                        }
+                    }
+                }
+                UndoAction::SetMark { key, old_color, .. } => {
+                    match old_color {
+                        Some(c) => { self.marks.insert(key, c); }
+                        None => { self.marks.remove(&key); }
+                    }
+                }
+            }
+            self.redo_stack.push(action);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Redo the last undone action. Returns true if something was redone.
+    pub fn redo(&mut self) -> bool {
+        if let Some(action) = self.redo_stack.pop() {
+            match action.clone() {
+                UndoAction::CellEdit { row, col, new_value, .. } => {
+                    self.edits.insert((row, col), new_value);
+                }
+                UndoAction::InsertRow { index } => {
+                    let row = vec![CellValue::Null; self.columns.len()];
+                    let idx = index.min(self.rows.len());
+                    self.rows.insert(idx, row);
+                    let mut new_edits = HashMap::new();
+                    for (&(r, c), v) in &self.edits {
+                        if r < idx {
+                            new_edits.insert((r, c), v.clone());
+                        } else {
+                            new_edits.insert((r + 1, c), v.clone());
+                        }
+                    }
+                    self.edits = new_edits;
+                }
+                UndoAction::DeleteRow { index, .. } => {
+                    if index < self.rows.len() {
+                        self.rows.remove(index);
+                        let mut new_edits = HashMap::new();
+                        for (&(r, c), v) in &self.edits {
+                            if r < index {
+                                new_edits.insert((r, c), v.clone());
+                            } else if r > index {
+                                new_edits.insert((r - 1, c), v.clone());
+                            }
+                        }
+                        self.edits = new_edits;
+                    }
+                }
+                UndoAction::InsertColumn { index, name, data_type } => {
+                    let idx = index.min(self.columns.len());
+                    self.columns.insert(idx, ColumnInfo { name, data_type });
+                    for row in &mut self.rows {
+                        row.insert(idx, CellValue::Null);
+                    }
+                    let mut new_edits = HashMap::new();
+                    for (&(r, c), v) in &self.edits {
+                        if c < idx {
+                            new_edits.insert((r, c), v.clone());
+                        } else {
+                            new_edits.insert((r, c + 1), v.clone());
+                        }
+                    }
+                    self.edits = new_edits;
+                }
+                UndoAction::DeleteColumn { index, .. } => {
+                    if index < self.columns.len() {
+                        self.columns.remove(index);
+                        for row in &mut self.rows {
+                            if index < row.len() {
+                                row.remove(index);
+                            }
+                        }
+                        let mut new_edits = HashMap::new();
+                        for (&(r, c), v) in &self.edits {
+                            if c < index {
+                                new_edits.insert((r, c), v.clone());
+                            } else if c > index {
+                                new_edits.insert((r, c - 1), v.clone());
+                            }
+                        }
+                        self.edits = new_edits;
+                    }
+                }
+                UndoAction::MoveRow { from, to } => {
+                    if from < self.rows.len() && to < self.rows.len() {
+                        let row = self.rows.remove(from);
+                        self.rows.insert(to, row);
+                    }
+                }
+                UndoAction::MoveColumn { from, to } => {
+                    if from < self.columns.len() && to < self.columns.len() {
+                        let col = self.columns.remove(from);
+                        self.columns.insert(to, col);
+                        for row in &mut self.rows {
+                            if from < row.len() {
+                                let val = row.remove(from);
+                                let ins = to.min(row.len());
+                                row.insert(ins, val);
+                            }
+                        }
+                    }
+                }
+                UndoAction::SetMark { key, new_color, .. } => {
+                    match new_color {
+                        Some(c) => { self.marks.insert(key, c); }
+                        None => { self.marks.remove(&key); }
+                    }
+                }
+            }
+            self.undo_stack.push(action);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 /// Check if a single CellValue can be converted to the target data type.
+#[allow(dead_code)]
 fn can_convert_value(val: &CellValue, target_type: &str) -> bool {
     match val {
         CellValue::Null => true, // Null converts to anything
@@ -547,6 +978,9 @@ mod tests {
             structural_changes: false,
             total_rows: None,
             row_offset: 0,
+            marks: HashMap::new(),
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         }
     }
 
