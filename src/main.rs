@@ -152,7 +152,7 @@ fn detect_delimiter_from_content(content: &str) -> u8 {
     if lines.is_empty() {
         return b',';
     }
-    let candidates: &[u8] = &[b',', b';', b'|', b'\t'];
+    let candidates: &[u8] = b",;|\t";
     let mut best: Option<(u8, usize)> = None;
     for &delim in candidates {
         let delim_char = delim as char;
@@ -162,11 +162,10 @@ fn detect_delimiter_from_content(content: &str) -> u8 {
         }
         let header_count = counts[0];
         let consistent = counts.iter().all(|&c| c == header_count || c == 0);
-        if consistent {
-            if best.is_none() || header_count > best.unwrap().1 {
+        if consistent
+            && (best.is_none() || header_count > best.unwrap().1) {
                 best = Some((delim, header_count));
             }
-        }
     }
     best.map(|(d, _)| d).unwrap_or(b',')
 }
@@ -774,25 +773,23 @@ impl eframe::App for OctoApp {
                 self.save_file_as();
             }
         }
-        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::A)) {
-            if self.table.col_count() > 0 && self.table.row_count() > 0 {
+        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::A))
+            && self.table.col_count() > 0 && self.table.row_count() > 0 {
                 self.table_state.selected_rows.clear();
                 self.table_state.selected_cols.clear();
                 for r in 0..self.table.row_count() {
                     self.table_state.selected_rows.insert(r);
                 }
             }
-        }
 
         // --- Handle close request ---
-        if ctx.input(|i| i.viewport().close_requested()) {
-            if (self.table.is_modified() || self.raw_content_modified) && !self.confirmed_close {
+        if ctx.input(|i| i.viewport().close_requested())
+            && (self.table.is_modified() || self.raw_content_modified) && !self.confirmed_close {
                 // Block the close and show our dialog
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 self.show_close_confirm = true;
             }
             // If confirmed_close is true, we just let it close
-        }
 
         // Drain background-loaded rows into the table
         if let Some(ref buffer) = self.bg_row_buffer {
@@ -980,11 +977,10 @@ impl eframe::App for OctoApp {
                     // Insert after selected column, or at end
                     self.insert_col_at = self.table_state.selected_cell.map(|(_, c)| c + 1);
                 }
-                if action.delete_column {
-                    if self.table.col_count() > 0 {
+                if action.delete_column
+                    && self.table.col_count() > 0 {
                         self.open_delete_columns_dialog();
                     }
-                }
                 if action.move_col_left {
                     if let Some((row, col)) = self.table_state.selected_cell {
                         if col > 0 {
@@ -1379,13 +1375,11 @@ impl eframe::App for OctoApp {
                             if ui
                                 .checkbox(&mut self.raw_view_formatted, "Align Columns")
                                 .changed()
-                            {
-                                if self.raw_view_formatted {
+                                && self.raw_view_formatted {
                                     let delim = self.csv_delimiter as char;
                                     *content = format_delimited_text(content, delim);
                                     self.raw_content_modified = true;
                                 }
-                            }
                             ui.add_space(16.0);
                             if is_csv {
                                 ui.label("Delimiter:");
@@ -1616,11 +1610,10 @@ impl eframe::App for OctoApp {
                 self.new_col_type = "String".to_string();
                 self.insert_col_at = self.table_state.selected_cell.map(|(_, c)| c + 1);
             }
-            if interaction.ctx_delete_column {
-                if self.table.col_count() > 0 {
+            if interaction.ctx_delete_column
+                && self.table.col_count() > 0 {
                     self.open_delete_columns_dialog();
                 }
-            }
             if interaction.ctx_move_col_left {
                 if let Some((row, col)) = self.table_state.selected_cell {
                     if col > 0 {

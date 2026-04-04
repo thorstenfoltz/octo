@@ -157,7 +157,7 @@ impl FormatReader for ExcelReader {
                         }
                         CellValue::Null => {}
                         other => {
-                            worksheet.write_string(xlsx_row, col_idx as u16, &other.to_string())?;
+                            worksheet.write_string(xlsx_row, col_idx as u16, other.to_string())?;
                         }
                     }
                 }

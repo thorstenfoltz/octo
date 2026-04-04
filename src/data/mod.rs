@@ -874,14 +874,8 @@ impl DataTable {
 fn can_convert_value(val: &CellValue, target_type: &str) -> bool {
     match val {
         CellValue::Null => true, // Null converts to anything
-        CellValue::Bool(_) => match target_type {
-            "String" | "Utf8" | "Boolean" | "Int64" | "Float64" => true,
-            _ => false,
-        },
-        CellValue::Int(_) => match target_type {
-            "String" | "Utf8" | "Int64" | "Float64" | "Boolean" => true,
-            _ => false,
-        },
+        CellValue::Bool(_) => matches!(target_type, "String" | "Utf8" | "Boolean" | "Int64" | "Float64"),
+        CellValue::Int(_) => matches!(target_type, "String" | "Utf8" | "Int64" | "Float64" | "Boolean"),
         CellValue::Float(f) => match target_type {
             "String" | "Utf8" | "Float64" => true,
             "Int64" => f.fract() == 0.0 && f.abs() < i64::MAX as f64,
@@ -909,10 +903,7 @@ fn can_convert_value(val: &CellValue, target_type: &str) -> bool {
                 _ => false,
             }
         }
-        CellValue::Date(_) => match target_type {
-            "String" | "Utf8" | "Date32" | "Timestamp(Microsecond, None)" => true,
-            _ => false,
-        },
+        CellValue::Date(_) => matches!(target_type, "String" | "Utf8" | "Date32" | "Timestamp(Microsecond, None)"),
         CellValue::DateTime(_) => match target_type {
             "String" | "Utf8" | "Timestamp(Microsecond, None)" => true,
             "Date32" => true, // truncate time portion

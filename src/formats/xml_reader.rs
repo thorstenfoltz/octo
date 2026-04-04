@@ -156,7 +156,7 @@ fn parse_xml_to_table(content: &str, path: &Path) -> Result<DataTable> {
     };
 
     if root.children.is_empty() {
-        return xml_elements_to_table(&[root.clone()], path);
+        return xml_elements_to_table(std::slice::from_ref(root), path);
     }
 
     xml_elements_to_table(&root.children, path)

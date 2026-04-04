@@ -61,7 +61,7 @@ fn detect_delimiter(path: &Path) -> Option<u8> {
         return None;
     }
 
-    let candidates: &[u8] = &[b',', b';', b'|', b'\t'];
+    let candidates: &[u8] = b",;|\t";
     let mut best: Option<(u8, usize)> = None; // (delimiter, count_per_line)
 
     for &delim in candidates {
@@ -77,11 +77,10 @@ fn detect_delimiter(path: &Path) -> Option<u8> {
         let header_count = counts[0];
         let consistent = counts.iter().all(|&c| c == header_count || c == 0);
 
-        if consistent {
-            if best.is_none() || header_count > best.unwrap().1 {
+        if consistent
+            && (best.is_none() || header_count > best.unwrap().1) {
                 best = Some((delim, header_count));
             }
-        }
     }
 
     best.map(|(d, _)| d)
@@ -198,7 +197,7 @@ fn read_delimited(path: &Path, delimiter: u8, format_name: &str) -> Result<DataT
             "Timestamp(Microsecond, None)".to_string()
         } else if has_date {
             "Date32".to_string()
-        } else if has_float || (has_int && has_float) {
+        } else if has_float {
             "Float64".to_string()
         } else if has_int {
             "Int64".to_string()
@@ -227,6 +226,7 @@ fn read_delimited(path: &Path, delimiter: u8, format_name: &str) -> Result<DataT
 /// Load a chunk of CSV/TSV rows in the background.
 /// Skips `skip_rows` data records, then reads up to `max_rows` records.
 /// Pushes rows into `buffer` in batches. Sets `done` to true when finished.
+#[allow(clippy::too_many_arguments)]
 pub fn load_csv_rows_chunk(
     path: &Path,
     delimiter: u8,

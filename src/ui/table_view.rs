@@ -78,6 +78,7 @@ impl TableViewState {
 }
 
 /// Signals from the table back to the app.
+#[derive(Default)]
 pub struct TableInteraction {
     /// Column header was clicked (for setting insert position).
     pub header_col_clicked: Option<usize>,
@@ -118,35 +119,6 @@ pub struct TableInteraction {
     pub clear_mark: Option<MarkKey>,
 }
 
-impl Default for TableInteraction {
-    fn default() -> Self {
-        Self {
-            header_col_clicked: None,
-            col_drag_move: None,
-            sort_rows_asc_by: None,
-            sort_rows_desc_by: None,
-            ctx_insert_row: false,
-            ctx_delete_row: false,
-            ctx_insert_column: false,
-            ctx_delete_column: false,
-            ctx_move_row_up: false,
-            ctx_move_row_down: false,
-            ctx_move_col_left: false,
-            ctx_move_col_right: false,
-            ctx_copy: false,
-            ctx_paste: false,
-            paste_text: None,
-            rename_column: None,
-            change_col_type: None,
-            ctx_copy_cell: false,
-            needs_more_rows: false,
-            undo: false,
-            redo: false,
-            set_mark: None,
-            clear_mark: None,
-        }
-    }
-}
 
 /// Draw the data table with true row virtualization.
 pub fn draw_table(
@@ -337,6 +309,7 @@ pub fn draw_table(
     let visible_count = (data_area_height / ROW_HEIGHT).ceil() as usize + 2;
     let last_visible = (first_visible + visible_count).min(row_count);
 
+    #[allow(clippy::needless_range_loop)]
     for display_idx in first_visible..last_visible {
         let actual_row = filtered_rows[display_idx];
         let row_y = data_area_top + (display_idx as f32 * ROW_HEIGHT) - state.scroll_y;
@@ -524,9 +497,7 @@ fn draw_header_direct(
                 colors.bg_header.b(),
                 120,
             )
-        } else if is_drop_target {
-            colors.bg_selected
-        } else if is_col_selected {
+        } else if is_drop_target || is_col_selected {
             colors.bg_selected
         } else {
             colors.bg_header
@@ -786,12 +757,11 @@ fn draw_header_direct(
                     interaction.ctx_copy = true;
                     ui.close_menu();
                 }
-                if state.clipboard.is_some() || state.os_clipboard_has_text {
-                    if ui.button("Paste").clicked() {
+                if (state.clipboard.is_some() || state.os_clipboard_has_text)
+                    && ui.button("Paste").clicked() {
                         interaction.ctx_paste = true;
                         ui.close_menu();
                     }
-                }
                 ui.separator();
                 mark_submenu(ui, MarkKey::Column(col_idx), table, interaction);
                 ui.separator();
@@ -843,8 +813,8 @@ fn draw_header_direct(
                     }
                 });
                 ui.separator();
-                if col_idx > 0 {
-                    if ui.button("Move Left").clicked() {
+                if col_idx > 0
+                    && ui.button("Move Left").clicked() {
                         state.selected_cell = state
                             .selected_cell
                             .map(|(r, _)| (r, col_idx))
@@ -852,9 +822,8 @@ fn draw_header_direct(
                         interaction.ctx_move_col_left = true;
                         ui.close_menu();
                     }
-                }
-                if col_idx + 1 < table.col_count() {
-                    if ui.button("Move Right").clicked() {
+                if col_idx + 1 < table.col_count()
+                    && ui.button("Move Right").clicked() {
                         state.selected_cell = state
                             .selected_cell
                             .map(|(r, _)| (r, col_idx))
@@ -862,7 +831,6 @@ fn draw_header_direct(
                         interaction.ctx_move_col_right = true;
                         ui.close_menu();
                     }
-                }
             });
 
             // Drag start
@@ -990,7 +958,7 @@ fn draw_data_row_direct(
 
     let row_bg = if is_multi_selected_row {
         colors.bg_selected
-    } else if display_idx % 2 == 0 {
+    } else if display_idx.is_multiple_of(2) {
         colors.row_even
     } else {
         colors.row_odd
@@ -1035,9 +1003,7 @@ fn draw_data_row_direct(
             let is_col_selected = state.selected_cols.contains(&col_idx);
 
             let mark_color = table.get_mark_color(actual_row, col_idx);
-            let cell_bg = if is_selected {
-                colors.bg_selected
-            } else if is_multi_selected_row || is_col_selected {
+            let cell_bg = if is_selected || is_multi_selected_row || is_col_selected {
                 colors.bg_selected
             } else if let Some(mc) = mark_color {
                 colors.mark_color(mc)
@@ -1155,12 +1121,11 @@ fn draw_data_row_direct(
                         interaction.ctx_copy = true;
                         ui.close_menu();
                     }
-                    if state.clipboard.is_some() || state.os_clipboard_has_text {
-                        if ui.button("Paste").clicked() {
+                    if (state.clipboard.is_some() || state.os_clipboard_has_text)
+                        && ui.button("Paste").clicked() {
                             interaction.ctx_paste = true;
                             ui.close_menu();
                         }
-                    }
                     ui.separator();
 
                     // --- Mark ---
@@ -1176,18 +1141,16 @@ fn draw_data_row_direct(
                         interaction.ctx_delete_row = true;
                         ui.close_menu();
                     }
-                    if actual_row > 0 {
-                        if ui.button("Move Row Up").clicked() {
+                    if actual_row > 0
+                        && ui.button("Move Row Up").clicked() {
                             interaction.ctx_move_row_up = true;
                             ui.close_menu();
                         }
-                    }
-                    if actual_row + 1 < row_count {
-                        if ui.button("Move Row Down").clicked() {
+                    if actual_row + 1 < row_count
+                        && ui.button("Move Row Down").clicked() {
                             interaction.ctx_move_row_down = true;
                             ui.close_menu();
                         }
-                    }
 
                     ui.separator();
                     ui.label(RichText::new("Column").strong().size(11.0));
@@ -1205,18 +1168,16 @@ fn draw_data_row_direct(
                         interaction.ctx_delete_column = true;
                         ui.close_menu();
                     }
-                    if col_idx > 0 {
-                        if ui.button("Move Column Left").clicked() {
+                    if col_idx > 0
+                        && ui.button("Move Column Left").clicked() {
                             interaction.ctx_move_col_left = true;
                             ui.close_menu();
                         }
-                    }
-                    if col_idx + 1 < col_count {
-                        if ui.button("Move Column Right").clicked() {
+                    if col_idx + 1 < col_count
+                        && ui.button("Move Column Right").clicked() {
                             interaction.ctx_move_col_right = true;
                             ui.close_menu();
                         }
-                    }
 
                     ui.separator();
                     ui.label(RichText::new("Sort").strong().size(11.0));
@@ -1307,12 +1268,11 @@ fn draw_data_row_direct(
                 interaction.ctx_copy = true;
                 ui.close_menu();
             }
-            if state.clipboard.is_some() || state.os_clipboard_has_text {
-                if ui.button("Paste").clicked() {
+            if (state.clipboard.is_some() || state.os_clipboard_has_text)
+                && ui.button("Paste").clicked() {
                     interaction.ctx_paste = true;
                     ui.close_menu();
                 }
-            }
             ui.separator();
 
             mark_submenu(ui, MarkKey::Row(actual_row), table, interaction);
@@ -1327,18 +1287,16 @@ fn draw_data_row_direct(
                 interaction.ctx_delete_row = true;
                 ui.close_menu();
             }
-            if actual_row > 0 {
-                if ui.button("Move Row Up").clicked() {
+            if actual_row > 0
+                && ui.button("Move Row Up").clicked() {
                     interaction.ctx_move_row_up = true;
                     ui.close_menu();
                 }
-            }
-            if actual_row + 1 < row_count {
-                if ui.button("Move Row Down").clicked() {
+            if actual_row + 1 < row_count
+                && ui.button("Move Row Down").clicked() {
                     interaction.ctx_move_row_down = true;
                     ui.close_menu();
                 }
-            }
         });
     }
 }

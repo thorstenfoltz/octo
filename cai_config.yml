@@ -5,8 +5,8 @@ emoji: true
 conventional: true
 branch_context: false
 load_tokens_from: /home/thorsten/.config/cai/tokens.yml
-prompt_file: ''
-squash_prompt_file: ''
+prompt_file: ""
+squash_prompt_file: ""
 token_logging: true
 measure_time: true
 anthropic:

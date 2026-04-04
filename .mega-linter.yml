@@ -32,9 +32,6 @@ ENABLE_LINTERS:
   - YAML_V8R
   - YAML_YAMLLINT
 FAIL_IF_UPDATED_SOURCES: false
-PRE_COMMANDS:
-  - command: apt-get update && apt-get install -y --no-install-recommends g++ pkg-config libfontconfig1-dev libfreetype6-dev libharfbuzz-dev libfribidi-dev libjpeg-dev libopenjp2-7-dev libgumbo-dev libjbig2dec0-dev libmujs-dev
-    cwd: root
 FILEIO_REPORTER: false
 FILTER_REGEX_EXCLUDE: none
 FLAVOR_SUGGESTIONS: false

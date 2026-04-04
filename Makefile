@@ -40,9 +40,11 @@ clean: ## Clean cache of uv and delete virtual environment
 	@$(UV) cache clean
 	@rm -rf .venv
 
-lint:
+lint: ## Lints the code
 	@sh ./.linters/check_git_branch_name.sh
-	@npx mega-linter-runner --flavor rust
+	@docker build --pull -q -t megalinter-rust-custom .github/megalinter-rust/
+	@docker run --rm -v /var/run/docker.sock:/var/run/docker.sock:rw -v $(CURDIR):/tmp/lint:rw megalinter-rust-custom
 
-lint-fix: ## Lints the code using sqlfluff and fixes the issues
-	@npx mega-linter-runner --flavor rust --fix
+lint-fix: ## Lints the code and fixes issues
+	@docker build --pull -q -t megalinter-rust-custom .github/megalinter-rust/
+	@docker run --rm -v /var/run/docker.sock:/var/run/docker.sock:rw -v $(CURDIR):/tmp/lint:rw -e APPLY_FIXES=all megalinter-rust-custom

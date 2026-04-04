@@ -3,6 +3,7 @@ use egui::{Align, Layout, RichText, Ui};
 use super::theme::{ThemeColors, ThemeMode};
 use crate::data::ViewMode;
 
+#[derive(Default)]
 pub struct ToolbarAction {
     pub open_file: bool,
     pub save_file: bool,
@@ -23,29 +24,6 @@ pub struct ToolbarAction {
     pub view_mode_changed: Option<ViewMode>,
 }
 
-impl Default for ToolbarAction {
-    fn default() -> Self {
-        Self {
-            open_file: false,
-            save_file: false,
-            save_file_as: false,
-            toggle_theme: false,
-            search_changed: false,
-            add_row: false,
-            delete_row: false,
-            add_column: false,
-            delete_column: false,
-            move_row_up: false,
-            move_row_down: false,
-            move_col_left: false,
-            move_col_right: false,
-            sort_rows_asc_by: None,
-            sort_rows_desc_by: None,
-            discard_edits: false,
-            view_mode_changed: None,
-        }
-    }
-}
 
 #[allow(clippy::too_many_arguments)]
 pub fn draw_toolbar(
@@ -93,12 +71,11 @@ pub fn draw_toolbar(
             }
             if has_data {
                 ui.separator();
-                if has_source_path {
-                    if ui.button("Save").clicked() {
+                if has_source_path
+                    && ui.button("Save").clicked() {
                         action.save_file = true;
                         ui.close_menu();
                     }
-                }
                 if ui.button("Save As...").clicked() {
                     action.save_file_as = true;
                     ui.close_menu();
@@ -126,8 +103,8 @@ pub fn draw_toolbar(
                     ui.close_menu();
                 }
 
-                let can_move_up = selected_cell.map_or(false, |(r, _)| r > 0);
-                let can_move_down = selected_cell.map_or(false, |(r, _)| r + 1 < row_count);
+                let can_move_up = selected_cell.is_some_and(|(r, _)| r > 0);
+                let can_move_down = selected_cell.is_some_and(|(r, _)| r + 1 < row_count);
 
                 let up_btn = ui.add_enabled(can_move_up, egui::Button::new("Move Row Up"));
                 if up_btn.clicked() {
@@ -159,8 +136,8 @@ pub fn draw_toolbar(
                     ui.close_menu();
                 }
 
-                let can_move_left = selected_cell.map_or(false, |(_, c)| c > 0);
-                let can_move_right = selected_cell.map_or(false, |(_, c)| c + 1 < col_count);
+                let can_move_left = selected_cell.is_some_and(|(_, c)| c > 0);
+                let can_move_right = selected_cell.is_some_and(|(_, c)| c + 1 < col_count);
 
                 let left_btn = ui.add_enabled(can_move_left, egui::Button::new("Move Column Left"));
                 if left_btn.clicked() {
