@@ -1,6 +1,6 @@
 use octo::data::CellValue;
-use octo::formats::csv_reader::*;
 use octo::formats::FormatReader;
+use octo::formats::csv_reader::*;
 use std::io::Write;
 use tempfile::NamedTempFile;
 

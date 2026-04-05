@@ -1,6 +1,6 @@
 use octo::data::CellValue;
-use octo::formats::yaml_reader::*;
 use octo::formats::FormatReader;
+use octo::formats::yaml_reader::*;
 use serde_json::json;
 
 #[test]
