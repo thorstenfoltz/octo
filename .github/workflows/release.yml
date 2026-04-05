@@ -1,15 +1,19 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.2.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 env:
   CARGO_TERM_COLOR: always
+  MAKEFLAGS: -j4
 
 jobs:
   build-linux:
@@ -17,9 +21,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set version from tag
+      - name: Set version
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           sed -i "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
 
@@ -32,11 +37,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Run tests
-        run: cargo test
-
-      - name: Build release binary
-        run: cargo build --release
+      - name: Build and test
+        run: |
+          cargo test --release
+          cargo build --release
 
       - name: Package Linux release
         run: |
@@ -63,22 +67,22 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set version from tag
+      - name: Set version
+        env:
+          VERSION: ${{ inputs.version }}
         shell: pwsh
         run: |
-          $version = "$env:GITHUB_REF_NAME" -replace '^v', ''
-          echo "VERSION=$version" >> $env:GITHUB_ENV
-          (Get-Content Cargo.toml) -replace '^version = .*', "version = `"$version`"" | Set-Content Cargo.toml
+          echo "VERSION=$env:VERSION" >> $env:GITHUB_ENV
+          (Get-Content Cargo.toml) -replace '^version = .*', "version = `"$env:VERSION`"" | Set-Content Cargo.toml
 
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Run tests
-        run: cargo test
-
-      - name: Build release binary
-        run: cargo build --release
+      - name: Build and test
+        run: |
+          cargo test --release
+          cargo build --release
 
       - name: Package Windows release
         shell: pwsh
@@ -103,16 +107,21 @@ jobs:
     needs: [build-linux, build-windows]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Octo ${{ github.ref_name }}
-          generate_release_notes: true
-          files: |
-            artifacts/linux-release/*.tar.gz
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release create "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Octo v$VERSION" \
+            --generate-notes \
+            --draft \
+            artifacts/linux-release/*.tar.gz \
             artifacts/windows-release/*.zip

@@ -458,18 +458,10 @@ impl DataTable {
                 to
             } else if from < to {
                 // Row moved down: rows in (from, to] shift up by 1
-                if r > from && r <= to {
-                    r - 1
-                } else {
-                    r
-                }
+                if r > from && r <= to { r - 1 } else { r }
             } else {
                 // Row moved up: rows in [to, from) shift down by 1
-                if r >= to && r < from {
-                    r + 1
-                } else {
-                    r
-                }
+                if r >= to && r < from { r + 1 } else { r }
             };
             new_edits.insert((new_r, c), v.clone());
         }
@@ -499,17 +491,9 @@ impl DataTable {
             let new_c = if c == from {
                 to
             } else if from < to {
-                if c > from && c <= to {
-                    c - 1
-                } else {
-                    c
-                }
+                if c > from && c <= to { c - 1 } else { c }
             } else {
-                if c >= to && c < from {
-                    c + 1
-                } else {
-                    c
-                }
+                if c >= to && c < from { c + 1 } else { c }
             };
             new_edits.insert((r, new_c), v.clone());
         }
@@ -568,11 +552,7 @@ impl DataTable {
             let va = a.get(col_idx).unwrap_or(&CellValue::Null);
             let vb = b.get(col_idx).unwrap_or(&CellValue::Null);
             let cmp = cmp_cell_values(va, vb);
-            if ascending {
-                cmp
-            } else {
-                cmp.reverse()
-            }
+            if ascending { cmp } else { cmp.reverse() }
         });
     }
 

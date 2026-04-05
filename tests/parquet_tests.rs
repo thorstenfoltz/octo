@@ -1,8 +1,8 @@
 use arrow::array::*;
 use arrow::datatypes::{DataType, TimeUnit};
 use octo::data::{CellValue, ColumnInfo, DataTable};
-use octo::formats::parquet_reader::*;
 use octo::formats::FormatReader;
+use octo::formats::parquet_reader::*;
 use std::collections::HashMap;
 
 // --- data_type_from_string ---

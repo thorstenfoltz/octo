@@ -727,11 +727,7 @@ impl OctoApp {
                 .name
                 .to_lowercase()
                 .cmp(&self.table.columns[b].name.to_lowercase());
-            if ascending {
-                cmp
-            } else {
-                cmp.reverse()
-            }
+            if ascending { cmp } else { cmp.reverse() }
         });
 
         // Reorder column widths to match

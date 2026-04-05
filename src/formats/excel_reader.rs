@@ -1,7 +1,7 @@
 use crate::data::{CellValue, ColumnInfo, DataTable};
 use crate::formats::FormatReader;
 use anyhow::Result;
-use calamine::{open_workbook_auto, Data, Reader};
+use calamine::{Data, Reader, open_workbook_auto};
 use rust_xlsxwriter::Workbook;
 use std::path::Path;
 
@@ -66,10 +66,10 @@ impl FormatReader for ExcelReader {
                     Data::Float(f) => CellValue::Float(*f),
                     Data::Int(i) => CellValue::Int(*i),
                     Data::Bool(b) => CellValue::Bool(*b),
-                    Data::DateTime(ref dt) => CellValue::DateTime(format!("{}", dt)),
-                    Data::DateTimeIso(ref s) => CellValue::DateTime(s.clone()),
-                    Data::DurationIso(ref s) => CellValue::String(s.clone()),
-                    Data::Error(ref e) => CellValue::String(format!("#ERR: {:?}", e)),
+                    Data::DateTime(dt) => CellValue::DateTime(format!("{}", dt)),
+                    Data::DateTimeIso(s) => CellValue::DateTime(s.clone()),
+                    Data::DurationIso(s) => CellValue::String(s.clone()),
+                    Data::Error(e) => CellValue::String(format!("#ERR: {:?}", e)),
                 })
                 .collect();
             // Pad or truncate to match column count
