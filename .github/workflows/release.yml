@@ -82,14 +82,7 @@ jobs:
           (Get-Content Cargo.toml) -replace '^version = .*', "version = `"$env:VERSION`"" | Set-Content Cargo.toml
 
       - name: Generate ICO from PNG
-        shell: pwsh
-        run: |
-          Add-Type -AssemblyName System.Drawing
-          $png = [System.Drawing.Bitmap]::new("assets/octo.png")
-          $ico = [System.IO.FileStream]::new("assets/octo.ico", [System.IO.FileMode]::Create)
-          $png.Save($ico, [System.Drawing.Imaging.ImageFormat]::Icon)
-          $ico.Close()
-          $png.Dispose()
+        run: magick assets/octo.png -define icon:auto-resize=256,128,64,48,32,16 assets/octo.ico
 
       - uses: dtolnay/rust-toolchain@stable
 
