@@ -55,7 +55,7 @@ jobs:
           # Binary tarball (release artifact)
           gh release download "$VERSION" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern "octo-v${VERSION}-linux-x86_64.tar.gz" \
+            --pattern "octo-${VERSION}-linux-x86_64.tar.gz" \
             --output binary.tar.gz
           BINARY_SHA256=$(sha256sum binary.tar.gz | awk '{print $1}')
           echo "binary=$BINARY_SHA256" >> "$GITHUB_OUTPUT"

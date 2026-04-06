@@ -20,7 +20,7 @@ pkgbase = octo-bin
 	depends = mujs
 	provides = octo
 	conflicts = octo
-	source = octo-vX.X.X-linux-x86_64.tar.gz::https://github.com/thorstenfoltz/octo/releases/download/X.X.X/octo-vX.X.X-linux-x86_64.tar.gz
+	source = octo-X.X.X-linux-x86_64.tar.gz::https://github.com/thorstenfoltz/octo/releases/download/X.X.X/octo-X.X.X-linux-x86_64.tar.gz
 	sha256sums = SKIP
 
 pkgname = octo-bin

@@ -47,7 +47,7 @@ jobs:
 
       - name: Package Linux release
         run: |
-          DIR="octo-v${VERSION}-linux-x86_64"
+          DIR="octo-${VERSION}-linux-x86_64"
           mkdir -p "$DIR/assets"
           cp target/release/octo "$DIR/"
           cp install.sh "$DIR/"
@@ -63,7 +63,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux-release
-          path: octo-v${{ env.VERSION }}-linux-x86_64.tar.gz
+          path: octo-${{ env.VERSION }}-linux-x86_64.tar.gz
 
   build-windows:
     runs-on: windows-latest
@@ -103,7 +103,7 @@ jobs:
       - name: Package Windows release
         shell: pwsh
         run: |
-          $dir = "octo-v$env:VERSION-windows-x86_64"
+          $dir = "octo-$env:VERSION-windows-x86_64"
           New-Item -ItemType Directory -Path "$dir\assets" -Force
           Copy-Item "target\release\octo.exe" "$dir\"
           Copy-Item "install.bat" "$dir\"
@@ -112,13 +112,13 @@ jobs:
           if (Test-Path "assets\octo.ico") { Copy-Item "assets\octo.ico" "$dir\assets\" }
           Copy-Item "README.md" "$dir\"
           if (Test-Path "LICENSE") { Copy-Item "LICENSE" "$dir\" }
-          Compress-Archive -Path "$dir\*" -DestinationPath "octo-v$env:VERSION-windows-x86_64.zip"
+          Compress-Archive -Path "$dir\*" -DestinationPath "octo-$env:VERSION-windows-x86_64.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-release
-          path: octo-v${{ env.VERSION }}-windows-x86_64.zip
+          path: octo-${{ env.VERSION }}-windows-x86_64.zip
 
       # TODO: Enable SignPath code signing once certificate is available
       # - name: Upload unsigned exe for signing
@@ -133,8 +133,8 @@ jobs:
       #   with:
       #     name: windows-packaging
       #     path: |
-      #       octo-v${{ env.VERSION }}-windows-x86_64/
-      #       !octo-v${{ env.VERSION }}-windows-x86_64/octo.exe
+      #       octo-${{ env.VERSION }}-windows-x86_64/
+      #       !octo-${{ env.VERSION }}-windows-x86_64/octo.exe
 
   # TODO: Enable SignPath code signing once certificate is available
   # sign-windows:
@@ -172,13 +172,13 @@ jobs:
   #       run: |
   #         DIR=$(ls package/)
   #         cp signed/octo.exe "package/$DIR/octo.exe"
-  #         cd package && zip -r "../octo-v${VERSION}-windows-x86_64.zip" "$DIR/"
+  #         cd package && zip -r "../octo-${VERSION}-windows-x86_64.zip" "$DIR/"
   #
   #     - name: Upload signed release
   #       uses: actions/upload-artifact@v4
   #       with:
   #         name: windows-release
-  #         path: octo-v${{ inputs.version }}-windows-x86_64.zip
+  #         path: octo-${{ inputs.version }}-windows-x86_64.zip
 
   publish:
     needs: [build-linux, build-windows]

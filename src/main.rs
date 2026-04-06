@@ -799,8 +799,8 @@ impl OctoApp {
         #[cfg(target_os = "linux")]
         {
             let url = format!(
-                "https://github.com/thorstenfoltz/octo/releases/download/{}/octo-v{}-linux-x86_64.tar.gz",
-                new_version, new_version
+                "https://github.com/thorstenfoltz/octo/releases/download/{0}/octo-{0}-linux-x86_64.tar.gz",
+                new_version
             );
 
             let bytes = ureq::get(&url)
@@ -814,7 +814,7 @@ impl OctoApp {
             // Extract the binary from the tar.gz
             let decoder = flate2::read::GzDecoder::new(std::io::Cursor::new(bytes));
             let mut archive = tar::Archive::new(decoder);
-            let binary_name = format!("octo-v{}-linux-x86_64/octo", new_version);
+            let binary_name = format!("octo-{}-linux-x86_64/octo", new_version);
 
             let mut found = false;
             for entry in archive.entries().map_err(|e| format!("Tar error: {}", e))? {

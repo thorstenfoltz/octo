@@ -9,11 +9,11 @@ license=('MIT')
 depends=('gtk3' 'libxcb' 'libxkbcommon' 'openssl' 'fontconfig' 'freetype2' 'harfbuzz' 'fribidi' 'libjpeg-turbo' 'openjpeg2' 'gumbo-parser' 'jbig2dec' 'mujs')
 provides=('octo')
 conflicts=('octo')
-source=("octo-v$pkgver-linux-x86_64.tar.gz::$url/releases/download/$pkgver/octo-v$pkgver-linux-x86_64.tar.gz")
+source=("octo-$pkgver-linux-x86_64.tar.gz::$url/releases/download/$pkgver/octo-$pkgver-linux-x86_64.tar.gz")
 sha256sums=('SKIP')
 
 package() {
-    cd "octo-v$pkgver-linux-x86_64"
+    cd "octo-$pkgver-linux-x86_64"
     install -Dm755 "octo" "$pkgdir/usr/bin/octo"
     install -Dm644 "assets/octo.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/octo.svg"
     install -Dm644 "octo.desktop" "$pkgdir/usr/share/applications/octo.desktop"
