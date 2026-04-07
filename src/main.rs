@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use octo::data::{self, DataTable, ViewMode};
 use octo::formats::{self, FormatRegistry};
 use octo::ui;

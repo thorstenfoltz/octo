@@ -1,6 +1,15 @@
 @echo off
 setlocal
 
+:: Check for administrator privileges
+net session >nul 2>&1
+if errorlevel 1 (
+    echo This installer requires administrator privileges.
+    echo Right-click install.bat and select "Run as administrator".
+    pause
+    exit /b 1
+)
+
 set "INSTALL_DIR=%ProgramFiles%\Octo"
 set "SCRIPT_DIR=%~dp0"
 
@@ -35,12 +44,14 @@ if errorlevel 1 (
     setx PATH "%CURRENT_PATH%;%INSTALL_DIR%"
 )
 
-:: Convert PNG to ICO if not already present
+:: Convert PNG to ICO if not already present and magick is available
 if not exist "%INSTALL_DIR%\octo.ico" (
     if exist "%INSTALL_DIR%\octo.png" (
-        echo Converting icon...
-        powershell -NoProfile -Command ^
-            "Add-Type -AssemblyName System.Drawing; $bmp = [System.Drawing.Bitmap]::new('%INSTALL_DIR%\octo.png'); $ico = [System.IO.File]::Create('%INSTALL_DIR%\octo.ico'); $bmp.Save($ico, [System.Drawing.Imaging.ImageFormat]::Icon); $ico.Close(); $bmp.Dispose()"
+        where magick >nul 2>&1
+        if not errorlevel 1 (
+            echo Converting icon...
+            magick "%INSTALL_DIR%\octo.png" -define icon:auto-resize=256,128,64,48,32,16 "%INSTALL_DIR%\octo.ico"
+        )
     )
 )
 
@@ -52,7 +63,14 @@ if exist "%INSTALL_DIR%\octo.ico" (
 ) else (
     set "ICON_PATH=%INSTALL_DIR%\octo.exe"
 )
-powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('%SHORTCUT_DIR%\Octo.lnk'); $sc.TargetPath = '%INSTALL_DIR%\octo.exe'; $sc.IconLocation = '%ICON_PATH%'; $sc.WorkingDirectory = '%USERPROFILE%'; $sc.Description = 'Multi-format data viewer and editor'; $sc.Save()"
+powershell -NoProfile -Command ^
+    "$ws = New-Object -ComObject WScript.Shell;" ^
+    "$sc = $ws.CreateShortcut('%SHORTCUT_DIR%\Octo.lnk');" ^
+    "$sc.TargetPath = '%INSTALL_DIR%\octo.exe';" ^
+    "$sc.IconLocation = '%ICON_PATH%';" ^
+    "$sc.WorkingDirectory = '%USERPROFILE%';" ^
+    "$sc.Description = 'Multi-format data viewer and editor';" ^
+    "$sc.Save()"
 
 echo.
 echo Octo installed successfully.
