@@ -175,7 +175,7 @@ impl ThemeColors {
 }
 
 /// Apply the theme to an egui context
-pub fn apply_theme(ctx: &egui::Context, mode: ThemeMode) {
+pub fn apply_theme(ctx: &egui::Context, mode: ThemeMode, font_size: f32) {
     let colors = ThemeColors::for_mode(mode);
 
     let mut style = Style::default();
@@ -241,24 +241,29 @@ pub fn apply_theme(ctx: &egui::Context, mode: ThemeMode) {
 
     style.visuals = visuals;
 
-    // Font sizes
+    // Font sizes — scaled from the user-configured base size
+    let small = (font_size * 0.85).round();
+    let heading = (font_size * 1.38).round();
     style.text_styles = [
         (
             TextStyle::Small,
-            FontId::new(11.0, FontFamily::Proportional),
+            FontId::new(small, FontFamily::Proportional),
         ),
-        (TextStyle::Body, FontId::new(13.0, FontFamily::Proportional)),
+        (
+            TextStyle::Body,
+            FontId::new(font_size, FontFamily::Proportional),
+        ),
         (
             TextStyle::Monospace,
-            FontId::new(13.0, FontFamily::Monospace),
+            FontId::new(font_size, FontFamily::Monospace),
         ),
         (
             TextStyle::Button,
-            FontId::new(13.0, FontFamily::Proportional),
+            FontId::new(font_size, FontFamily::Proportional),
         ),
         (
             TextStyle::Heading,
-            FontId::new(18.0, FontFamily::Proportional),
+            FontId::new(heading, FontFamily::Proportional),
         ),
     ]
     .into();

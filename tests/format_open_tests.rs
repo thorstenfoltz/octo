@@ -1,7 +1,7 @@
 mod common;
 
 use common::{ensure_fixtures, fixture_path};
-use octo::formats::FormatRegistry;
+use octa::formats::FormatRegistry;
 
 #[test]
 fn test_open_csv() {

@@ -1,6 +1,6 @@
-use octo::data::{CellValue, ColumnInfo, DataTable};
-use octo::formats::FormatReader;
-use octo::formats::text_reader::TextReader;
+use octa::data::{CellValue, ColumnInfo, DataTable};
+use octa::formats::FormatReader;
+use octa::formats::text_reader::TextReader;
 use std::io::Write;
 
 #[test]

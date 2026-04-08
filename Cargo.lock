@@ -3433,7 +3433,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "octo"
+name = "octa"
 version = "0.0.0-dev"
 dependencies = [
  "anyhow",
@@ -3464,6 +3464,7 @@ dependencies = [
  "toml 0.8.23",
  "ureq",
  "winresource",
+ "zip",
 ]
 
 [[package]]

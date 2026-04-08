@@ -15,9 +15,9 @@ BIN_DIR="$PREFIX/bin"
 ICON_DIR="$PREFIX/share/icons/hicolor/scalable/apps"
 DESKTOP_DIR="$PREFIX/share/applications"
 
-echo "Uninstalling Octo from prefix: $PREFIX"
+echo "Uninstalling Octa from prefix: $PREFIX"
 
-for file in "$BIN_DIR/octo" "$ICON_DIR/octo.svg" "$DESKTOP_DIR/octo.desktop"; do
+for file in "$BIN_DIR/octa" "$ICON_DIR/octa.svg" "$DESKTOP_DIR/octa.desktop"; do
 	if [[ -f "$file" ]]; then
 		rm -v "$file"
 	else
@@ -34,4 +34,4 @@ if command -v update-desktop-database &>/dev/null; then
 	update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
 fi
 
-echo "Octo uninstalled."
+echo "Octa uninstalled."

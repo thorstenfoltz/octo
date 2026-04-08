@@ -7,10 +7,6 @@ on:
         description: "Release version"
         required: true
         type: string
-      release_notes:
-        description: "Release notes (optional, auto-generated if empty)"
-        required: false
-        type: string
 
 permissions:
   contents: write
@@ -51,23 +47,23 @@ jobs:
 
       - name: Package Linux release
         run: |
-          DIR="octo-${VERSION}-linux-x86_64"
+          DIR="octa-${VERSION}-linux-x86_64"
           mkdir -p "$DIR/assets"
-          cp target/release/octo "$DIR/"
+          cp target/release/octa "$DIR/"
           cp install.sh "$DIR/"
           cp uninstall.sh "$DIR/"
-          cp octo.desktop "$DIR/"
-          cp assets/octo.svg "$DIR/assets/"
-          cp assets/octo.png "$DIR/assets/"
+          cp octa.desktop "$DIR/"
+          cp assets/octa.svg "$DIR/assets/"
+          cp assets/octa.png "$DIR/assets/"
           cp pkg/README-linux.md "$DIR/README.md"
           cp LICENSE "$DIR/" 2>/dev/null || true
           tar czf "${DIR}.tar.gz" "$DIR/"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: linux-release
-          path: octo-${{ env.VERSION }}-linux-x86_64.tar.gz
+          path: octa-${{ env.VERSION }}-linux-x86_64.tar.gz
 
   build-windows:
     runs-on: windows-latest
@@ -86,7 +82,7 @@ jobs:
           (Get-Content Cargo.toml) -replace '^version = .*', "version = `"$env:VERSION`"" | Set-Content Cargo.toml
 
       - name: Generate ICO from PNG
-        run: magick assets/octo.png -define icon:auto-resize=256,128,64,48,32,16 assets/octo.ico
+        run: magick assets/octa.png -define icon:auto-resize=256,128,64,48,32,16 assets/octa.ico
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -100,38 +96,38 @@ jobs:
       - name: Package Windows release
         shell: pwsh
         run: |
-          $dir = "octo-$env:VERSION-windows-x86_64"
+          $dir = "octa-$env:VERSION-windows-x86_64"
           New-Item -ItemType Directory -Path "$dir\assets" -Force
-          Copy-Item "target\release\octo.exe" "$dir\"
+          Copy-Item "target\release\octa.exe" "$dir\"
           Copy-Item "install.bat" "$dir\"
-          Copy-Item "assets\octo.svg" "$dir\assets\"
-          Copy-Item "assets\octo.png" "$dir\assets\"
-          if (Test-Path "assets\octo.ico") { Copy-Item "assets\octo.ico" "$dir\assets\" }
+          Copy-Item "assets\octa.svg" "$dir\assets\"
+          Copy-Item "assets\octa.png" "$dir\assets\"
+          if (Test-Path "assets\octa.ico") { Copy-Item "assets\octa.ico" "$dir\assets\" }
           Copy-Item "pkg\README-windows.md" "$dir\README.md"
           if (Test-Path "LICENSE") { Copy-Item "LICENSE" "$dir\" }
-          Compress-Archive -Path "$dir\*" -DestinationPath "octo-$env:VERSION-windows-x86_64.zip"
+          Compress-Archive -Path "$dir\*" -DestinationPath "octa-$env:VERSION-windows-x86_64.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v5
         with:
           name: windows-release
-          path: octo-${{ env.VERSION }}-windows-x86_64.zip
+          path: octa-${{ env.VERSION }}-windows-x86_64.zip
 
       # TODO: Enable SignPath code signing once certificate is available
       # - name: Upload unsigned exe for signing
       #   id: upload-unsigned
-      #   uses: actions/upload-artifact@v4
+      #   uses: actions/upload-artifact@v5
       #   with:
       #     name: windows-unsigned-exe
-      #     path: target/release/octo.exe
+      #     path: target/release/octa.exe
       #
       # - name: Upload packaging files
-      #   uses: actions/upload-artifact@v4
+      #   uses: actions/upload-artifact@v5
       #   with:
       #     name: windows-packaging
       #     path: |
-      #       octo-${{ env.VERSION }}-windows-x86_64/
-      #       !octo-${{ env.VERSION }}-windows-x86_64/octo.exe
+      #       octa-${{ env.VERSION }}-windows-x86_64/
+      #       !octa-${{ env.VERSION }}-windows-x86_64/octa.exe
 
   # TODO: Enable SignPath code signing once certificate is available
   # sign-windows:
@@ -139,7 +135,7 @@ jobs:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - name: Download unsigned exe
-  #       uses: actions/download-artifact@v4
+  #       uses: actions/download-artifact@v5
   #       with:
   #         name: windows-unsigned-exe
   #         path: unsigned
@@ -149,7 +145,7 @@ jobs:
   #       with:
   #         api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
   #         organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-  #         project-slug: octo
+  #         project-slug: octa
   #         signing-policy-slug: release-signing
   #         artifact-configuration-slug: windows-exe
   #         github-artifact-id: ${{ needs.build-windows.outputs.unsigned-artifact-id }}
@@ -157,7 +153,7 @@ jobs:
   #         output-artifact-directory: signed
   #
   #     - name: Download packaging files
-  #       uses: actions/download-artifact@v4
+  #       uses: actions/download-artifact@v5
   #       with:
   #         name: windows-packaging
   #         path: package
@@ -168,14 +164,14 @@ jobs:
   #       shell: bash
   #       run: |
   #         DIR=$(ls package/)
-  #         cp signed/octo.exe "package/$DIR/octo.exe"
-  #         cd package && zip -r "../octo-${VERSION}-windows-x86_64.zip" "$DIR/"
+  #         cp signed/octa.exe "package/$DIR/octa.exe"
+  #         cd package && zip -r "../octa-${VERSION}-windows-x86_64.zip" "$DIR/"
   #
   #     - name: Upload signed release
-  #       uses: actions/upload-artifact@v4
+  #       uses: actions/upload-artifact@v5
   #       with:
   #         name: windows-release
-  #         path: octo-${{ inputs.version }}-windows-x86_64.zip
+  #         path: octa-${{ inputs.version }}-windows-x86_64.zip
 
   publish:
     needs: [build-linux, build-windows]
@@ -191,16 +187,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ inputs.version }}
-          RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
-          NOTES_FLAG="--generate-notes"
-          if [ -n "$RELEASE_NOTES" ]; then
-            NOTES_FLAG="--notes"
+          NOTES_ARGS="--generate-notes"
+          if [ -s release_notes.md ]; then
+            NOTES_ARGS="--notes-file release_notes.md"
           fi
           gh release create "$VERSION" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Octo $VERSION" \
-            $NOTES_FLAG ${RELEASE_NOTES:+"$RELEASE_NOTES"} \
+            --title "Octa $VERSION" \
+            $NOTES_ARGS \
             artifacts/linux-release/*.tar.gz \
             artifacts/windows-release/*.zip
 
@@ -229,7 +224,7 @@ jobs:
           # Binary tarball (release artifact)
           gh release download "$VERSION" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern "octo-${VERSION}-linux-x86_64.tar.gz" \
+            --pattern "octa-${VERSION}-linux-x86_64.tar.gz" \
             --output binary.tar.gz
           BINARY_SHA256=$(sha256sum binary.tar.gz | awk '{print $1}')
           echo "binary=$BINARY_SHA256" >> "$GITHUB_OUTPUT"
@@ -241,12 +236,12 @@ jobs:
           SOURCE_SHA256: ${{ steps.sha.outputs.source }}
           BINARY_SHA256: ${{ steps.sha.outputs.binary }}
         run: |
-          # octo (source)
+          # octa (source)
           sed -i "s/X\.X\.X/$VERSION/g" .github/aur/PKGBUILD .github/aur/.SRCINFO
           sed -i "s/sha256sums=('SKIP')/sha256sums=('$SOURCE_SHA256')/" .github/aur/PKGBUILD
           sed -i "s/sha256sums = SKIP/sha256sums = $SOURCE_SHA256/" .github/aur/.SRCINFO
 
-          # octo-bin (binary)
+          # octa-bin (binary)
           sed -i "s/X\.X\.X/$VERSION/g" .github/aur-bin/PKGBUILD .github/aur-bin/.SRCINFO
           sed -i "s/sha256sums=('SKIP')/sha256sums=('$BINARY_SHA256')/" .github/aur-bin/PKGBUILD
           sed -i "s/sha256sums = SKIP/sha256sums = $BINARY_SHA256/" .github/aur-bin/.SRCINFO
@@ -265,15 +260,15 @@ jobs:
 
           ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
 
-#      - name: Push octo to AUR
+#      - name: Push octa to AUR
 #        env:
 #          VERSION: ${{ inputs.version }}
 #        run: |
 #          git -c init.defaultBranch=master clone \
-#            ssh://aur@aur.archlinux.org/octo.git /tmp/aur-octo
+#            ssh://aur@aur.archlinux.org/octa.git /tmp/aur-octa
 #
-#          cp .github/aur/PKGBUILD .github/aur/.SRCINFO /tmp/aur-octo/
-#          cd /tmp/aur-octo
+#          cp .github/aur/PKGBUILD .github/aur/.SRCINFO /tmp/aur-octa/
+#          cd /tmp/aur-octa
 #
 #          echo "--- PKGBUILD ---"
 #          cat PKGBUILD
@@ -290,15 +285,15 @@ jobs:
 #          git commit -m "release $VERSION"
 #          git push
 #
-#      - name: Push octo-bin to AUR
+#      - name: Push octa-bin to AUR
 #        env:
 #          VERSION: ${{ inputs.version }}
 #        run: |
 #          git -c init.defaultBranch=master clone \
-#            ssh://aur@aur.archlinux.org/octo-bin.git /tmp/aur-octo-bin
+#            ssh://aur@aur.archlinux.org/octa-bin.git /tmp/aur-octa-bin
 #
-#          cp .github/aur-bin/PKGBUILD .github/aur-bin/.SRCINFO /tmp/aur-octo-bin/
-#          cd /tmp/aur-octo-bin
+#          cp .github/aur-bin/PKGBUILD .github/aur-bin/.SRCINFO /tmp/aur-octa-bin/
+#          cd /tmp/aur-octa-bin
 #
 #          echo "--- PKGBUILD ---"
 #          cat PKGBUILD

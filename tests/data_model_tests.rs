@@ -1,4 +1,4 @@
-use octo::data::*;
+use octa::data::*;
 use std::collections::HashMap;
 
 fn sample_table() -> DataTable {

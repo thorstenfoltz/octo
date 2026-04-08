@@ -1,6 +1,9 @@
-use octo::data::{self, DataTable, ViewMode};
-use octo::formats::{self, FormatRegistry};
-use octo::ui;
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use octa::data::{self, DataTable, ViewMode};
+use octa::formats::{self, FormatRegistry};
+use octa::ui;
+use ui::settings::{AppSettings, SettingsDialog};
 use ui::table_view::TableViewState;
 use ui::theme::ThemeMode;
 
@@ -9,11 +12,9 @@ use egui::RichText;
 
 use std::sync::{Arc, Mutex};
 
-const OCTO_SVG: &str = include_str!("../assets/octo.svg");
-
-fn render_icon() -> egui::IconData {
+fn render_icon(svg_source: &str) -> egui::IconData {
     let opt = resvg::usvg::Options::default();
-    let tree = resvg::usvg::Tree::from_str(OCTO_SVG, &opt).expect("Failed to parse SVG");
+    let tree = resvg::usvg::Tree::from_str(svg_source, &opt).expect("Failed to parse SVG");
     let icon_size = 256u32;
     let mut pixmap =
         resvg::tiny_skia::Pixmap::new(icon_size, icon_size).expect("Failed to create pixmap");
@@ -41,13 +42,13 @@ fn main() -> eframe::Result<()> {
     if let Some(arg) = std::env::args().nth(1) {
         match arg.as_str() {
             "--version" | "-V" => {
-                println!("octo {}", VERSION);
+                println!("octa {}", VERSION);
                 std::process::exit(0);
             }
             "--help" | "-h" => {
-                println!("octo {} - A modular multi-format data viewer and editor", VERSION);
+                println!("octa {} - A modular multi-format data viewer and editor", VERSION);
                 println!();
-                println!("Usage: octo [OPTIONS] [FILE]");
+                println!("Usage: octa [OPTIONS] [FILE]");
                 println!();
                 println!("Arguments:");
                 println!("  [FILE]  File to open on startup");
@@ -64,7 +65,7 @@ fn main() -> eframe::Result<()> {
         }
     }
 
-    // Parse CLI arguments: octo [file_path]
+    // Parse CLI arguments: octa [file_path]
     let initial_file = std::env::args()
         .nth(1)
         .map(std::path::PathBuf::from)
@@ -72,15 +73,19 @@ fn main() -> eframe::Result<()> {
 
     let title = match &initial_file {
         Some(p) => format!(
-            "Octo - {}",
+            "Octa - {}",
             p.file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default()
         ),
-        None => "Octo".to_string(),
+        None => "Octa".to_string(),
     };
 
-    let icon = render_icon();
+    let settings = AppSettings::load();
+    let icon_svg = settings.icon_variant.svg_source();
+    let icon = render_icon(icon_svg);
+    let default_theme = settings.default_theme;
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([3840.0, 2160.0])
@@ -92,11 +97,11 @@ fn main() -> eframe::Result<()> {
     };
 
     eframe::run_native(
-        "octo",
+        "octa",
         options,
         Box::new(move |cc| {
-            ui::theme::apply_theme(&cc.egui_ctx, ThemeMode::Light);
-            Ok(Box::new(OctoApp::new(initial_file)))
+            ui::theme::apply_theme(&cc.egui_ctx, default_theme, settings.font_size);
+            Ok(Box::new(OctaApp::new(initial_file, settings)))
         }),
     )
 }
@@ -119,10 +124,12 @@ enum UpdateState {
     Error(String),
 }
 
-struct OctoApp {
+struct OctaApp {
     table: DataTable,
     registry: FormatRegistry,
     theme_mode: ThemeMode,
+    settings: AppSettings,
+    settings_dialog: SettingsDialog,
     table_state: TableViewState,
     search_text: String,
     filtered_rows: Vec<usize>,
@@ -336,12 +343,15 @@ const COLUMN_TYPES: &[&str] = &[
     "Timestamp(Microsecond, None)",
 ];
 
-impl OctoApp {
-    fn new(initial_file: Option<std::path::PathBuf>) -> Self {
+impl OctaApp {
+    fn new(initial_file: Option<std::path::PathBuf>, settings: AppSettings) -> Self {
+        let theme_mode = settings.default_theme;
         Self {
             table: DataTable::empty(),
             registry: FormatRegistry::new(),
-            theme_mode: ThemeMode::Light,
+            theme_mode,
+            settings,
+            settings_dialog: SettingsDialog::default(),
             table_state: TableViewState::default(),
             search_text: String::new(),
             filtered_rows: Vec::new(),
@@ -746,9 +756,9 @@ impl OctoApp {
         std::thread::spawn(move || {
             let result = (|| -> Result<String, String> {
                 let body = ureq::get(
-                    "https://api.github.com/repos/thorstenfoltz/octo/releases/latest",
+                    "https://api.github.com/repos/thorstenfoltz/octa/releases/latest",
                 )
-                .header("User-Agent", &format!("octo/{}", VERSION))
+                .header("User-Agent", &format!("octa/{}", VERSION))
                 .header("Accept", "application/vnd.github.v3+json")
                 .call()
                 .map_err(|e| format!("Request failed: {}", e))?
@@ -799,12 +809,12 @@ impl OctoApp {
         #[cfg(target_os = "linux")]
         {
             let url = format!(
-                "https://github.com/thorstenfoltz/octo/releases/download/{0}/octo-{0}-linux-x86_64.tar.gz",
+                "https://github.com/thorstenfoltz/octa/releases/download/{0}/octa-{0}-linux-x86_64.tar.gz",
                 new_version
             );
 
             let bytes = ureq::get(&url)
-                .header("User-Agent", &format!("octo/{}", VERSION))
+                .header("User-Agent", &format!("octa/{}", VERSION))
                 .call()
                 .map_err(|e| format!("Download failed: {}", e))?
                 .body_mut()
@@ -814,7 +824,7 @@ impl OctoApp {
             // Extract the binary from the tar.gz
             let decoder = flate2::read::GzDecoder::new(std::io::Cursor::new(bytes));
             let mut archive = tar::Archive::new(decoder);
-            let binary_name = format!("octo-{}-linux-x86_64/octo", new_version);
+            let binary_name = format!("octa-{}-linux-x86_64/octa", new_version);
 
             let mut found = false;
             for entry in archive.entries().map_err(|e| format!("Tar error: {}", e))? {
@@ -861,12 +871,62 @@ impl OctoApp {
             }
         }
 
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(target_os = "windows")]
+        {
+            let url = format!(
+                "https://github.com/thorstenfoltz/octa/releases/download/{0}/octa-{0}-windows-x86_64.zip",
+                new_version
+            );
+
+            let bytes = ureq::get(&url)
+                .header("User-Agent", &format!("octa/{}", VERSION))
+                .call()
+                .map_err(|e| format!("Download failed: {}", e))?
+                .body_mut()
+                .read_to_vec()
+                .map_err(|e| format!("Read failed: {}", e))?;
+
+            let cursor = std::io::Cursor::new(bytes);
+            let mut archive =
+                zip::ZipArchive::new(cursor).map_err(|e| format!("Zip error: {}", e))?;
+
+            let binary_name = "octa.exe";
+            let mut found = false;
+            for i in 0..archive.len() {
+                let mut file = archive
+                    .by_index(i)
+                    .map_err(|e| format!("Zip entry error: {}", e))?;
+                if file.name().ends_with(binary_name) && !file.name().ends_with('/') {
+                    let tmp_path = current_exe.with_extension("update.exe");
+                    let mut tmp_file = std::fs::File::create(&tmp_path)
+                        .map_err(|e| format!("Cannot create temp file: {}", e))?;
+                    std::io::copy(&mut file, &mut tmp_file)
+                        .map_err(|e| format!("Extract failed: {}", e))?;
+
+                    // On Windows the running exe can be renamed but not deleted
+                    let old_path = current_exe.with_extension("old.exe");
+                    let _ = std::fs::remove_file(&old_path);
+                    std::fs::rename(&current_exe, &old_path)
+                        .map_err(|e| format!("Backup rename failed: {}", e))?;
+                    std::fs::rename(&tmp_path, &current_exe)
+                        .map_err(|e| format!("Install rename failed: {}", e))?;
+
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found {
+                return Err(format!("'{}' not found in archive", binary_name));
+            }
+        }
+
+        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
         {
             let _ = current_exe;
             let _ = new_version;
             return Err(
-                "Auto-update is only supported on Linux. Please download the latest release from the repository.".to_string(),
+                "Auto-update is not supported on this platform. Please download the latest release from the repository.".to_string(),
             );
         }
 
@@ -942,7 +1002,7 @@ impl OctoApp {
     }
 }
 
-impl eframe::App for OctoApp {
+impl eframe::App for OctaApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // --- Load file from CLI on first frame ---
         if let Some(path) = self.initial_file.take() {
@@ -1052,7 +1112,8 @@ impl eframe::App for OctoApp {
                 // Lazily create logo texture
                 if self.logo_texture.is_none() {
                     let opt = resvg::usvg::Options::default();
-                    if let Ok(tree) = resvg::usvg::Tree::from_str(OCTO_SVG, &opt) {
+                    let svg_src = self.settings.icon_variant.svg_source();
+                    if let Ok(tree) = resvg::usvg::Tree::from_str(svg_src, &opt) {
                         let size = tree.size();
                         let (w, h) = (size.width() as u32, size.height() as u32);
                         if let Some(mut pixmap) = resvg::tiny_skia::Pixmap::new(w, h) {
@@ -1066,7 +1127,7 @@ impl eframe::App for OctoApp {
                                 pixmap.data(),
                             );
                             self.logo_texture = Some(ctx.load_texture(
-                                "octo_logo",
+                                "octa_logo",
                                 image,
                                 egui::TextureOptions::LINEAR,
                             ));
@@ -1102,7 +1163,7 @@ impl eframe::App for OctoApp {
                 }
                 if action.toggle_theme {
                     self.theme_mode = self.theme_mode.toggle();
-                    ui::theme::apply_theme(ctx, self.theme_mode);
+                    ui::theme::apply_theme(ctx, self.theme_mode, self.settings.font_size);
                 }
                 if action.search_changed {
                     self.filter_dirty = true;
@@ -1114,6 +1175,9 @@ impl eframe::App for OctoApp {
                 }
 
                 // --- Help actions ---
+                if action.show_settings {
+                    self.settings_dialog.open(&self.settings);
+                }
                 if action.show_about {
                     self.show_about_dialog = true;
                 }
@@ -1437,16 +1501,61 @@ impl eframe::App for OctoApp {
                 });
         }
 
+        // --- Settings dialog ---
+        if let Some(new_settings) = self.settings_dialog.show(ctx) {
+            let icon_changed = self.settings_dialog.icon_changed;
+            let font_changed = self.settings_dialog.font_changed;
+            let theme_changed = self.settings_dialog.theme_changed;
+
+            self.settings = new_settings;
+            self.settings.save();
+
+            if theme_changed {
+                self.theme_mode = self.settings.default_theme;
+            }
+            if font_changed || theme_changed {
+                ui::theme::apply_theme(ctx, self.theme_mode, self.settings.font_size);
+            }
+            if icon_changed {
+                // Refresh the toolbar logo texture
+                let svg_src = self.settings.icon_variant.svg_source();
+                let opt = resvg::usvg::Options::default();
+                if let Ok(tree) = resvg::usvg::Tree::from_str(svg_src, &opt) {
+                    let size = tree.size();
+                    let (w, h) = (size.width() as u32, size.height() as u32);
+                    if let Some(mut pixmap) = resvg::tiny_skia::Pixmap::new(w, h) {
+                        resvg::render(
+                            &tree,
+                            resvg::tiny_skia::Transform::default(),
+                            &mut pixmap.as_mut(),
+                        );
+                        let image = egui::ColorImage::from_rgba_unmultiplied(
+                            [w as usize, h as usize],
+                            pixmap.data(),
+                        );
+                        self.logo_texture = Some(ctx.load_texture(
+                            "octa_logo",
+                            image,
+                            egui::TextureOptions::LINEAR,
+                        ));
+                    }
+                }
+                // Update the window icon
+                let icon = render_icon(svg_src);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Icon(Some(Arc::new(icon))));
+            }
+        }
+
         // --- About dialog ---
         if self.show_about_dialog {
-            egui::Window::new("About Octo")
+            egui::Window::new("About Octa")
                 .resizable(false)
                 .collapsible(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
                     ui.vertical_centered(|ui| {
                         ui.add_space(8.0);
-                        ui.label(RichText::new("Octo").strong().size(20.0));
+                        ui.label(RichText::new("Octa").strong().size(20.0));
                         ui.add_space(4.0);
                         ui.label(format!("Version {}", VERSION));
                         ui.add_space(8.0);
@@ -1514,7 +1623,7 @@ impl eframe::App for OctoApp {
                         }
                         UpdateState::Updated(ref version) => {
                             ui.label(format!(
-                                "Updated to version {}. Please restart Octo to use the new version.",
+                                "Updated to version {}. Please restart Octa to use the new version.",
                                 version
                             ));
                             ui.add_space(8.0);
