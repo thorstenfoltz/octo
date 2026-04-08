@@ -1,3 +1,4 @@
+pub mod settings;
 pub mod status_bar;
 pub mod table_view;
 pub mod theme;

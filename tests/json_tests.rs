@@ -1,5 +1,5 @@
-use octo::data::CellValue;
-use octo::formats::json_reader::*;
+use octa::data::CellValue;
+use octa::formats::json_reader::*;
 use serde_json::json;
 use std::path::PathBuf;
 

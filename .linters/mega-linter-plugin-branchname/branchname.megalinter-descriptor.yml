@@ -5,7 +5,7 @@ linters:
     name: REPOSITORY_BRANCH_NAME
     descriptor_flavors:
       - all_flavors
-    linter_url: https://github.com/thorstenfoltz/octo
+    linter_url: https://github.com/thorstenfoltz/octa
     linter_text: "Validates git branch names follow the convention: master, main, or prefix/name (feature, fix, hotfix, chore, refactor, test, docs)"
     cli_lint_mode: project
     lint_all_files: true

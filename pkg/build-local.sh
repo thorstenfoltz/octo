@@ -8,8 +8,8 @@ set -euo pipefail
 #   binary  — pre-compiled, fast install
 #   version defaults to 0.0.1
 #
-# Install: paru -U pkg/build/<type>/octo-*.pkg.tar.zst
-# Remove:  paru -R octo  or  paru -R octo-bin
+# Install: paru -U pkg/build/<type>/octa-*.pkg.tar.zst
+# Remove:  paru -R octa  or  paru -R octa-bin
 
 TYPE="${1:-}"
 VERSION="${2:-0.0.1}"
@@ -35,8 +35,8 @@ if [[ "$TYPE" == "source" ]]; then
 	# Source package — compiles during install
 	# -------------------------------------------------------------------
 	echo "==> Creating source tarball for version $VERSION..."
-	tar czf "$BUILD_DIR/octo-$VERSION.tar.gz" \
-		--transform "s,^,octo-$VERSION/," \
+	tar czf "$BUILD_DIR/octa-$VERSION.tar.gz" \
+		--transform "s,^,octa-$VERSION/," \
 		--exclude='.git' \
 		--exclude='target' \
 		--exclude='pkg/build' \
@@ -44,18 +44,18 @@ if [[ "$TYPE" == "source" ]]; then
 
 	cat >"$BUILD_DIR/PKGBUILD" <<'PKGBUILD_EOF'
 # Local test build (source) — not for AUR
-pkgname=octo
+pkgname=octa
 pkgver=VERSION_PLACEHOLDER
 pkgrel=1
 pkgdesc="A modular multi-format data viewer and editor"
 arch=('x86_64')
-url="https://github.com/thorstenfoltz/octo"
+url="https://github.com/thorstenfoltz/octa"
 license=('MIT')
 depends=('gtk3' 'libxcb' 'libxkbcommon' 'openssl' 'fontconfig' 'freetype2' 'harfbuzz' 'fribidi' 'libjpeg-turbo' 'openjpeg2' 'gumbo-parser' 'jbig2dec' 'mujs')
 makedepends=('rust' 'cargo' 'clang' 'cmake' 'nasm' 'pkgconf')
-conflicts=('octo-bin')
+conflicts=('octa-bin')
 options=(!lto)
-source=("octo-$pkgver.tar.gz")
+source=("octa-$pkgver.tar.gz")
 sha256sums=('SKIP')
 
 prepare() {
@@ -77,9 +77,9 @@ build() {
 
 package() {
     cd "$pkgname-$pkgver"
-    install -Dm755 "target/release/octo" "$pkgdir/usr/bin/octo"
-    install -Dm644 "assets/octo.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/octo.svg"
-    install -Dm644 "octo.desktop" "$pkgdir/usr/share/applications/octo.desktop"
+    install -Dm755 "target/release/octa" "$pkgdir/usr/bin/octa"
+    install -Dm644 "assets/octa.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/octa.svg"
+    install -Dm644 "octa.desktop" "$pkgdir/usr/share/applications/octa.desktop"
     install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
 PKGBUILD_EOF
@@ -100,31 +100,31 @@ else
 	cargo build --release 2>&1
 	sed -i 's/^version = .*/version = "0.0.0-dev"/' Cargo.toml
 
-	cp "$REPO_DIR/target/release/octo" "$BUILD_DIR/octo"
-	cp "$REPO_DIR/assets/octo.svg" "$BUILD_DIR/octo.svg"
-	cp "$REPO_DIR/octo.desktop" "$BUILD_DIR/octo.desktop"
+	cp "$REPO_DIR/target/release/octa" "$BUILD_DIR/octa"
+	cp "$REPO_DIR/assets/octa.svg" "$BUILD_DIR/octa.svg"
+	cp "$REPO_DIR/octa.desktop" "$BUILD_DIR/octa.desktop"
 	cp "$REPO_DIR/LICENSE" "$BUILD_DIR/LICENSE"
 
 	cat >"$BUILD_DIR/PKGBUILD" <<'PKGBUILD_EOF'
 # Local test build (binary) — not for AUR
-pkgname=octo-bin
+pkgname=octa-bin
 pkgver=VERSION_PLACEHOLDER
 pkgrel=1
 pkgdesc="A modular multi-format data viewer and editor (pre-compiled)"
 arch=('x86_64')
-url="https://github.com/thorstenfoltz/octo"
+url="https://github.com/thorstenfoltz/octa"
 license=('MIT')
 depends=('gtk3' 'libxcb' 'libxkbcommon' 'openssl' 'fontconfig' 'freetype2' 'harfbuzz' 'fribidi' 'libjpeg-turbo' 'openjpeg2' 'gumbo-parser' 'jbig2dec' 'mujs')
-provides=('octo')
-conflicts=('octo')
-source=('octo' 'octo.svg' 'octo.desktop' 'LICENSE')
+provides=('octa')
+conflicts=('octa')
+source=('octa' 'octa.svg' 'octa.desktop' 'LICENSE')
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
-    install -Dm755 "$srcdir/octo" "$pkgdir/usr/bin/octo"
-    install -Dm644 "$srcdir/octo.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/octo.svg"
-    install -Dm644 "$srcdir/octo.desktop" "$pkgdir/usr/share/applications/octo.desktop"
-    install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/octo/LICENSE"
+    install -Dm755 "$srcdir/octa" "$pkgdir/usr/bin/octa"
+    install -Dm644 "$srcdir/octa.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/octa.svg"
+    install -Dm644 "$srcdir/octa.desktop" "$pkgdir/usr/share/applications/octa.desktop"
+    install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/octa/LICENSE"
 }
 PKGBUILD_EOF
 
@@ -134,13 +134,13 @@ PKGBUILD_EOF
 	cd "$BUILD_DIR"
 	makepkg -sf
 
-	PKG="$BUILD_DIR/octo-bin-${VERSION}-1-${ARCH}.pkg.tar.zst"
+	PKG="$BUILD_DIR/octa-bin-${VERSION}-1-${ARCH}.pkg.tar.zst"
 	echo ""
 	echo "Done! Install with:"
 	echo "  paru -U $PKG"
 fi
 
-PKGNAME="octo"
-[[ "$TYPE" == "binary" ]] && PKGNAME="octo-bin"
+PKGNAME="octa"
+[[ "$TYPE" == "binary" ]] && PKGNAME="octa-bin"
 echo ""
 echo "Remove with:  paru -R $PKGNAME"

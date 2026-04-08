@@ -1,10 +1,10 @@
 [Desktop Entry]
-Name=Octo
+Name=Octa
 Comment=Multi-format data viewer and editor
-Exec=octo %F
-Icon=octo
+Exec=octa %F
+Icon=octa
 Terminal=false
 Type=Application
-StartupWMClass=octo
+StartupWMClass=octa
 Categories=Office;Utility;DataVisualization;
 MimeType=text/csv;application/json;application/x-parquet;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/xml;application/toml;application/x-yaml;application/avro;

@@ -1,5 +1,5 @@
-use octo::data::{CellValue, ColumnInfo, DataTable};
-use octo::formats::FormatRegistry;
+use octa::data::{CellValue, ColumnInfo, DataTable};
+use octa::formats::FormatRegistry;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Once;

@@ -22,6 +22,7 @@ pub struct ToolbarAction {
     pub sort_rows_desc_by: Option<usize>,
     pub discard_edits: bool,
     pub view_mode_changed: Option<ViewMode>,
+    pub show_settings: bool,
     pub show_about: bool,
     pub check_for_updates: bool,
 }
@@ -55,7 +56,7 @@ pub fn draw_toolbar(
             ui.image(egui::load::SizedTexture::new(tex.id(), [20.0, 20.0]));
         }
         ui.label(
-            RichText::new("Octo")
+            RichText::new("Octa")
                 .strong()
                 .size(15.0)
                 .color(colors.accent),
@@ -235,13 +236,18 @@ pub fn draw_toolbar(
         // --- Help menu (always visible) ---
         ui.menu_button(RichText::new("Help").color(colors.text_primary), |ui| {
             ui.set_min_width(160.0);
-            if ui.button("About").clicked() {
-                action.show_about = true;
+            if ui.button("Settings...").clicked() {
+                action.show_settings = true;
                 ui.close_menu();
             }
             ui.separator();
             if ui.button("Check for Updates...").clicked() {
                 action.check_for_updates = true;
+                ui.close_menu();
+            }
+            ui.separator();
+            if ui.button("About").clicked() {
+                action.show_about = true;
                 ui.close_menu();
             }
         });

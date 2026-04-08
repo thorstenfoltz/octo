@@ -18,13 +18,13 @@ DESKTOP_DIR="$PREFIX/share/applications"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # If a pre-built binary exists next to this script, use it; otherwise build from source
-if [[ -f "$SCRIPT_DIR/octo" ]]; then
-	BINARY="$SCRIPT_DIR/octo"
+if [[ -f "$SCRIPT_DIR/octa" ]]; then
+	BINARY="$SCRIPT_DIR/octa"
 	echo "Using pre-built binary."
 elif command -v cargo &>/dev/null; then
-	echo "Building Octo (release)..."
+	echo "Building Octa (release)..."
 	cargo build --release
-	BINARY="$SCRIPT_DIR/target/release/octo"
+	BINARY="$SCRIPT_DIR/target/release/octa"
 else
 	echo "Error: No pre-built binary found and cargo is not installed."
 	echo "Install Rust from https://rustup.rs/ or download a pre-built release."
@@ -32,13 +32,13 @@ else
 fi
 
 echo "Installing binary to $BIN_DIR..."
-install -Dm755 "$BINARY" "$BIN_DIR/octo"
+install -Dm755 "$BINARY" "$BIN_DIR/octa"
 
 echo "Installing icon to $ICON_DIR..."
-install -Dm644 "$SCRIPT_DIR/assets/octo.svg" "$ICON_DIR/octo.svg"
+install -Dm644 "$SCRIPT_DIR/assets/octa.svg" "$ICON_DIR/octa.svg"
 
 echo "Installing desktop entry to $DESKTOP_DIR..."
-install -Dm644 "$SCRIPT_DIR/octo.desktop" "$DESKTOP_DIR/octo.desktop"
+install -Dm644 "$SCRIPT_DIR/octa.desktop" "$DESKTOP_DIR/octa.desktop"
 
 echo "Updating icon cache..."
 if command -v gtk-update-icon-cache &>/dev/null; then
@@ -49,7 +49,7 @@ if command -v update-desktop-database &>/dev/null; then
 	update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
 fi
 
-echo "Octo installed successfully."
-echo "  Binary:  $BIN_DIR/octo"
-echo "  Icon:    $ICON_DIR/octo.svg"
-echo "  Desktop: $DESKTOP_DIR/octo.desktop"
+echo "Octa installed successfully."
+echo "  Binary:  $BIN_DIR/octa"
+echo "  Icon:    $ICON_DIR/octa.svg"
+echo "  Desktop: $DESKTOP_DIR/octa.desktop"

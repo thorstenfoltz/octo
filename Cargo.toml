@@ -1,21 +1,21 @@
 [package]
-name = "octo"
+name = "octa"
 version = "0.0.0-dev"
 edition = "2024"
 authors = ["Thorsten Foltz <thorsten.foltz@live.com>"]
 description = "A modular multi-format data viewer and editor"
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/thorstenfoltz/octo"
+repository = "https://github.com/thorstenfoltz/octa"
 keywords = ["data-viewer", "parquet", "csv", "gui", "egui"]
 categories = ["visualization", "gui"]
 
 [lib]
-name = "octo"
+name = "octa"
 path = "src/lib.rs"
 
 [[bin]]
-name = "octo"
+name = "octa"
 path = "src/main.rs"
 
 [profile.release]

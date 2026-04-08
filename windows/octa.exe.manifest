@@ -3,7 +3,7 @@
   <assemblyIdentity
     version="1.0.0.0"
     processorArchitecture="*"
-    name="com.tfoltz.octo"
+    name="com.tfoltz.octa"
     type="win32"
   />
   <description>Multi-format data viewer and editor</description>

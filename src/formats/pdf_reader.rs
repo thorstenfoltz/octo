@@ -108,7 +108,7 @@ impl FormatReader for PdfReader {
     fn write_file(&self, path: &Path, table: &DataTable) -> Result<()> {
         use printpdf::*;
 
-        let (doc, page1, layer1) = PdfDocument::new("Octo Export", Mm(210.0), Mm(297.0), "Layer 1");
+        let (doc, page1, layer1) = PdfDocument::new("Octa Export", Mm(210.0), Mm(297.0), "Layer 1");
 
         let font = doc.add_builtin_font(BuiltinFont::Helvetica)?;
 

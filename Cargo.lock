@@ -3433,8 +3433,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "octo"
-version = "0.1.2"
+name = "octa"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "apache-avro",

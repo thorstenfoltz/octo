@@ -1,4 +1,4 @@
-use octo::formats::FormatRegistry;
+use octa::formats::FormatRegistry;
 use std::path::PathBuf;
 
 #[test]
