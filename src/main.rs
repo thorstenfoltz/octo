@@ -8,7 +8,7 @@ use ui::table_view::TableViewState;
 use ui::theme::ThemeMode;
 
 use eframe::egui;
-use egui::RichText;
+use egui::{Align, Color32, Layout, RichText, Stroke};
 
 use std::sync::{Arc, Mutex};
 
@@ -732,6 +732,8 @@ impl OctaApp {
                         }
                     } else if self.table.format_name.as_deref() == Some("Markdown") {
                         self.view_mode = ViewMode::Markdown;
+                    } else if self.table.format_name.as_deref() == Some("Jupyter Notebook") {
+                        self.view_mode = ViewMode::Notebook;
                     } else if self.table.format_name.as_deref() == Some("Text") {
                         self.view_mode = ViewMode::Raw;
                     } else {
@@ -1368,6 +1370,7 @@ impl eframe::App for OctaApp {
                     self.raw_content.is_some(),
                     !self.pdf_page_images.is_empty(),
                     self.table.format_name.as_deref() == Some("Markdown"),
+                    self.table.format_name.as_deref() == Some("Jupyter Notebook"),
                     self.logo_texture.as_ref(),
                 );
                 // Clear focus request after this frame
@@ -1927,7 +1930,7 @@ All formats support both reading and writing. When saving, the original format a
 
 Cells support simple Excel-like formulas starting with **=**. Supported features:
 
-- **Cell references**: A1, B2, AA1, etc. (column letter + row number, 1-based)
+- **Cell references**: A1, B2, AA1, etc. (column letter + row number, 1-based — column letters are shown in each column header)
 - **Operators**: `+`, `-`, `*`, `/`
 - **Parentheses**: `(A1 + B1) * 2`
 - **Numeric literals**: `=A1 * 1.5`
@@ -1995,6 +1998,7 @@ Open **Help > Settings** to configure:
 - **Show row numbers**: toggle the row number column on the left
 - **Alternating row colors**: toggle zebra-stripe row backgrounds for easier reading
 - **Negative numbers in red**: display negative numeric values in red
+- **Highlight edited cells**: show a yellow background on cells that have been modified (off by default)
 
 ## Keyboard Shortcuts
 
@@ -2212,6 +2216,188 @@ Open **Help > Settings** to configure:
                 return;
             }
 
+            // --- Jupyter Notebook rendered view ---
+            if self.view_mode == ViewMode::Notebook {
+                let colors = ui::theme::ThemeColors::for_mode(self.theme_mode);
+                let is_dark = self.theme_mode == ui::theme::ThemeMode::Dark;
+
+                if self.table.row_count() == 0 {
+                    ui.centered_and_justified(|ui| {
+                        ui.label(
+                            RichText::new("Empty notebook")
+                                .size(16.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                    });
+                } else {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.add_space(8.0);
+                            ui.horizontal(|ui| {
+                                ui.add_space(16.0);
+                                ui.vertical(|ui| {
+                                    ui.set_max_width(960.0);
+
+                                    for row_idx in 0..self.table.row_count() {
+                                        let cell_num = match self.table.get(row_idx, 0) {
+                                            Some(data::CellValue::Int(n)) => Some(n),
+                                            _ => None,
+                                        };
+                                        let cell_type = match self.table.get(row_idx, 1) {
+                                            Some(data::CellValue::String(s)) => s.clone(),
+                                            _ => "code".to_string(),
+                                        };
+                                        let source = match self.table.get(row_idx, 2) {
+                                            Some(data::CellValue::String(s)) => s.clone(),
+                                            Some(v) => v.to_string(),
+                                            None => String::new(),
+                                        };
+                                        let output = match self.table.get(row_idx, 3) {
+                                            Some(data::CellValue::String(s)) => s.clone(),
+                                            Some(v) => v.to_string(),
+                                            None => String::new(),
+                                        };
+
+                                        let is_code = cell_type == "code";
+                                        let is_markdown = cell_type == "markdown";
+
+                                        // Cell container
+                                        let cell_bg = if is_code {
+                                            if is_dark {
+                                                Color32::from_rgb(30, 34, 42)
+                                            } else {
+                                                Color32::from_rgb(248, 249, 250)
+                                            }
+                                        } else {
+                                            colors.bg_primary
+                                        };
+
+                                        let border_color = if is_code {
+                                            if is_dark {
+                                                Color32::from_rgb(60, 70, 90)
+                                            } else {
+                                                Color32::from_rgb(200, 210, 220)
+                                            }
+                                        } else {
+                                            colors.border_subtle
+                                        };
+
+                                        // Cell label (e.g. "In [1]:" or nothing for markdown)
+                                        ui.horizontal(|ui| {
+                                            // Left label area
+                                            let label_width = 80.0;
+                                            ui.allocate_ui_with_layout(
+                                                egui::vec2(label_width, 20.0),
+                                                Layout::right_to_left(Align::TOP),
+                                                |ui| {
+                                                    if is_code {
+                                                        let label = if let Some(n) = cell_num {
+                                                            format!("In [{}]:", n)
+                                                        } else {
+                                                            "In [ ]:".to_string()
+                                                        };
+                                                        ui.label(
+                                                            RichText::new(label)
+                                                                .font(egui::FontId::new(
+                                                                    12.0,
+                                                                    egui::FontFamily::Monospace,
+                                                                ))
+                                                                .color(colors.accent),
+                                                        );
+                                                    }
+                                                },
+                                            );
+
+                                            // Cell content area
+                                            ui.vertical(|ui| {
+                                                if is_markdown {
+                                                    // Render markdown content
+                                                    egui_commonmark::CommonMarkViewer::new()
+                                                        .show(
+                                                            ui,
+                                                            &mut self.commonmark_cache,
+                                                            &source,
+                                                        );
+                                                } else {
+                                                    // Code cell with background
+                                                    egui::Frame::new()
+                                                        .fill(cell_bg)
+                                                        .stroke(Stroke::new(1.0, border_color))
+                                                        .corner_radius(4.0)
+                                                        .inner_margin(8.0)
+                                                        .show(ui, |ui| {
+                                                            ui.label(
+                                                                RichText::new(&source)
+                                                                    .font(egui::FontId::new(
+                                                                        13.0,
+                                                                        egui::FontFamily::Monospace,
+                                                                    ))
+                                                                    .color(colors.text_primary),
+                                                            );
+                                                        });
+
+                                                    // Output area
+                                                    if !output.is_empty() {
+                                                        let out_bg = if is_dark {
+                                                            Color32::from_rgb(25, 28, 35)
+                                                        } else {
+                                                            Color32::from_rgb(255, 255, 255)
+                                                        };
+                                                        egui::Frame::new()
+                                                            .fill(out_bg)
+                                                            .stroke(Stroke::new(
+                                                                1.0,
+                                                                border_color,
+                                                            ))
+                                                            .corner_radius(4.0)
+                                                            .inner_margin(8.0)
+                                                            .show(ui, |ui| {
+                                                                // Output label
+                                                                let out_label =
+                                                                    if let Some(n) = cell_num {
+                                                                        format!("Out[{}]:", n)
+                                                                    } else {
+                                                                        "Out[ ]:".to_string()
+                                                                    };
+                                                                ui.horizontal(|ui| {
+                                                                    ui.label(
+                                                                        RichText::new(out_label)
+                                                                            .font(egui::FontId::new(
+                                                                                12.0,
+                                                                                egui::FontFamily::Monospace,
+                                                                            ))
+                                                                            .color(colors.error),
+                                                                    );
+                                                                });
+                                                                ui.label(
+                                                                    RichText::new(&output)
+                                                                        .font(egui::FontId::new(
+                                                                            13.0,
+                                                                            egui::FontFamily::Monospace,
+                                                                        ))
+                                                                        .color(
+                                                                            colors.text_secondary,
+                                                                        ),
+                                                                );
+                                                            });
+                                                    }
+                                                }
+                                            });
+                                        });
+
+                                        // Separator between cells
+                                        ui.add_space(8.0);
+                                        ui.separator();
+                                        ui.add_space(4.0);
+                                    }
+                                });
+                            });
+                        });
+                }
+                return;
+            }
+
             // --- Markdown rendered view ---
             if self.view_mode == ViewMode::Markdown {
                 if let Some(ref content) = self.raw_content {
@@ -2381,6 +2567,7 @@ Open **Help > Settings** to configure:
                 self.settings.show_row_numbers,
                 self.settings.alternating_row_colors,
                 self.settings.negative_numbers_red,
+                self.settings.highlight_edits,
                 self.settings.font_size,
             );
 

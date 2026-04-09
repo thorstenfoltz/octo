@@ -114,6 +114,9 @@ pub struct AppSettings {
     /// Whether negative numbers are displayed in red.
     #[serde(default)]
     pub negative_numbers_red: bool,
+    /// Whether edited cells are highlighted with a background color.
+    #[serde(default)]
+    pub highlight_edits: bool,
 }
 
 fn default_true() -> bool {
@@ -130,6 +133,7 @@ impl Default for AppSettings {
             show_row_numbers: true,
             alternating_row_colors: true,
             negative_numbers_red: false,
+            highlight_edits: false,
         }
     }
 }
@@ -330,6 +334,11 @@ impl SettingsDialog {
                         // --- Negative numbers in red ---
                         ui.label("Negative numbers in red:");
                         ui.checkbox(&mut self.draft.negative_numbers_red, "");
+                        ui.end_row();
+
+                        // --- Highlight edited cells ---
+                        ui.label("Highlight edited cells:");
+                        ui.checkbox(&mut self.draft.highlight_edits, "");
                         ui.end_row();
                     });
 

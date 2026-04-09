@@ -20,7 +20,8 @@ pkgbase = octa-bin
 	depends = mujs
 	provides = octa
 	conflicts = octa
+	options = !debug
 	source = octa-X.X.X-linux-x86_64.tar.gz::https://github.com/thorstenfoltz/octa/releases/download/X.X.X/octa-X.X.X-linux-x86_64.tar.gz
-	sha256sums = SKIP
+	sha256sums = ab4239451c62eb0ee8855606466b5cb7d684ac35eaa896fc1bce571eceab47c6
 
 pkgname = octa-bin

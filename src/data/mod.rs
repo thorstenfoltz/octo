@@ -14,6 +14,8 @@ pub enum ViewMode {
     Pdf,
     /// Rendered Markdown view.
     Markdown,
+    /// Rendered Jupyter Notebook view.
+    Notebook,
 }
 
 /// Search/filter mode for the table.

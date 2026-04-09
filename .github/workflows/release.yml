@@ -60,7 +60,7 @@ jobs:
           tar czf "${DIR}.tar.gz" "$DIR/"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: linux-release
           path: octa-${{ env.VERSION }}-linux-x86_64.tar.gz
@@ -108,70 +108,10 @@ jobs:
           Compress-Archive -Path "$dir\*" -DestinationPath "octa-$env:VERSION-windows-x86_64.zip"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: windows-release
           path: octa-${{ env.VERSION }}-windows-x86_64.zip
-
-      # TODO: Enable SignPath code signing once certificate is available
-      # - name: Upload unsigned exe for signing
-      #   id: upload-unsigned
-      #   uses: actions/upload-artifact@v5
-      #   with:
-      #     name: windows-unsigned-exe
-      #     path: target/release/octa.exe
-      #
-      # - name: Upload packaging files
-      #   uses: actions/upload-artifact@v5
-      #   with:
-      #     name: windows-packaging
-      #     path: |
-      #       octa-${{ env.VERSION }}-windows-x86_64/
-      #       !octa-${{ env.VERSION }}-windows-x86_64/octa.exe
-
-  # TODO: Enable SignPath code signing once certificate is available
-  # sign-windows:
-  #   needs: build-windows
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Download unsigned exe
-  #       uses: actions/download-artifact@v5
-  #       with:
-  #         name: windows-unsigned-exe
-  #         path: unsigned
-  #
-  #     - name: Sign with SignPath
-  #       uses: signpath/github-action-submit-signing-request@v1
-  #       with:
-  #         api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-  #         organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-  #         project-slug: octa
-  #         signing-policy-slug: release-signing
-  #         artifact-configuration-slug: windows-exe
-  #         github-artifact-id: ${{ needs.build-windows.outputs.unsigned-artifact-id }}
-  #         wait-for-completion: true
-  #         output-artifact-directory: signed
-  #
-  #     - name: Download packaging files
-  #       uses: actions/download-artifact@v5
-  #       with:
-  #         name: windows-packaging
-  #         path: package
-  #
-  #     - name: Repackage with signed exe
-  #       env:
-  #         VERSION: ${{ inputs.version }}
-  #       shell: bash
-  #       run: |
-  #         DIR=$(ls package/)
-  #         cp signed/octa.exe "package/$DIR/octa.exe"
-  #         cd package && zip -r "../octa-${VERSION}-windows-x86_64.zip" "$DIR/"
-  #
-  #     - name: Upload signed release
-  #       uses: actions/upload-artifact@v5
-  #       with:
-  #         name: windows-release
-  #         path: octa-${{ inputs.version }}-windows-x86_64.zip
 
   publish:
     needs: [build-linux, build-windows]
@@ -179,7 +119,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with:
           path: artifacts
 
@@ -260,52 +200,52 @@ jobs:
 
           ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
 
-#      - name: Push octa to AUR
-#        env:
-#          VERSION: ${{ inputs.version }}
-#        run: |
-#          git -c init.defaultBranch=master clone \
-#            ssh://aur@aur.archlinux.org/octa.git /tmp/aur-octa
-#
-#          cp .github/aur/PKGBUILD .github/aur/.SRCINFO /tmp/aur-octa/
-#          cd /tmp/aur-octa
-#
-#          echo "--- PKGBUILD ---"
-#          cat PKGBUILD
-#          echo "--- .SRCINFO ---"
-#          cat .SRCINFO
-#
-#          STATUS="$(git status --porcelain)"
-#          echo "$STATUS" | grep -q 'PKGBUILD'
-#          echo "$STATUS" | grep -q '.SRCINFO'
-#
-#          git config user.name "GitHub Actions"
-#          git config user.email "actions@github.com"
-#          git add PKGBUILD .SRCINFO
-#          git commit -m "release $VERSION"
-#          git push
-#
-#      - name: Push octa-bin to AUR
-#        env:
-#          VERSION: ${{ inputs.version }}
-#        run: |
-#          git -c init.defaultBranch=master clone \
-#            ssh://aur@aur.archlinux.org/octa-bin.git /tmp/aur-octa-bin
-#
-#          cp .github/aur-bin/PKGBUILD .github/aur-bin/.SRCINFO /tmp/aur-octa-bin/
-#          cd /tmp/aur-octa-bin
-#
-#          echo "--- PKGBUILD ---"
-#          cat PKGBUILD
-#          echo "--- .SRCINFO ---"
-#          cat .SRCINFO
-#
-#          STATUS="$(git status --porcelain)"
-#          echo "$STATUS" | grep -q 'PKGBUILD'
-#          echo "$STATUS" | grep -q '.SRCINFO'
-#
-#          git config user.name "GitHub Actions"
-#          git config user.email "actions@github.com"
-#          git add PKGBUILD .SRCINFO
-#          git commit -m "release $VERSION"
-#          git push
+      - name: Push octa to AUR
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git -c init.defaultBranch=master clone \
+            ssh://aur@aur.archlinux.org/octa.git /tmp/aur-octa
+
+          cp .github/aur/PKGBUILD .github/aur/.SRCINFO /tmp/aur-octa/
+          cd /tmp/aur-octa
+
+          echo "--- PKGBUILD ---"
+          cat PKGBUILD
+          echo "--- .SRCINFO ---"
+          cat .SRCINFO
+
+          STATUS="$(git status --porcelain)"
+          echo "$STATUS" | grep -q 'PKGBUILD'
+          echo "$STATUS" | grep -q '.SRCINFO'
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add PKGBUILD .SRCINFO
+          git commit -m "release $VERSION"
+          git push
+
+      - name: Push octa-bin to AUR
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git -c init.defaultBranch=master clone \
+            ssh://aur@aur.archlinux.org/octa-bin.git /tmp/aur-octa-bin
+
+          cp .github/aur-bin/PKGBUILD .github/aur-bin/.SRCINFO /tmp/aur-octa-bin/
+          cd /tmp/aur-octa-bin
+
+          echo "--- PKGBUILD ---"
+          cat PKGBUILD
+          echo "--- .SRCINFO ---"
+          cat .SRCINFO
+
+          STATUS="$(git status --porcelain)"
+          echo "$STATUS" | grep -q 'PKGBUILD'
+          echo "$STATUS" | grep -q '.SRCINFO'
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add PKGBUILD .SRCINFO
+          git commit -m "release $VERSION"
+          git push

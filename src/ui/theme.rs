@@ -75,21 +75,21 @@ impl ThemeColors {
     /// Get the background color for a mark highlight.
     pub fn mark_color(&self, mark: MarkColor) -> Color32 {
         match mark {
-            MarkColor::Red => Color32::from_rgba_unmultiplied(239, 68, 68, 80),
-            MarkColor::Orange => Color32::from_rgba_unmultiplied(255, 140, 0, 80),
-            MarkColor::Yellow => Color32::from_rgba_unmultiplied(234, 179, 8, 80),
-            MarkColor::Green => Color32::from_rgba_unmultiplied(34, 197, 94, 80),
-            MarkColor::Blue => Color32::from_rgba_unmultiplied(59, 130, 246, 80),
-            MarkColor::Purple => Color32::from_rgba_unmultiplied(168, 85, 247, 80),
+            MarkColor::Red => Color32::from_rgba_unmultiplied(220, 38, 38, 90),
+            MarkColor::Orange => Color32::from_rgba_unmultiplied(234, 88, 12, 90),
+            MarkColor::Yellow => Color32::from_rgba_unmultiplied(250, 204, 21, 90),
+            MarkColor::Green => Color32::from_rgba_unmultiplied(34, 197, 94, 90),
+            MarkColor::Blue => Color32::from_rgba_unmultiplied(59, 130, 246, 90),
+            MarkColor::Purple => Color32::from_rgba_unmultiplied(168, 85, 247, 90),
         }
     }
 
     /// Get a solid color swatch for the color picker.
     pub fn mark_swatch(mark: MarkColor) -> Color32 {
         match mark {
-            MarkColor::Red => Color32::from_rgb(239, 68, 68),
-            MarkColor::Orange => Color32::from_rgb(249, 115, 22),
-            MarkColor::Yellow => Color32::from_rgb(234, 179, 8),
+            MarkColor::Red => Color32::from_rgb(220, 38, 38),
+            MarkColor::Orange => Color32::from_rgb(234, 88, 12),
+            MarkColor::Yellow => Color32::from_rgb(250, 204, 21),
             MarkColor::Green => Color32::from_rgb(34, 197, 94),
             MarkColor::Blue => Color32::from_rgb(59, 130, 246),
             MarkColor::Purple => Color32::from_rgb(168, 85, 247),
