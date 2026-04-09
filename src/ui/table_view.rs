@@ -52,7 +52,21 @@ const MIN_ROW_NUMBER_WIDTH: f32 = 60.0;
 const HEADER_HEIGHT: f32 = 44.0; // taller to fit column index number
 const RESIZE_HANDLE_WIDTH: f32 = 6.0;
 const SORT_ARROW_SIZE: f32 = 14.0;
-const COL_INDEX_HEIGHT: f32 = 12.0; // space for the column index number at top
+const COL_INDEX_HEIGHT: f32 = 12.0; // space for the column index letter at top
+
+/// Convert a 0-based column index to an Excel-style letter label (A, B, ..., Z, AA, AB, ...).
+fn col_index_letter(idx: usize) -> String {
+    let mut result = String::new();
+    let mut n = idx;
+    loop {
+        result.insert(0, (b'A' + (n % 26) as u8) as char);
+        if n < 26 {
+            break;
+        }
+        n = n / 26 - 1;
+    }
+    result
+}
 
 impl TableViewState {
     /// Ensure column widths are initialized for the given table.
@@ -134,6 +148,7 @@ pub fn draw_table(
     show_row_numbers: bool,
     alternating_row_colors: bool,
     negative_numbers_red: bool,
+    highlight_edits: bool,
     font_size: f32,
 ) -> TableInteraction {
     let colors = ThemeColors::for_mode(theme_mode);
@@ -351,6 +366,7 @@ pub fn draw_table(
             show_row_numbers,
             alternating_row_colors,
             negative_numbers_red,
+            highlight_edits,
             font_size,
             row_height,
         );
@@ -529,8 +545,8 @@ fn draw_header_direct(
 
         col_painter.rect_filled(rect, 0.0, header_bg);
 
-        // --- Column index number at top ---
-        let index_text = format!("{}", col_idx + 1);
+        // --- Column index letter + number at top ---
+        let index_text = format!("{} ({})", col_index_letter(col_idx), col_idx + 1);
         let index_galley = painter.layout_no_wrap(
             index_text,
             egui::FontId::new((font_size * 0.7).round(), egui::FontFamily::Monospace),
@@ -984,6 +1000,7 @@ fn draw_data_row_direct(
     show_row_numbers: bool,
     alternating_row_colors: bool,
     negative_numbers_red: bool,
+    highlight_edits: bool,
     font_size: f32,
     row_height: f32,
 ) {
@@ -1042,7 +1059,7 @@ fn draw_data_row_direct(
                 colors.bg_selected
             } else if let Some(mc) = mark_color {
                 colors.mark_color(mc)
-            } else if is_edited {
+            } else if highlight_edits && is_edited {
                 colors.bg_edited
             } else {
                 row_bg

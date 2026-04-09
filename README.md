@@ -4,7 +4,7 @@
   <img src="assets/octa-rose.svg" alt="Octa" width="128" height="128">
 </p>
 
-A native desktop application for viewing and editing data files, built with Rust and [egui](https://github.com/emilk/egui). Octa opens files in a spreadsheet-like table view and supports inline editing, sorting, filtering, undo/redo, color marking, and more.
+An application for viewing data files. Octa opens files in a spreadsheet-like table view with sorting, filtering, and search. Writing is supported but limited. Octa is primarily a reader.
 
 ## Supported Formats
 
@@ -13,13 +13,14 @@ A native desktop application for viewing and editing data files, built with Rust
 | Parquet             | yes  | yes   |
 | CSV / TSV           | yes  | yes   |
 | JSON / JSON Lines   | yes  | yes   |
-| Excel (xlsx)        | yes  | yes   |
+| Excel        | yes  | yes   |
 | Arrow IPC / Feather | yes  | yes   |
 | Avro                | yes  | yes   |
 | XML                 | yes  | yes   |
 | TOML                | yes  | yes   |
 | YAML                | yes  | yes   |
 | PDF                 | yes  | yes   |
+| Jupyter Notebook    | yes  | yes   |
 | Markdown            | yes  | yes   |
 | Plain Text          | yes  | yes   |
 
@@ -42,11 +43,11 @@ Unknown file extensions are opened as plain text.
 - **Table View** -- structured spreadsheet display (default)
 - **Raw Text View** -- source text with line numbers and optional column alignment
 - **Markdown View** -- rendered CommonMark preview
+- **Notebook View** -- rendered Jupyter notebook with code cells, markdown cells, and outputs
 - **PDF View** -- page-by-page rendered output
 
 ### Editing
 
-- Full undo/redo support (Ctrl+Z / Ctrl+Y)
 - Insert, delete, and move rows and columns
 - Color marking for cells, rows, and columns with six color choices
 - Unsaved-changes guards on close and file open
@@ -56,8 +57,6 @@ Unknown file extensions are opened as plain text.
 
 - Configurable font size
 - Light and dark theme with the option to set a default
-- Customizable icon color (Rose, Amber, Blue, Cyan, Emerald, Indigo, Lime, Orange, Purple, Red, Slate, Teal)
-- Settings persist across sessions
 
 ### Other
 
@@ -71,40 +70,25 @@ Unknown file extensions are opened as plain text.
   <img src="assets/octa-rose.png" alt="Octa Icon" width="128" height="128">
 </p>
 
-## Building
-
-Requires Rust (edition 2024) and a C compiler (for native dependencies like mupdf).
-
-```bash
-# Debug build
-cargo build
-
-# Release build (optimized, stripped)
-cargo build --release
-
-# Run directly
-cargo run
-
-# Run with a file
-cargo run -- path/to/file.parquet
-```
-
-### System Dependencies (Linux)
-
-```bash
-sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev \
-  libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libfontconfig1-dev \
-  libfreetype6-dev libharfbuzz-dev libfribidi-dev libjpeg-dev \
-  libopenjp2-7-dev libgumbo-dev libjbig2dec0-dev libmujs-dev
-```
-
 ## Installation
 
 ### Arch Linux
 
-A `PKGBUILD` is available in `.github/aur/` for building an Arch Linux package.
+Available on the AUR as `octa` (build from source) and `octa-bin` (prebuilt binary).
+
+```bash
+paru -S octa
+```
+
+or 
+
+```bash
+paru -S octa-bin
+``` 
 
 ### Other Linux Distros
+
+Clone the repository and execute the installation script.
 
 ```bash
 # System-wide (installs to /usr/local)
@@ -118,17 +102,8 @@ This installs the binary, SVG icon, and desktop entry so Octa appears in your ap
 
 ### Windows
 
-Run `install.bat` as Administrator. This builds a release binary, copies it to `%ProgramFiles%\Octa`, adds it to your PATH, and creates a Start Menu shortcut.
-
-## Testing
-
-```bash
-# Run all tests
-cargo test
-
-# Run a single test
-cargo test <test_name>
-```
+Run `install.bat` as Administrator. If it doesn't work, just copy and paste the exe file to the wished location. Please note, Defender will probably prevent
+opening, because of an unknown publisher. Expand the warning completely and accept, then it works.
 
 ## Configuration
 
@@ -136,16 +111,6 @@ Settings are stored in:
 
 - **Linux:** `$XDG_CONFIG_HOME/octa/settings.toml` (defaults to `~/.config/octa/settings.toml`)
 - **Windows:** `%APPDATA%\Octa\settings.toml`
-
-Available settings:
-
-| Setting         | Default | Description                        |
-|-----------------|---------|------------------------------------|
-| `font_size`     | `13.0`  | Base font size in points (8 -- 32) |
-| `default_theme` | `Light` | Startup theme (`Light` or `Dark`)  |
-| `icon_variant`  | `Rose`  | Icon color variant                 |
-
-Settings can also be changed from **Help > Settings** inside the application.
 
 ## License
 

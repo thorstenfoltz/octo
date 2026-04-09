@@ -51,6 +51,7 @@ pub fn draw_toolbar(
     has_raw_content: bool,
     has_pdf_pages: bool,
     has_markdown: bool,
+    has_notebook: bool,
     logo_texture: Option<&egui::TextureHandle>,
 ) -> ToolbarAction {
     let mut action = ToolbarAction::default();
@@ -217,6 +218,14 @@ pub fn draw_toolbar(
                         ui.close_menu();
                     }
                 }
+                if has_notebook {
+                    let is_nb = current_view_mode == ViewMode::Notebook;
+                    let nb_btn = ui.radio(is_nb, "Notebook View");
+                    if nb_btn.clicked() {
+                        action.view_mode_changed = Some(ViewMode::Notebook);
+                        ui.close_menu();
+                    }
+                }
                 if has_pdf_pages {
                     let pdf_btn = ui.radio(is_pdf, "PDF View");
                     if pdf_btn.clicked() {
@@ -229,11 +238,11 @@ pub fn draw_toolbar(
             // --- Search menu ---
             ui.menu_button(RichText::new("Search").color(colors.text_primary), |ui| {
                 ui.set_min_width(180.0);
-                if ui.button("Find  Ctrl+F").clicked() {
+                if ui.button("Find").clicked() {
                     action.search_focus = true;
                     ui.close_menu();
                 }
-                if ui.button("Find & Replace  Ctrl+H").clicked() {
+                if ui.button("Find & Replace").clicked() {
                     action.toggle_replace_bar = true;
                     ui.close_menu();
                 }
