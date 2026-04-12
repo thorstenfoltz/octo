@@ -4,7 +4,12 @@ use egui::{Align2, Color32, CursorIcon, RichText, Sense, Ui, Vec2};
 
 use super::status_bar::format_number;
 use super::theme::{ThemeColors, ThemeMode};
-use crate::data::{DataTable, MarkColor, MarkKey};
+use crate::data::{CellValue, DataTable, MarkColor, MarkKey};
+
+/// Whether a cell value should be right-aligned (numbers only).
+pub fn is_right_aligned(value: &CellValue) -> bool {
+    matches!(value, CellValue::Int(_) | CellValue::Float(_))
+}
 
 /// State for the table view (selection, editing).
 #[derive(Default)]
@@ -202,10 +207,17 @@ pub fn draw_table(
         let max_scroll_x = (total_col_width - view_width).max(0.0);
         let data_area_height = view_height - HEADER_HEIGHT - 1.0;
 
+        let ctrl = ui.input(|i| i.modifiers.ctrl || i.modifiers.mac_cmd);
         let arrow_up = ui.input(|i| i.key_pressed(egui::Key::ArrowUp));
         let arrow_down = ui.input(|i| i.key_pressed(egui::Key::ArrowDown));
         let arrow_left = ui.input(|i| i.key_pressed(egui::Key::ArrowLeft));
         let arrow_right = ui.input(|i| i.key_pressed(egui::Key::ArrowRight));
+
+        // Ctrl+Arrow: jump to first/last row or column (like Excel/Sheets)
+        let jump_first_row = ctrl && arrow_up;
+        let jump_last_row = ctrl && arrow_down;
+        let jump_first_col = ctrl && arrow_left;
+        let jump_last_col = ctrl && arrow_right;
 
         if arrow_up || arrow_down || arrow_left || arrow_right {
             let row_count = filtered_rows.len();
@@ -221,16 +233,22 @@ pub fn draw_table(
             let mut new_display = cur_display;
             let mut new_col = cur_col;
 
-            if arrow_up && cur_display > 0 {
+            if jump_first_row {
+                new_display = 0;
+            } else if jump_last_row {
+                new_display = row_count.saturating_sub(1);
+            } else if arrow_up && cur_display > 0 {
                 new_display = cur_display - 1;
-            }
-            if arrow_down && cur_display + 1 < row_count {
+            } else if arrow_down && cur_display + 1 < row_count {
                 new_display = cur_display + 1;
             }
-            if arrow_left && cur_col > 0 {
+            if jump_first_col {
+                new_col = 0;
+            } else if jump_last_col {
+                new_col = col_count.saturating_sub(1);
+            } else if arrow_left && cur_col > 0 {
                 new_col = cur_col - 1;
-            }
-            if arrow_right && cur_col + 1 < col_count {
+            } else if arrow_right && cur_col + 1 < col_count {
                 new_col = cur_col + 1;
             }
 
@@ -1112,9 +1130,7 @@ fn draw_data_row_direct(
                             match crate::data::evaluate_formula(&new_text[1..], table) {
                                 Some(result) => {
                                     // Keep result as Int if it's a whole number, otherwise Float
-                                    if result.fract() == 0.0
-                                        && result.abs() < i64::MAX as f64
-                                    {
+                                    if result.fract() == 0.0 && result.abs() < i64::MAX as f64 {
                                         crate::data::CellValue::Int(result as i64)
                                     } else {
                                         crate::data::CellValue::Float(result)
@@ -1168,11 +1184,13 @@ fn draw_data_row_direct(
                         egui::FontId::new(font_size, egui::FontFamily::Monospace),
                         text_color,
                     );
+                    let x = if is_right_aligned(value) {
+                        text_rect.right() - galley.size().x
+                    } else {
+                        text_rect.left()
+                    };
                     painter.with_clip_rect(cell_clip).galley(
-                        egui::pos2(
-                            text_rect.left(),
-                            text_rect.center().y - galley.size().y / 2.0,
-                        ),
+                        egui::pos2(x, text_rect.center().y - galley.size().y / 2.0),
                         galley,
                         Color32::TRANSPARENT,
                     );

@@ -30,6 +30,7 @@ pub struct ToolbarAction {
     pub toggle_replace_bar: bool,
     pub search_focus: bool,
     pub show_documentation: bool,
+    pub exit: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -52,6 +53,7 @@ pub fn draw_toolbar(
     has_pdf_pages: bool,
     has_markdown: bool,
     has_notebook: bool,
+    has_json: bool,
     logo_texture: Option<&egui::TextureHandle>,
 ) -> ToolbarAction {
     let mut action = ToolbarAction::default();
@@ -89,6 +91,11 @@ pub fn draw_toolbar(
                 }
                 if ui.button("Save As...").clicked() {
                     action.save_file_as = true;
+                    ui.close_menu();
+                }
+                ui.separator();
+                if ui.button("Exit").clicked() {
+                    action.exit = true;
                     ui.close_menu();
                 }
             }
@@ -202,8 +209,10 @@ pub fn draw_toolbar(
 
                 // Disable table view for notebook files (notebook view is the primary view)
                 let table_enabled = !has_notebook;
-                let table_btn =
-                    ui.add_enabled(table_enabled, egui::RadioButton::new(is_table, "Table View"));
+                let table_btn = ui.add_enabled(
+                    table_enabled,
+                    egui::RadioButton::new(is_table, "Table View"),
+                );
                 if table_btn.clicked() {
                     action.view_mode_changed = Some(ViewMode::Table);
                     ui.close_menu();
@@ -234,6 +243,14 @@ pub fn draw_toolbar(
                     let pdf_btn = ui.radio(is_pdf, "PDF View");
                     if pdf_btn.clicked() {
                         action.view_mode_changed = Some(ViewMode::Pdf);
+                        ui.close_menu();
+                    }
+                }
+                if has_json {
+                    let is_json_tree = current_view_mode == ViewMode::JsonTree;
+                    let json_btn = ui.radio(is_json_tree, "JSON Tree");
+                    if json_btn.clicked() {
+                        action.view_mode_changed = Some(ViewMode::JsonTree);
                         ui.close_menu();
                     }
                 }

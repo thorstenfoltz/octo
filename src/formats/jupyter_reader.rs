@@ -134,10 +134,7 @@ fn extract_outputs(value: Option<&Value>) -> String {
                     .get("ename")
                     .and_then(|v| v.as_str())
                     .unwrap_or("Error");
-                let evalue = output
-                    .get("evalue")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let evalue = output.get("evalue").and_then(|v| v.as_str()).unwrap_or("");
                 parts.push(format!("{}: {}", ename, evalue));
             }
             _ => {}
@@ -163,7 +160,10 @@ fn write_notebook(path: &Path, table: &DataTable) -> Result<()> {
             None => String::new(),
         };
 
-        let source_lines: Vec<Value> = source.lines().map(|l| Value::String(format!("{}\n", l))).collect();
+        let source_lines: Vec<Value> = source
+            .lines()
+            .map(|l| Value::String(format!("{}\n", l)))
+            .collect();
         // Fix last line: don't add trailing newline if source didn't end with one
         let source_array = if source_lines.is_empty() {
             Value::Array(vec![])

@@ -28,11 +28,7 @@ fn formula_table() -> DataTable {
                 CellValue::Float(3.0),
                 CellValue::String("world".into()),
             ],
-            vec![
-                CellValue::Int(30),
-                CellValue::Float(0.5),
-                CellValue::Null,
-            ],
+            vec![CellValue::Int(30), CellValue::Float(0.5), CellValue::Null],
         ],
         edits: HashMap::new(),
         source_path: None,

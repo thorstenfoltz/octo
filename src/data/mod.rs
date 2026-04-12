@@ -1,3 +1,5 @@
+pub mod search;
+
 use std::collections::HashMap;
 use std::fmt;
 
@@ -16,6 +18,8 @@ pub enum ViewMode {
     Markdown,
     /// Rendered Jupyter Notebook view.
     Notebook,
+    /// Collapsible JSON tree view (like Firefox JSON viewer).
+    JsonTree,
 }
 
 /// Search/filter mode for the table.
@@ -207,7 +211,7 @@ fn cell_as_f64(table: &DataTable, row: usize, col: usize) -> Option<f64> {
 enum FormulaToken {
     Number(f64),
     CellRef(usize, usize), // (row, col)
-    Op(char),               // +, -, *, /
+    Op(char),              // +, -, *, /
     LParen,
     RParen,
 }
@@ -281,11 +285,7 @@ fn tokenize_formula(expr: &str) -> Option<Vec<FormulaToken>> {
 }
 
 /// Recursive descent parser: expression = term (('+' | '-') term)*
-fn eval_expression(
-    tokens: &[FormulaToken],
-    pos: usize,
-    table: &DataTable,
-) -> Option<(f64, usize)> {
+fn eval_expression(tokens: &[FormulaToken], pos: usize, table: &DataTable) -> Option<(f64, usize)> {
     let (mut left, mut p) = eval_term(tokens, pos, table)?;
     while p < tokens.len() {
         match &tokens[p] {
@@ -431,6 +431,13 @@ pub enum UndoAction {
         key: MarkKey,
         old_color: Option<MarkColor>,
         new_color: Option<MarkColor>,
+    },
+    ConvertColumn {
+        col_idx: usize,
+        old_type: String,
+        new_type: String,
+        old_values: Vec<CellValue>,
+        new_values: Vec<CellValue>,
     },
 }
 
@@ -847,6 +854,63 @@ impl DataTable {
         true
     }
 
+    /// Convert all values in a column to a new data type.
+    /// Returns true if conversion succeeded, false if validation failed.
+    /// Pushes an undo action and converts both rows and pending edits.
+    pub fn convert_column(&mut self, col_idx: usize, target_type: &str) -> bool {
+        if col_idx >= self.columns.len() {
+            return false;
+        }
+        let old_type = &self.columns[col_idx].data_type;
+        if old_type == target_type {
+            return true;
+        }
+        if !self.can_convert_column(col_idx, target_type) {
+            return false;
+        }
+        // Save old values for undo
+        let old_values: Vec<CellValue> = (0..self.rows.len())
+            .map(|r| self.get(r, col_idx).cloned().unwrap_or(CellValue::Null))
+            .collect();
+
+        // Convert row values
+        for row in &mut self.rows {
+            if col_idx < row.len() {
+                row[col_idx] = convert_value(&row[col_idx], target_type);
+            }
+        }
+        // Convert pending edits for this column
+        let edit_keys: Vec<(usize, usize)> = self
+            .edits
+            .keys()
+            .filter(|(_, c)| *c == col_idx)
+            .copied()
+            .collect();
+        for key in edit_keys {
+            if let Some(val) = self.edits.get(&key) {
+                let converted = convert_value(val, target_type);
+                self.edits.insert(key, converted);
+            }
+        }
+
+        let new_values: Vec<CellValue> = (0..self.rows.len())
+            .map(|r| self.get(r, col_idx).cloned().unwrap_or(CellValue::Null))
+            .collect();
+
+        let old_type_str = self.columns[col_idx].data_type.clone();
+        self.columns[col_idx].data_type = target_type.to_string();
+        self.structural_changes = true;
+        self.undo_stack.push(UndoAction::ConvertColumn {
+            col_idx,
+            old_type: old_type_str,
+            new_type: target_type.to_string(),
+            old_values,
+            new_values,
+        });
+        self.redo_stack.clear();
+        true
+    }
+
     /// Evict the first `count` rows from the table, incrementing row_offset.
     /// Remaps edits: subtracts `count` from row indices, discards edits in evicted range.
     pub fn evict_front_rows(&mut self, count: usize) {
@@ -1021,6 +1085,35 @@ impl DataTable {
                         self.marks.remove(&key);
                     }
                 },
+                UndoAction::ConvertColumn {
+                    col_idx,
+                    ref old_type,
+                    ref old_values,
+                    ..
+                } => {
+                    if col_idx < self.columns.len() {
+                        self.columns[col_idx].data_type = old_type.clone();
+                        for (row_idx, row) in self.rows.iter_mut().enumerate() {
+                            if col_idx < row.len() {
+                                if let Some(val) = old_values.get(row_idx) {
+                                    row[col_idx] = val.clone();
+                                }
+                            }
+                        }
+                        // Restore edits for this column from old values
+                        let edit_keys: Vec<(usize, usize)> = self
+                            .edits
+                            .keys()
+                            .filter(|(_, c)| *c == col_idx)
+                            .copied()
+                            .collect();
+                        for key in edit_keys {
+                            if let Some(val) = old_values.get(key.0) {
+                                self.edits.insert(key, val.clone());
+                            }
+                        }
+                    }
+                }
             }
             self.redo_stack.push(action);
             true
@@ -1135,6 +1228,35 @@ impl DataTable {
                         self.marks.remove(&key);
                     }
                 },
+                UndoAction::ConvertColumn {
+                    col_idx,
+                    ref new_type,
+                    ref new_values,
+                    ..
+                } => {
+                    if col_idx < self.columns.len() {
+                        self.columns[col_idx].data_type = new_type.clone();
+                        for (row_idx, row) in self.rows.iter_mut().enumerate() {
+                            if col_idx < row.len() {
+                                if let Some(val) = new_values.get(row_idx) {
+                                    row[col_idx] = val.clone();
+                                }
+                            }
+                        }
+                        // Restore edits for this column from new values
+                        let edit_keys: Vec<(usize, usize)> = self
+                            .edits
+                            .keys()
+                            .filter(|(_, c)| *c == col_idx)
+                            .copied()
+                            .collect();
+                        for key in edit_keys {
+                            if let Some(val) = new_values.get(key.0) {
+                                self.edits.insert(key, val.clone());
+                            }
+                        }
+                    }
+                }
             }
             self.undo_stack.push(action);
             true
@@ -1194,6 +1316,71 @@ pub fn can_convert_value(val: &CellValue, target_type: &str) -> bool {
         },
         CellValue::Binary(_) => matches!(target_type, "String" | "Utf8"),
         CellValue::Nested(_) => matches!(target_type, "String" | "Utf8"),
+    }
+}
+
+/// Convert a CellValue to a target data type.
+/// Assumes `can_convert_value` has already validated the conversion.
+pub fn convert_value(val: &CellValue, target_type: &str) -> CellValue {
+    match val {
+        CellValue::Null => CellValue::Null,
+        CellValue::Bool(b) => match target_type {
+            "Boolean" => val.clone(),
+            "Int64" => CellValue::Int(if *b { 1 } else { 0 }),
+            "Float64" => CellValue::Float(if *b { 1.0 } else { 0.0 }),
+            "String" | "Utf8" => CellValue::String(b.to_string()),
+            _ => val.clone(),
+        },
+        CellValue::Int(n) => match target_type {
+            "Int64" => val.clone(),
+            "Float64" => CellValue::Float(*n as f64),
+            "Boolean" => CellValue::Bool(*n != 0),
+            "String" | "Utf8" => CellValue::String(n.to_string()),
+            _ => val.clone(),
+        },
+        CellValue::Float(f) => match target_type {
+            "Float64" => val.clone(),
+            "Int64" => CellValue::Int(*f as i64),
+            "String" | "Utf8" => CellValue::String(f.to_string()),
+            _ => val.clone(),
+        },
+        CellValue::String(s) => {
+            if s.is_empty() {
+                return CellValue::Null;
+            }
+            match target_type {
+                "String" | "Utf8" => val.clone(),
+                "Int64" => CellValue::Int(s.parse::<i64>().unwrap_or(0)),
+                "Float64" => CellValue::Float(s.parse::<f64>().unwrap_or(0.0)),
+                "Boolean" => {
+                    let lower = s.to_lowercase();
+                    CellValue::Bool(matches!(lower.as_str(), "true" | "1" | "yes"))
+                }
+                "Date32" => CellValue::Date(s.clone()),
+                "Timestamp(Microsecond, None)" => CellValue::DateTime(s.clone()),
+                _ => val.clone(),
+            }
+        }
+        CellValue::Date(s) => match target_type {
+            "Date32" => val.clone(),
+            "String" | "Utf8" => CellValue::String(s.clone()),
+            "Timestamp(Microsecond, None)" => CellValue::DateTime(format!("{s} 00:00:00")),
+            _ => val.clone(),
+        },
+        CellValue::DateTime(s) => match target_type {
+            "Timestamp(Microsecond, None)" => val.clone(),
+            "String" | "Utf8" => CellValue::String(s.clone()),
+            "Date32" => CellValue::Date(s.chars().take(10).collect()),
+            _ => val.clone(),
+        },
+        CellValue::Binary(b) => match target_type {
+            "String" | "Utf8" => CellValue::String(format!("{b:?}")),
+            _ => val.clone(),
+        },
+        CellValue::Nested(s) => match target_type {
+            "String" | "Utf8" => CellValue::String(s.clone()),
+            _ => val.clone(),
+        },
     }
 }
 
