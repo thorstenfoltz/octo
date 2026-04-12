@@ -1,3 +1,4 @@
+use octa::data::search::RowMatcher;
 use octa::data::*;
 
 // --- wildcard_to_regex ---
@@ -91,4 +92,87 @@ fn regex_replace_with_capture_groups() {
     let re = regex::Regex::new(r"(\d+)\.(\d+)").unwrap();
     let result = re.replace("price 12.50", "$1,$2");
     assert_eq!(result, "price 12,50");
+}
+
+// --- Unicode / Umlaut tests ---
+
+#[test]
+fn plain_search_matches_german_umlauts() {
+    let m = RowMatcher::new("über", SearchMode::Plain);
+    assert!(m.matches("Übersicht"));
+    assert!(m.matches("über"));
+    assert!(!m.matches("uber"));
+}
+
+#[test]
+fn plain_search_case_insensitive_umlauts() {
+    let m = RowMatcher::new("ä", SearchMode::Plain);
+    assert!(m.matches("Ä"));
+    assert!(m.matches("ä"));
+    assert!(m.matches("Bär"));
+    assert!(m.matches("BÄR"));
+}
+
+#[test]
+fn plain_search_eszett() {
+    let m = RowMatcher::new("straße", SearchMode::Plain);
+    assert!(m.matches("Straße"));
+    assert!(m.matches("straße"));
+    // Note: ß and SS are NOT equivalent via to_lowercase(); this is expected.
+    assert!(!m.matches("STRASSE"));
+}
+
+#[test]
+fn plain_replace_with_umlauts_in_query() {
+    let m = RowMatcher::new("ä", SearchMode::Plain);
+    assert_eq!(m.replace("Bär", "ae"), "Baer");
+    assert_eq!(m.replace("BÄR", "aeR"), "BaeRR");
+}
+
+#[test]
+fn plain_replace_preserves_surrounding_unicode() {
+    let m = RowMatcher::new("world", SearchMode::Plain);
+    assert_eq!(m.replace("Ünö world Ünö", "welt"), "Ünö welt Ünö");
+}
+
+#[test]
+fn plain_search_mixed_ascii_umlaut() {
+    let m = RowMatcher::new("münchen", SearchMode::Plain);
+    assert!(m.matches("München"));
+    assert!(m.matches("MÜNCHEN"));
+    assert!(!m.matches("Munchen"));
+}
+
+#[test]
+fn wildcard_search_with_umlauts() {
+    let re = regex::Regex::new(&wildcard_to_regex("ü*ung")).unwrap();
+    assert!(re.is_match("Übung"));
+    assert!(re.is_match("überraschung"));
+    assert!(!re.is_match("ubung"));
+}
+
+#[test]
+fn wildcard_case_insensitive_umlauts() {
+    let re = regex::Regex::new(&wildcard_to_regex("*ö*")).unwrap();
+    assert!(re.is_match("schön"));
+    assert!(re.is_match("SCHÖN"));
+    assert!(re.is_match("Öl"));
+}
+
+#[test]
+fn plain_replace_turkish_i_no_panic() {
+    // Turkish İ (U+0130) lowercases to i + combining dot (3 bytes vs 2 bytes).
+    // The old byte-offset approach would panic here; regex-based replace is safe.
+    let m = RowMatcher::new("test", SearchMode::Plain);
+    let result = m.replace("İ test end", "X");
+    assert!(result.contains('X'));
+    assert!(!result.contains("test"));
+}
+
+#[test]
+fn plain_search_accented_characters() {
+    let m = RowMatcher::new("café", SearchMode::Plain);
+    assert!(m.matches("Café"));
+    assert!(m.matches("CAFÉ"));
+    assert!(!m.matches("cafe"));
 }

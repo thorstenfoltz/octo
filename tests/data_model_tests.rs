@@ -807,3 +807,280 @@ fn test_settings_defaults() {
     assert!(!settings.negative_numbers_red);
     assert_eq!(settings.default_search_mode, SearchMode::Plain);
 }
+
+// --- Number alignment tests ---
+
+#[test]
+fn test_is_right_aligned() {
+    use octa::ui::table_view::is_right_aligned;
+
+    assert!(is_right_aligned(&CellValue::Int(42)));
+    assert!(is_right_aligned(&CellValue::Int(-1)));
+    assert!(is_right_aligned(&CellValue::Float(3.14)));
+    assert!(is_right_aligned(&CellValue::Float(0.0)));
+
+    assert!(!is_right_aligned(&CellValue::String("123".into())));
+    assert!(!is_right_aligned(&CellValue::String("hello".into())));
+    assert!(!is_right_aligned(&CellValue::Null));
+    assert!(!is_right_aligned(&CellValue::Bool(true)));
+    assert!(!is_right_aligned(&CellValue::Date("2024-01-01".into())));
+    assert!(!is_right_aligned(&CellValue::DateTime(
+        "2024-01-01 00:00:00".into()
+    )));
+    assert!(!is_right_aligned(&CellValue::Nested("{}".into())));
+    assert!(!is_right_aligned(&CellValue::Binary(vec![1, 2, 3])));
+}
+
+// --- Column type conversion tests ---
+
+#[test]
+fn test_convert_value_int_to_float() {
+    assert_eq!(
+        convert_value(&CellValue::Int(42), "Float64"),
+        CellValue::Float(42.0)
+    );
+    assert_eq!(
+        convert_value(&CellValue::Int(-5), "Float64"),
+        CellValue::Float(-5.0)
+    );
+    assert_eq!(
+        convert_value(&CellValue::Int(0), "Float64"),
+        CellValue::Float(0.0)
+    );
+}
+
+#[test]
+fn test_convert_value_float_to_int() {
+    assert_eq!(
+        convert_value(&CellValue::Float(3.0), "Int64"),
+        CellValue::Int(3)
+    );
+    assert_eq!(
+        convert_value(&CellValue::Float(-7.0), "Int64"),
+        CellValue::Int(-7)
+    );
+    assert_eq!(
+        convert_value(&CellValue::Float(0.0), "Int64"),
+        CellValue::Int(0)
+    );
+}
+
+#[test]
+fn test_convert_value_int_to_string() {
+    assert_eq!(
+        convert_value(&CellValue::Int(42), "Utf8"),
+        CellValue::String("42".into())
+    );
+    assert_eq!(
+        convert_value(&CellValue::Int(42), "String"),
+        CellValue::String("42".into())
+    );
+}
+
+#[test]
+fn test_convert_value_float_to_string() {
+    assert_eq!(
+        convert_value(&CellValue::Float(3.14), "String"),
+        CellValue::String("3.14".into())
+    );
+}
+
+#[test]
+fn test_convert_value_string_to_int() {
+    assert_eq!(
+        convert_value(&CellValue::String("42".into()), "Int64"),
+        CellValue::Int(42)
+    );
+}
+
+#[test]
+fn test_convert_value_string_to_float() {
+    assert_eq!(
+        convert_value(&CellValue::String("3.14".into()), "Float64"),
+        CellValue::Float(3.14)
+    );
+}
+
+#[test]
+fn test_convert_value_string_to_bool() {
+    assert_eq!(
+        convert_value(&CellValue::String("true".into()), "Boolean"),
+        CellValue::Bool(true)
+    );
+    assert_eq!(
+        convert_value(&CellValue::String("false".into()), "Boolean"),
+        CellValue::Bool(false)
+    );
+    assert_eq!(
+        convert_value(&CellValue::String("1".into()), "Boolean"),
+        CellValue::Bool(true)
+    );
+    assert_eq!(
+        convert_value(&CellValue::String("no".into()), "Boolean"),
+        CellValue::Bool(false)
+    );
+}
+
+#[test]
+fn test_convert_value_bool_to_int() {
+    assert_eq!(
+        convert_value(&CellValue::Bool(true), "Int64"),
+        CellValue::Int(1)
+    );
+    assert_eq!(
+        convert_value(&CellValue::Bool(false), "Int64"),
+        CellValue::Int(0)
+    );
+}
+
+#[test]
+fn test_convert_value_bool_to_float() {
+    assert_eq!(
+        convert_value(&CellValue::Bool(true), "Float64"),
+        CellValue::Float(1.0)
+    );
+    assert_eq!(
+        convert_value(&CellValue::Bool(false), "Float64"),
+        CellValue::Float(0.0)
+    );
+}
+
+#[test]
+fn test_convert_value_null_stays_null() {
+    assert_eq!(convert_value(&CellValue::Null, "Int64"), CellValue::Null);
+    assert_eq!(convert_value(&CellValue::Null, "Float64"), CellValue::Null);
+    assert_eq!(convert_value(&CellValue::Null, "String"), CellValue::Null);
+    assert_eq!(convert_value(&CellValue::Null, "Boolean"), CellValue::Null);
+}
+
+#[test]
+fn test_convert_value_empty_string_to_null() {
+    assert_eq!(
+        convert_value(&CellValue::String("".into()), "Int64"),
+        CellValue::Null
+    );
+    assert_eq!(
+        convert_value(&CellValue::String("".into()), "Float64"),
+        CellValue::Null
+    );
+}
+
+#[test]
+fn test_convert_value_date_to_string() {
+    assert_eq!(
+        convert_value(&CellValue::Date("2024-01-15".into()), "String"),
+        CellValue::String("2024-01-15".into())
+    );
+}
+
+#[test]
+fn test_convert_value_datetime_to_date() {
+    assert_eq!(
+        convert_value(&CellValue::DateTime("2024-01-15 10:30:00".into()), "Date32"),
+        CellValue::Date("2024-01-15".into())
+    );
+}
+
+#[test]
+fn test_convert_value_date_to_datetime() {
+    assert_eq!(
+        convert_value(
+            &CellValue::Date("2024-01-15".into()),
+            "Timestamp(Microsecond, None)"
+        ),
+        CellValue::DateTime("2024-01-15 00:00:00".into())
+    );
+}
+
+#[test]
+fn test_can_convert_value_rejects_fractional_float_to_int() {
+    assert!(!can_convert_value(&CellValue::Float(3.5), "Int64"));
+    assert!(can_convert_value(&CellValue::Float(3.0), "Int64"));
+}
+
+#[test]
+fn test_can_convert_value_rejects_non_numeric_string_to_int() {
+    assert!(!can_convert_value(
+        &CellValue::String("abc".into()),
+        "Int64"
+    ));
+    assert!(can_convert_value(&CellValue::String("42".into()), "Int64"));
+}
+
+#[test]
+fn test_convert_column_int_to_float() {
+    let mut table = sample_table();
+    // Column 0 is "id" (Int64)
+    assert!(table.convert_column(0, "Float64"));
+    assert_eq!(table.columns[0].data_type, "Float64");
+    assert_eq!(table.rows[0][0], CellValue::Float(1.0));
+    assert_eq!(table.rows[1][0], CellValue::Float(2.0));
+    assert_eq!(table.rows[2][0], CellValue::Float(3.0));
+}
+
+#[test]
+fn test_convert_column_float_to_int() {
+    let mut table = sample_table();
+    // Column 2 is "score" (Float64): 9.5, 7.0, 8.2
+    // 9.5 and 8.2 have fractional parts, so this should fail
+    assert!(!table.convert_column(2, "Int64"));
+    // Column data should be unchanged
+    assert_eq!(table.columns[2].data_type, "Float64");
+    assert_eq!(table.rows[0][2], CellValue::Float(9.5));
+}
+
+#[test]
+fn test_convert_column_with_edits() {
+    let mut table = sample_table();
+    // Edit row 0, col 0 from Int(1) to Int(10)
+    table.set(0, 0, CellValue::Int(10));
+    assert!(table.convert_column(0, "Float64"));
+    // The edit should also be converted
+    let val = table.get(0, 0).unwrap();
+    assert_eq!(*val, CellValue::Float(10.0));
+}
+
+#[test]
+fn test_convert_column_undo() {
+    let mut table = sample_table();
+    assert!(table.convert_column(0, "Float64"));
+    assert_eq!(table.rows[0][0], CellValue::Float(1.0));
+    // Undo
+    assert!(table.undo());
+    assert_eq!(table.columns[0].data_type, "Int64");
+    assert_eq!(table.rows[0][0], CellValue::Int(1));
+}
+
+#[test]
+fn test_convert_column_undo_redo() {
+    let mut table = sample_table();
+    assert!(table.convert_column(0, "Float64"));
+    assert!(table.undo());
+    assert_eq!(table.rows[0][0], CellValue::Int(1));
+    // Redo
+    assert!(table.redo());
+    assert_eq!(table.columns[0].data_type, "Float64");
+    assert_eq!(table.rows[0][0], CellValue::Float(1.0));
+}
+
+#[test]
+fn test_convert_column_same_type_noop() {
+    let mut table = sample_table();
+    assert!(table.convert_column(0, "Int64"));
+    // Should succeed but not push undo action (it's a no-op)
+    assert!(
+        table.undo_stack.is_empty()
+            || table
+                .undo_stack
+                .last()
+                .map(|a| matches!(a, UndoAction::ConvertColumn { .. }))
+                .unwrap_or(false)
+                == false
+    );
+}
+
+#[test]
+fn test_convert_column_invalid_index() {
+    let mut table = sample_table();
+    assert!(!table.convert_column(99, "Float64"));
+}

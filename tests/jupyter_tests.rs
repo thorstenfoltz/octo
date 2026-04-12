@@ -128,10 +128,7 @@ fn test_read_cell_numbers() {
 fn test_read_cell_types() {
     let f = write_temp_notebook(sample_notebook());
     let table = JupyterReader.read_file(f.path()).unwrap();
-    assert_eq!(
-        table.get(0, 1),
-        Some(&CellValue::String("markdown".into()))
-    );
+    assert_eq!(table.get(0, 1), Some(&CellValue::String("markdown".into())));
     assert_eq!(table.get(1, 1), Some(&CellValue::String("code".into())));
     assert_eq!(table.get(2, 1), Some(&CellValue::String("code".into())));
 }
@@ -209,7 +206,8 @@ fn test_read_markdown_has_no_output() {
 
 #[test]
 fn test_read_empty_notebook() {
-    let f = write_temp_notebook(r#"{"nbformat": 4, "nbformat_minor": 5, "metadata": {}, "cells": []}"#);
+    let f =
+        write_temp_notebook(r#"{"nbformat": 4, "nbformat_minor": 5, "metadata": {}, "cells": []}"#);
     let table = JupyterReader.read_file(f.path()).unwrap();
     assert_eq!(table.row_count(), 0);
     assert_eq!(table.col_count(), 4);
@@ -230,10 +228,12 @@ fn test_read_missing_cells_fails() {
 #[test]
 fn test_read_source_as_string() {
     // Some notebooks store source as a single string instead of array
-    let f = write_temp_notebook(r#"{
+    let f = write_temp_notebook(
+        r#"{
         "nbformat": 4, "nbformat_minor": 5, "metadata": {},
         "cells": [{"cell_type": "code", "metadata": {}, "source": "x = 1", "outputs": []}]
-    }"#);
+    }"#,
+    );
     let table = JupyterReader.read_file(f.path()).unwrap();
     assert_eq!(table.get(0, 2), Some(&CellValue::String("x = 1".into())));
 }
