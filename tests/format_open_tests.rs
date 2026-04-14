@@ -160,6 +160,18 @@ fn test_open_pdf() {
     assert_eq!(reader.name(), "PDF");
 }
 
+#[test]
+fn test_open_orc() {
+    ensure_fixtures();
+    let reg = FormatRegistry::new();
+    let path = fixture_path("sample.orc");
+    let reader = reg.reader_for_path(&path).unwrap();
+    let table = reader.read_file(&path).unwrap();
+    assert_eq!(table.row_count(), 3);
+    assert_eq!(table.col_count(), 3);
+    assert_eq!(reader.name(), "ORC");
+}
+
 // --- Round-trip tests: write to temp then read back ---
 
 #[test]
@@ -288,6 +300,21 @@ fn test_roundtrip_text() {
     reader.write_file(tmp.path(), &table).unwrap();
     let table2 = reader.read_file(tmp.path()).unwrap();
     assert_eq!(table2.row_count(), table.row_count());
+}
+
+#[test]
+fn test_roundtrip_orc() {
+    ensure_fixtures();
+    let reg = FormatRegistry::new();
+    let path = fixture_path("sample.orc");
+    let reader = reg.reader_for_path(&path).unwrap();
+    let table = reader.read_file(&path).unwrap();
+
+    let tmp = tempfile::NamedTempFile::with_suffix(".orc").unwrap();
+    reader.write_file(tmp.path(), &table).unwrap();
+    let table2 = reader.read_file(tmp.path()).unwrap();
+    assert_eq!(table2.row_count(), table.row_count());
+    assert_eq!(table2.col_count(), table.col_count());
 }
 
 #[test]

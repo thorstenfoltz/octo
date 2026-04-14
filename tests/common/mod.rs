@@ -70,6 +70,7 @@ pub fn ensure_fixtures() {
             ("sample.arrow", "arrow"),
             ("sample.xlsx", "xlsx"),
             ("sample.pdf", "pdf"),
+            ("sample.orc", "orc"),
         ];
 
         for (filename, ext) in binary_fixtures {

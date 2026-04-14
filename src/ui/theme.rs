@@ -109,7 +109,7 @@ impl ThemeColors {
             bg_secondary: Color32::from_rgb(39, 39, 42), // zinc-800
             bg_tertiary: Color32::from_rgb(52, 52, 56),  // zinc-700
             bg_header: Color32::from_rgb(30, 30, 35),
-            bg_selected: Color32::from_rgba_unmultiplied(99, 102, 241, 40), // indigo-500 subtle
+            bg_selected: Color32::from_rgba_unmultiplied(99, 102, 241, 100), // indigo-500
             bg_hover: Color32::from_rgb(45, 45, 50),
             bg_edited: Color32::from_rgb(50, 40, 20),
 
@@ -144,7 +144,7 @@ impl ThemeColors {
             bg_secondary: Color32::from_rgb(249, 250, 251), // gray-50
             bg_tertiary: Color32::from_rgb(243, 244, 246),  // gray-100
             bg_header: Color32::from_rgb(248, 248, 252),
-            bg_selected: Color32::from_rgb(219, 234, 254), // blue-100
+            bg_selected: Color32::from_rgb(191, 219, 254), // blue-200
             bg_hover: Color32::from_rgb(243, 244, 246),
             bg_edited: Color32::from_rgb(255, 249, 219),
 

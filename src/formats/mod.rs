@@ -2,9 +2,11 @@ pub mod arrow_ipc_reader;
 pub mod avro_reader;
 pub mod csv_reader;
 pub mod excel_reader;
+pub mod hdf5_reader;
 pub mod json_reader;
 pub mod jupyter_reader;
 pub mod markdown_reader;
+pub mod orc_reader;
 pub mod parquet_reader;
 pub mod pdf_reader;
 pub mod text_reader;
@@ -67,6 +69,8 @@ impl FormatRegistry {
         registry.register(Box::new(toml_reader::TomlReader));
         registry.register(Box::new(yaml_reader::YamlReader));
         registry.register(Box::new(jupyter_reader::JupyterReader));
+        registry.register(Box::new(orc_reader::OrcReader));
+        registry.register(Box::new(hdf5_reader::Hdf5Reader));
         registry.register(Box::new(markdown_reader::MarkdownReader));
         registry.register(Box::new(text_reader::TextReader));
         registry

@@ -142,10 +142,17 @@ pub struct AppSettings {
     /// Layout for Jupyter notebook output cells.
     #[serde(default)]
     pub notebook_output_layout: NotebookOutputLayout,
+    /// Maximum number of recently opened files shown in the File menu.
+    #[serde(default = "default_max_recent")]
+    pub max_recent_files: usize,
 }
 
 fn default_true() -> bool {
     true
+}
+
+fn default_max_recent() -> usize {
+    5
 }
 
 impl Default for AppSettings {
@@ -161,13 +168,14 @@ impl Default for AppSettings {
             highlight_edits: false,
             color_aligned_columns: true,
             notebook_output_layout: NotebookOutputLayout::default(),
+            max_recent_files: 5,
         }
     }
 }
 
 impl AppSettings {
     /// Platform-specific config directory.
-    fn config_dir() -> Option<PathBuf> {
+    pub fn config_dir() -> Option<PathBuf> {
         #[cfg(target_os = "linux")]
         {
             std::env::var("XDG_CONFIG_HOME")
@@ -262,135 +270,213 @@ impl SettingsDialog {
             .resizable(false)
             .collapsible(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .min_width(360.0)
+            .min_width(420.0)
             .show(ctx, |ui| {
-                egui::Grid::new("settings_grid")
-                    .num_columns(2)
-                    .spacing([16.0, 8.0])
-                    .show(ui, |ui| {
-                        // --- Font size ---
-                        ui.label("Font size:");
-                        let old_size = self.draft.font_size;
-                        ui.add(
-                            egui::DragValue::new(&mut self.draft.font_size)
-                                .range(8.0..=32.0)
-                                .speed(0.25)
-                                .suffix(" pt"),
-                        );
-                        if self.draft.font_size != old_size {
-                            self.font_changed = true;
-                        }
-                        ui.end_row();
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    // ── Appearance ──
+                    ui.label(egui::RichText::new("Appearance").strong().size(13.0));
+                    ui.add_space(4.0);
+                    egui::Grid::new("settings_appearance")
+                        .num_columns(2)
+                        .spacing([16.0, 8.0])
+                        .show(ui, |ui| {
+                            ui.label("Font size:").on_hover_text(
+                                "Base font size for all text in the application",
+                            );
+                            let old_size = self.draft.font_size;
+                            ui.add(
+                                egui::DragValue::new(&mut self.draft.font_size)
+                                    .range(8.0..=32.0)
+                                    .speed(0.25)
+                                    .suffix(" pt"),
+                            );
+                            if self.draft.font_size != old_size {
+                                self.font_changed = true;
+                            }
+                            ui.end_row();
 
-                        // --- Default theme ---
-                        ui.label("Default theme:");
-                        let old_theme = self.draft.default_theme;
-                        egui::ComboBox::from_id_salt("theme_combo")
-                            .selected_text(self.draft.default_theme.label())
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.draft.default_theme,
-                                    ThemeMode::Light,
-                                    "Light",
-                                );
-                                ui.selectable_value(
-                                    &mut self.draft.default_theme,
-                                    ThemeMode::Dark,
-                                    "Dark",
-                                );
-                            });
-                        if self.draft.default_theme != old_theme {
-                            self.theme_changed = true;
-                        }
-                        ui.end_row();
-
-                        // --- Icon variant ---
-                        ui.label("Icon color:");
-                        let old_icon = self.draft.icon_variant;
-                        egui::ComboBox::from_id_salt("icon_combo")
-                            .selected_text(self.draft.icon_variant.label())
-                            .show_ui(ui, |ui| {
-                                for &variant in IconVariant::ALL {
-                                    let color = variant.preview_color();
-                                    let text = egui::RichText::new(variant.label()).color(color);
+                            ui.label("Default theme:").on_hover_text(
+                                "Theme applied when the application starts",
+                            );
+                            let old_theme = self.draft.default_theme;
+                            egui::ComboBox::from_id_salt("theme_combo")
+                                .selected_text(self.draft.default_theme.label())
+                                .show_ui(ui, |ui| {
                                     ui.selectable_value(
-                                        &mut self.draft.icon_variant,
-                                        variant,
-                                        text,
+                                        &mut self.draft.default_theme,
+                                        ThemeMode::Light,
+                                        "Light",
                                     );
-                                }
-                            });
-                        if self.draft.icon_variant != old_icon {
-                            self.icon_changed = true;
-                        }
-                        ui.end_row();
+                                    ui.selectable_value(
+                                        &mut self.draft.default_theme,
+                                        ThemeMode::Dark,
+                                        "Dark",
+                                    );
+                                });
+                            if self.draft.default_theme != old_theme {
+                                self.theme_changed = true;
+                            }
+                            ui.end_row();
 
-                        // --- Default search mode ---
-                        ui.label("Default search:");
-                        egui::ComboBox::from_id_salt("search_mode_combo")
-                            .selected_text(self.draft.default_search_mode.label())
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.draft.default_search_mode,
-                                    SearchMode::Plain,
-                                    "Plain",
-                                );
-                                ui.selectable_value(
-                                    &mut self.draft.default_search_mode,
-                                    SearchMode::Wildcard,
-                                    "Wildcard",
-                                );
-                                ui.selectable_value(
-                                    &mut self.draft.default_search_mode,
-                                    SearchMode::Regex,
-                                    "Regex",
-                                );
-                            });
-                        ui.end_row();
+                            ui.label("Icon color:")
+                                .on_hover_text("Color variant for the application icon");
+                            let old_icon = self.draft.icon_variant;
+                            egui::ComboBox::from_id_salt("icon_combo")
+                                .selected_text(self.draft.icon_variant.label())
+                                .show_ui(ui, |ui| {
+                                    for &variant in IconVariant::ALL {
+                                        let color = variant.preview_color();
+                                        let text =
+                                            egui::RichText::new(variant.label()).color(color);
+                                        ui.selectable_value(
+                                            &mut self.draft.icon_variant,
+                                            variant,
+                                            text,
+                                        );
+                                    }
+                                });
+                            if self.draft.icon_variant != old_icon {
+                                self.icon_changed = true;
+                            }
+                            ui.end_row();
+                        });
 
-                        // --- Show row numbers ---
-                        ui.label("Show row numbers:");
-                        ui.checkbox(&mut self.draft.show_row_numbers, "");
-                        ui.end_row();
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(4.0);
 
-                        // --- Alternating row colors ---
-                        ui.label("Alternating row colors:");
-                        ui.checkbox(&mut self.draft.alternating_row_colors, "");
-                        ui.end_row();
+                    // ── Table View ──
+                    ui.label(egui::RichText::new("Table View").strong().size(13.0));
+                    ui.add_space(4.0);
+                    egui::Grid::new("settings_table")
+                        .num_columns(2)
+                        .spacing([16.0, 8.0])
+                        .show(ui, |ui| {
+                            ui.label("Show row numbers:")
+                                .on_hover_text("Display row numbers in the leftmost column");
+                            ui.checkbox(&mut self.draft.show_row_numbers, "");
+                            ui.end_row();
 
-                        // --- Negative numbers in red ---
-                        ui.label("Negative numbers in red:");
-                        ui.checkbox(&mut self.draft.negative_numbers_red, "");
-                        ui.end_row();
+                            ui.label("Alternating row colors:").on_hover_text(
+                                "Alternate row background colors for readability",
+                            );
+                            ui.checkbox(&mut self.draft.alternating_row_colors, "");
+                            ui.end_row();
 
-                        // --- Highlight edited cells ---
-                        ui.label("Highlight edited cells:");
-                        ui.checkbox(&mut self.draft.highlight_edits, "");
-                        ui.end_row();
+                            ui.label("Negative numbers in red:")
+                                .on_hover_text("Highlight negative numeric values with red text");
+                            ui.checkbox(&mut self.draft.negative_numbers_red, "");
+                            ui.end_row();
 
-                        // --- Color aligned columns ---
-                        ui.label("Color aligned columns:");
-                        ui.checkbox(&mut self.draft.color_aligned_columns, "");
-                        ui.end_row();
+                            ui.label("Highlight edited cells:")
+                                .on_hover_text("Show background color on modified cells");
+                            ui.checkbox(&mut self.draft.highlight_edits, "");
+                            ui.end_row();
+                        });
 
-                        // --- Notebook output layout ---
-                        ui.label("Notebook output:");
-                        egui::ComboBox::from_id_salt("notebook_layout_combo")
-                            .selected_text(self.draft.notebook_output_layout.label())
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.draft.notebook_output_layout,
-                                    NotebookOutputLayout::Beside,
-                                    "Beside",
-                                );
-                                ui.selectable_value(
-                                    &mut self.draft.notebook_output_layout,
-                                    NotebookOutputLayout::Beneath,
-                                    "Beneath",
-                                );
-                            });
-                        ui.end_row();
-                    });
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(4.0);
+
+                    // ── Search ──
+                    ui.label(egui::RichText::new("Search").strong().size(13.0));
+                    ui.add_space(4.0);
+                    egui::Grid::new("settings_search")
+                        .num_columns(2)
+                        .spacing([16.0, 8.0])
+                        .show(ui, |ui| {
+                            ui.label("Default search mode:")
+                                .on_hover_text("Default search/filter mode for new tabs");
+                            egui::ComboBox::from_id_salt("search_mode_combo")
+                                .selected_text(self.draft.default_search_mode.label())
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut self.draft.default_search_mode,
+                                        SearchMode::Plain,
+                                        "Plain",
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.draft.default_search_mode,
+                                        SearchMode::Wildcard,
+                                        "Wildcard",
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.draft.default_search_mode,
+                                        SearchMode::Regex,
+                                        "Regex",
+                                    );
+                                });
+                            ui.end_row();
+                        });
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(4.0);
+
+                    // ── Format-Specific ──
+                    ui.label(egui::RichText::new("Format-Specific").strong().size(13.0));
+                    ui.add_space(4.0);
+                    egui::Grid::new("settings_format")
+                        .num_columns(2)
+                        .spacing([16.0, 8.0])
+                        .show(ui, |ui| {
+                            ui.label("Color aligned columns:").on_hover_text(
+                                "Color columns in CSV/TSV Raw Text view\n\
+                                 (only applies when 'Align Columns' is enabled)",
+                            );
+                            ui.checkbox(&mut self.draft.color_aligned_columns, "");
+                            ui.end_row();
+
+                            ui.label("Notebook output:").on_hover_text(
+                                "Code output position in Jupyter Notebook view\n\
+                                 (only applies to .ipynb files in Notebook view mode)",
+                            );
+                            egui::ComboBox::from_id_salt("notebook_layout_combo")
+                                .selected_text(self.draft.notebook_output_layout.label())
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut self.draft.notebook_output_layout,
+                                        NotebookOutputLayout::Beside,
+                                        "Beside",
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.draft.notebook_output_layout,
+                                        NotebookOutputLayout::Beneath,
+                                        "Beneath",
+                                    );
+                                });
+                            ui.end_row();
+                        });
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(4.0);
+
+                    // ── Files ──
+                    ui.label(egui::RichText::new("Files").strong().size(13.0));
+                    ui.add_space(4.0);
+                    egui::Grid::new("settings_files")
+                        .num_columns(2)
+                        .spacing([16.0, 8.0])
+                        .show(ui, |ui| {
+                            ui.label("Max recent files:").on_hover_text(
+                                "Number of recently opened files shown in the File menu",
+                            );
+                            egui::ComboBox::from_id_salt("max_recent_combo")
+                                .selected_text(self.draft.max_recent_files.to_string())
+                                .width(50.0)
+                                .show_ui(ui, |ui| {
+                                    for n in 1..=30 {
+                                        ui.selectable_value(
+                                            &mut self.draft.max_recent_files,
+                                            n,
+                                            n.to_string(),
+                                        );
+                                    }
+                                });
+                            ui.end_row();
+                        });
+                });
 
                 ui.add_space(12.0);
                 ui.horizontal(|ui| {

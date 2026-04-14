@@ -155,6 +155,7 @@ pub fn draw_table(
     negative_numbers_red: bool,
     highlight_edits: bool,
     font_size: f32,
+    welcome_logo_texture: Option<&egui::TextureHandle>,
 ) -> TableInteraction {
     let colors = ThemeColors::for_mode(theme_mode);
     let row_height = (font_size * 2.0).max(DEFAULT_ROW_HEIGHT);
@@ -173,10 +174,20 @@ pub fn draw_table(
     let mut interaction = TableInteraction::default();
 
     if table.col_count() == 0 {
-        ui.centered_and_justified(|ui| {
+        ui.vertical_centered(|ui| {
+            let avail = ui.available_size();
+            let logo_size = (avail.x.min(avail.y) * 0.55).min(512.0).max(128.0);
+            ui.add_space((avail.y - logo_size - 40.0).max(0.0) / 2.0);
+            if let Some(tex) = welcome_logo_texture {
+                ui.add(egui::Image::new(egui::load::SizedTexture::new(
+                    tex.id(),
+                    [logo_size, logo_size],
+                )));
+            }
+            ui.add_space(16.0);
             ui.label(
-                RichText::new("Open a file to get started")
-                    .size(18.0)
+                RichText::new("Octa")
+                    .size(28.0)
                     .color(colors.text_muted),
             );
         });
