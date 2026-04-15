@@ -195,6 +195,24 @@ fn test_format_descriptions_includes_all() {
 }
 
 #[test]
+fn test_reader_for_orc() {
+    let reg = FormatRegistry::new();
+    let reader = reg.reader_for_path(&PathBuf::from("data.orc"));
+    assert!(reader.is_some());
+    assert_eq!(reader.unwrap().name(), "ORC");
+}
+
+#[test]
+fn test_reader_for_hdf5() {
+    let reg = FormatRegistry::new();
+    for ext in &["data.h5", "data.hdf5", "data.hdf"] {
+        let reader = reg.reader_for_path(&PathBuf::from(ext));
+        assert!(reader.is_some(), "No reader for {}", ext);
+        assert_eq!(reader.unwrap().name(), "HDF5");
+    }
+}
+
+#[test]
 fn test_fallback_various_unknown_extensions() {
     let reg = FormatRegistry::new();
     for ext in &["data.xyz", "file.zzz", "test.banana", "doc.rs"] {

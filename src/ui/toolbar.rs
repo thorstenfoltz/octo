@@ -5,7 +5,9 @@ use crate::data::{SearchMode, ViewMode};
 
 #[derive(Default)]
 pub struct ToolbarAction {
+    pub new_file: bool,
     pub open_file: bool,
+    pub open_recent: Option<String>,
     pub save_file: bool,
     pub save_file_as: bool,
     pub toggle_theme: bool,
@@ -55,6 +57,7 @@ pub fn draw_toolbar(
     has_notebook: bool,
     has_json: bool,
     logo_texture: Option<&egui::TextureHandle>,
+    recent_files: &[String],
 ) -> ToolbarAction {
     let mut action = ToolbarAction::default();
     let colors = ThemeColors::for_mode(theme_mode);
@@ -78,7 +81,11 @@ pub fn draw_toolbar(
 
         // --- File menu ---
         ui.menu_button(RichText::new("File").color(colors.text_primary), |ui| {
-            ui.set_min_width(120.0);
+            ui.set_min_width(180.0);
+            if ui.button("New File").clicked() {
+                action.new_file = true;
+                ui.close_menu();
+            }
             if ui.button("Open...").clicked() {
                 action.open_file = true;
                 ui.close_menu();
@@ -93,11 +100,29 @@ pub fn draw_toolbar(
                     action.save_file_as = true;
                     ui.close_menu();
                 }
-                ui.separator();
-                if ui.button("Exit").clicked() {
-                    action.exit = true;
-                    ui.close_menu();
+            }
+            ui.separator();
+            ui.menu_button("Recent Files", |ui| {
+                ui.set_min_width(250.0);
+                if recent_files.is_empty() {
+                    ui.add_enabled(false, egui::Button::new("(none)"));
+                } else {
+                    for path in recent_files {
+                        let filename = std::path::Path::new(path)
+                            .file_name()
+                            .map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_else(|| path.clone());
+                        if ui.button(&filename).on_hover_text(path).clicked() {
+                            action.open_recent = Some(path.clone());
+                            ui.close_menu();
+                        }
+                    }
                 }
+            });
+            ui.separator();
+            if ui.button("Exit").clicked() {
+                action.exit = true;
+                ui.close_menu();
             }
         });
 

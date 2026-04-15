@@ -13,6 +13,7 @@ use ui::theme::ThemeMode;
 use eframe::egui;
 use egui::{Color32, RichText};
 
+use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
 fn render_icon(svg_source: &str) -> egui::IconData {
@@ -244,8 +245,10 @@ struct OctaApp {
     confirmed_close: bool,
     /// System clipboard handle (shared, lazily initialized)
     os_clipboard: Option<Arc<Mutex<arboard::Clipboard>>>,
-    /// Logo texture for toolbar
+    /// Logo texture for toolbar (small, native SVG size)
     logo_texture: Option<egui::TextureHandle>,
+    /// Logo texture for welcome screen (large, rendered from SVG at high resolution)
+    welcome_logo_texture: Option<egui::TextureHandle>,
     /// File path passed via command line (loaded on first frame)
     initial_file: Option<std::path::PathBuf>,
     /// Pending file to open after unsaved-changes dialog resolves
@@ -261,6 +264,8 @@ struct OctaApp {
     /// Update check state shared with background thread
     update_state: Arc<Mutex<UpdateState>>,
     status_message: Option<(String, std::time::Instant)>,
+    /// Recently opened file paths (most recent first).
+    recent_files: Vec<String>,
 }
 
 /// Detect delimiter from a file by reading only the first few KB.
@@ -429,6 +434,7 @@ impl OctaApp {
     fn new(initial_file: Option<std::path::PathBuf>, settings: AppSettings) -> Self {
         let theme_mode = settings.default_theme;
         let search_mode = settings.default_search_mode;
+        let recent_files = Self::load_recent_files();
         Self {
             tabs: vec![TabState::new(search_mode)],
             active_tab: 0,
@@ -444,6 +450,7 @@ impl OctaApp {
                 .ok()
                 .map(|c| Arc::new(Mutex::new(c))),
             logo_texture: None,
+            welcome_logo_texture: None,
             initial_file,
             pending_open_file: false,
             show_open_confirm: false,
@@ -452,7 +459,53 @@ impl OctaApp {
             show_update_dialog: false,
             update_state: Arc::new(Mutex::new(UpdateState::Idle)),
             status_message: None,
+            recent_files,
         }
+    }
+
+    fn recent_files_path() -> Option<std::path::PathBuf> {
+        AppSettings::config_dir().map(|d| d.join("recent.toml"))
+    }
+
+    fn load_recent_files() -> Vec<String> {
+        #[derive(Deserialize)]
+        struct RecentData {
+            #[serde(default)]
+            files: Vec<String>,
+        }
+        Self::recent_files_path()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|s| toml::from_str::<RecentData>(&s).ok())
+            .map(|d| d.files)
+            .unwrap_or_default()
+    }
+
+    fn save_recent_files(&self) {
+        #[derive(Serialize)]
+        struct RecentData<'a> {
+            files: &'a [String],
+        }
+        if let Some(path) = Self::recent_files_path() {
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Ok(contents) = toml::to_string_pretty(&RecentData {
+                files: &self.recent_files,
+            }) {
+                let _ = std::fs::write(path, contents);
+            }
+        }
+    }
+
+    fn add_recent_file(&mut self, file_path: &str) {
+        let canonical = std::fs::canonicalize(file_path)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| file_path.to_string());
+        self.recent_files.retain(|p| p != &canonical);
+        self.recent_files.insert(0, canonical);
+        let max = self.settings.max_recent_files;
+        self.recent_files.truncate(max);
+        self.save_recent_files();
     }
 
     fn close_tab(&mut self, idx: usize) {
@@ -721,6 +774,9 @@ impl OctaApp {
                         .map(octa::data::json_util::max_json_depth)
                         .unwrap_or(0);
                     tab.json_expand_depth_str = tab.json_expand_depth.to_string();
+
+                    // Track in recent files
+                    self.add_recent_file(&path.to_string_lossy());
                 }
                 Err(e) => {
                     self.status_message = Some((
@@ -1220,13 +1276,22 @@ impl eframe::App for OctaApp {
 
         // --- Global keyboard shortcuts ---
         let ctrl_held = ctx.input(|i| i.modifiers.command);
+        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::N)) {
+            let mut new_tab = TabState::new(self.settings.default_search_mode);
+            new_tab.view_mode = ViewMode::Raw;
+            new_tab.raw_content = Some(String::new());
+            self.tabs.push(new_tab);
+            self.active_tab = self.tabs.len() - 1;
+        }
         if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::O)) {
             self.open_file();
         }
         if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::S)) {
             if self.tabs[self.active_tab].table.source_path.is_some() {
                 self.save_file();
-            } else if self.tabs[self.active_tab].table.col_count() > 0 {
+            } else if self.tabs[self.active_tab].table.col_count() > 0
+                || self.tabs[self.active_tab].raw_content_modified
+            {
                 self.save_file_as();
             }
         }
@@ -1408,27 +1473,53 @@ impl eframe::App for OctaApp {
             .exact_height(40.0)
             .show(ctx, |ui| {
                 // Lazily create logo texture
-                if self.logo_texture.is_none() {
+                if self.logo_texture.is_none() || self.welcome_logo_texture.is_none() {
                     let opt = resvg::usvg::Options::default();
                     let svg_src = self.settings.icon_variant.svg_source();
                     if let Ok(tree) = resvg::usvg::Tree::from_str(svg_src, &opt) {
-                        let size = tree.size();
-                        let (w, h) = (size.width() as u32, size.height() as u32);
-                        if let Some(mut pixmap) = resvg::tiny_skia::Pixmap::new(w, h) {
-                            resvg::render(
-                                &tree,
-                                resvg::tiny_skia::Transform::default(),
-                                &mut pixmap.as_mut(),
-                            );
-                            let image = egui::ColorImage::from_rgba_unmultiplied(
-                                [w as usize, h as usize],
-                                pixmap.data(),
-                            );
-                            self.logo_texture = Some(ctx.load_texture(
-                                "octa_logo",
-                                image,
-                                egui::TextureOptions::LINEAR,
-                            ));
+                        if self.logo_texture.is_none() {
+                            let size = tree.size();
+                            let (w, h) = (size.width() as u32, size.height() as u32);
+                            if let Some(mut pixmap) = resvg::tiny_skia::Pixmap::new(w, h) {
+                                resvg::render(
+                                    &tree,
+                                    resvg::tiny_skia::Transform::default(),
+                                    &mut pixmap.as_mut(),
+                                );
+                                let image = egui::ColorImage::from_rgba_unmultiplied(
+                                    [w as usize, h as usize],
+                                    pixmap.data(),
+                                );
+                                self.logo_texture = Some(ctx.load_texture(
+                                    "octa_logo",
+                                    image,
+                                    egui::TextureOptions::LINEAR,
+                                ));
+                            }
+                        }
+                        if self.welcome_logo_texture.is_none() {
+                            let render_size = 512u32;
+                            let size = tree.size();
+                            let sx = render_size as f32 / size.width();
+                            let sy = render_size as f32 / size.height();
+                            if let Some(mut pixmap) =
+                                resvg::tiny_skia::Pixmap::new(render_size, render_size)
+                            {
+                                resvg::render(
+                                    &tree,
+                                    resvg::tiny_skia::Transform::from_scale(sx, sy),
+                                    &mut pixmap.as_mut(),
+                                );
+                                let image = egui::ColorImage::from_rgba_unmultiplied(
+                                    [render_size as usize, render_size as usize],
+                                    pixmap.data(),
+                                );
+                                self.welcome_logo_texture = Some(ctx.load_texture(
+                                    "octa_welcome_logo",
+                                    image,
+                                    egui::TextureOptions::LINEAR,
+                                ));
+                            }
                         }
                     }
                 }
@@ -1455,12 +1546,33 @@ impl eframe::App for OctaApp {
                     tab.table.format_name.as_deref() == Some("Jupyter Notebook"),
                     tab.json_value.is_some(),
                     self.logo_texture.as_ref(),
+                    &self.recent_files,
                 );
                 // Clear focus request after this frame
                 self.search_focus_requested = false;
 
+                if action.new_file {
+                    let mut new_tab = TabState::new(self.settings.default_search_mode);
+                    new_tab.view_mode = ViewMode::Raw;
+                    new_tab.raw_content = Some(String::new());
+                    self.tabs.push(new_tab);
+                    self.active_tab = self.tabs.len() - 1;
+                }
                 if action.open_file {
                     self.open_file();
+                }
+                if let Some(ref path) = action.open_recent {
+                    let path_buf = std::path::PathBuf::from(path);
+                    if path_buf.exists() {
+                        self.load_file(path_buf);
+                    } else {
+                        self.recent_files.retain(|p| p != path);
+                        self.save_recent_files();
+                        self.status_message = Some((
+                            format!("File not found: {path}"),
+                            std::time::Instant::now(),
+                        ));
+                    }
                 }
                 if action.save_file {
                     self.save_file();
@@ -1658,10 +1770,12 @@ impl eframe::App for OctaApp {
                                     } else {
                                         egui::RichText::new(&label).color(colors.text_secondary)
                                     };
-                                    if ui
-                                        .add(egui::Label::new(text).sense(egui::Sense::click()))
-                                        .clicked()
-                                    {
+                                    let tab_label_resp = ui
+                                        .add(egui::Label::new(text).sense(egui::Sense::click()));
+                                    if tab_label_resp.hovered() {
+                                        ctx.set_cursor_icon(egui::CursorIcon::Default);
+                                    }
+                                    if tab_label_resp.clicked() {
                                         tab_to_activate = Some(idx);
                                     }
                                     // Close button
@@ -1674,6 +1788,7 @@ impl eframe::App for OctaApp {
                                         .sense(egui::Sense::click() | egui::Sense::hover()),
                                     );
                                     if close_resp.hovered() {
+                                        ctx.set_cursor_icon(egui::CursorIcon::Default);
                                         let r = close_resp.rect.shrink2(egui::vec2(2.0, 1.0));
                                         ui.painter().rect_filled(
                                             r,
@@ -1695,15 +1810,17 @@ impl eframe::App for OctaApp {
                             });
                         }
 
-                        // "+" button to add new empty tab
+                        // "+" button to add new empty tab (opens editor)
                         if ui
                             .add(egui::Button::new(
                                 egui::RichText::new("+").size(14.0).color(colors.text_muted),
                             ))
                             .clicked()
                         {
-                            self.tabs
-                                .push(TabState::new(self.settings.default_search_mode));
+                            let mut new_tab = TabState::new(self.settings.default_search_mode);
+                            new_tab.view_mode = ViewMode::Raw;
+                            new_tab.raw_content = Some(String::new());
+                            self.tabs.push(new_tab);
                             tab_to_activate = Some(self.tabs.len() - 1);
                         }
 
@@ -2061,6 +2178,9 @@ impl eframe::App for OctaApp {
                         ));
                     }
                 }
+                // Re-render welcome logo at high resolution
+                self.welcome_logo_texture = None;
+
                 // Update the window icon
                 let icon = render_icon(svg_src);
                 ctx.send_viewport_cmd(egui::ViewportCommand::Icon(Some(Arc::new(icon))));
@@ -2144,7 +2264,7 @@ Open a file using **File > Open** (or **Ctrl+O**), or pass a file path as a comm
 octa path/to/file.parquet
 ```
 
-**Supported formats:** Parquet, CSV, TSV, JSON, JSONL, Excel (.xlsx), Avro, Arrow IPC, XML, TOML, YAML, PDF, Markdown, Plain Text.
+**Supported formats:** Parquet, CSV, TSV, JSON, JSONL, Excel (.xlsx), Avro, Arrow IPC, ORC, HDF5, XML, TOML, YAML, PDF, Markdown, Plain Text.
 
 All formats support both reading and writing. When saving, the original format and settings (e.g. CSV delimiter) are preserved.
 
@@ -2250,6 +2370,7 @@ Open **Help > Settings** to configure:
 
 | Shortcut | Action |
 |----------|--------|
+| Ctrl+N | New file |
 | Ctrl+O | Open file |
 | Ctrl+S | Save file |
 | Ctrl+F | Focus search box |
@@ -2439,7 +2560,7 @@ Open **Help > Settings** to configure:
 
             // --- Raw text view ---
             if self.tabs[self.active_tab].view_mode == ViewMode::Raw {
-                view_modes::render_raw_view(ui, &mut self.tabs[self.active_tab], self.theme_mode, self.settings.color_aligned_columns);
+                view_modes::render_raw_view(ui, &mut self.tabs[self.active_tab], self.theme_mode, self.settings.color_aligned_columns, self.settings.tab_size);
                 return;
             }
 
@@ -2470,6 +2591,7 @@ Open **Help > Settings** to configure:
                 self.settings.negative_numbers_red,
                 self.settings.highlight_edits,
                 self.settings.font_size,
+                self.welcome_logo_texture.as_ref(),
             );
 
             // Handle column header click: update insert position for "Add Column" dialog
