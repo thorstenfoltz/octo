@@ -21,10 +21,22 @@ if exist "%SCRIPT_DIR%octa.exe" (
     echo Using previously built binary.
     set "BINARY=%SCRIPT_DIR%target\release\octa.exe"
 ) else (
-    echo Building Octa (release)...
+    where cargo >nul 2>&1
+    if errorlevel 1 (
+        echo No pre-built binary found next to this script and Rust/Cargo is not installed.
+        echo.
+        echo You have two options:
+        echo   1. Download a pre-built octa.exe from
+        echo      https://github.com/thorstenfoltz/octa/releases
+        echo      and either place it next to install.bat and rerun,
+        echo      or just double-click the exe - no install needed.
+        echo   2. Install the Rust toolchain from https://rustup.rs/ and rerun this script.
+        exit /b 1
+    )
+    echo Building Octa ^(release^)...
     cargo build --release
     if errorlevel 1 (
-        echo Build failed. Install Rust from https://rustup.rs/ or download a pre-built release.
+        echo Build failed.
         exit /b 1
     )
     set "BINARY=%SCRIPT_DIR%target\release\octa.exe"
@@ -35,14 +47,6 @@ if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 copy /y "%BINARY%" "%INSTALL_DIR%\octa.exe"
 copy /y "%SCRIPT_DIR%assets\octa.svg" "%INSTALL_DIR%\octa.svg"
 copy /y "%SCRIPT_DIR%assets\octa.png" "%INSTALL_DIR%\octa.png"
-
-:: Add to PATH via registry (current user)
-echo Adding %INSTALL_DIR% to user PATH...
-for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "CURRENT_PATH=%%B"
-echo %CURRENT_PATH% | findstr /i /c:"%INSTALL_DIR%" >nul
-if errorlevel 1 (
-    setx PATH "%CURRENT_PATH%;%INSTALL_DIR%"
-)
 
 :: Convert PNG to ICO if not already present and magick is available
 if not exist "%INSTALL_DIR%\octa.ico" (
@@ -77,5 +81,7 @@ echo Octa installed successfully.
 echo   Binary:   %INSTALL_DIR%\octa.exe
 echo   Shortcut: %SHORTCUT_DIR%\Octa.lnk
 echo.
-echo You may need to restart your terminal for PATH changes to take effect.
+echo Note: Octa is not code-signed. On first launch, Windows SmartScreen
+echo may show "Windows protected your PC". Click "More info" and then
+echo "Run anyway" to start the application.
 endlocal

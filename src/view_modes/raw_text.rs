@@ -5,6 +5,16 @@ use eframe::egui;
 use egui::RichText;
 use ui::theme::ThemeMode;
 
+/// Signals the raw view emits back to the app.
+#[derive(Default, Debug, Clone)]
+pub struct RawAction {
+    /// User clicked the Align Columns checkbox toggling it *off* while there
+    /// are unsaved edits. The app should show a confirmation dialog before
+    /// reloading. `raw_view_formatted` has already been flipped back to `true`
+    /// so the state visibly stays aligned until the user confirms.
+    pub confirm_unalign: bool,
+}
+
 const COL_COLORS_DARK: [egui::Color32; 6] = [
     egui::Color32::from_rgb(0x7d, 0xb8, 0xf0), // soft blue
     egui::Color32::from_rgb(0xa8, 0xd8, 0x6e), // soft green
@@ -39,7 +49,9 @@ pub fn render_raw_view(
     theme_mode: ThemeMode,
     color_aligned_columns: bool,
     tab_size: usize,
-) {
+    warn_unalign: bool,
+) -> RawAction {
+    let mut action = RawAction::default();
     if let Some(ref mut content) = tab.raw_content {
         let colors = ui::theme::ThemeColors::for_mode(theme_mode);
 
@@ -56,6 +68,11 @@ pub fn render_raw_view(
                         let delim = tab.csv_delimiter as char;
                         *content = format_delimited_text(content, delim);
                         tab.raw_content_modified = true;
+                    } else if warn_unalign && tab.raw_content_modified {
+                        // Reloading would discard in-buffer edits — bounce the
+                        // checkbox back and let the app confirm first.
+                        tab.raw_view_formatted = true;
+                        action.confirm_unalign = true;
                     } else if let Some(ref path) = tab.table.source_path {
                         if let Ok(original) = std::fs::read_to_string(path) {
                             *content = original;
@@ -257,6 +274,7 @@ pub fn render_raw_view(
             );
         });
     }
+    action
 }
 
 /// Align columns in delimited text for display.

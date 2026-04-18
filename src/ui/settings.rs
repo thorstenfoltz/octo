@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use super::shortcuts::{KeyCombo, ShortcutAction, Shortcuts};
 use super::theme::{BodyFont, ThemeMode};
 use crate::data::{BinaryDisplayMode, SearchMode};
 
@@ -192,6 +193,13 @@ pub struct AppSettings {
     /// Default LIMIT used in the placeholder query for new tabs.
     #[serde(default = "default_sql_row_limit")]
     pub sql_default_row_limit: usize,
+    /// Whether to show a confirmation warning before toggling "Align Columns"
+    /// off in the raw CSV/TSV view, which reloads the file and discards edits.
+    #[serde(default = "default_true")]
+    pub warn_raw_align_reload: bool,
+    /// User-customizable keyboard shortcut bindings.
+    #[serde(default)]
+    pub shortcuts: Shortcuts,
 }
 
 fn default_true() -> bool {
@@ -232,6 +240,8 @@ impl Default for AppSettings {
             sql_panel_default_open: false,
             sql_panel_position: SqlPanelPosition::default(),
             sql_default_row_limit: 100,
+            warn_raw_align_reload: true,
+            shortcuts: Shortcuts::default(),
         }
     }
 }
@@ -312,6 +322,9 @@ pub struct SettingsDialog {
     /// Buffer backing the SQL row-limit text input. Parsed into the draft
     /// on Apply so the user can type freely without drag widgets fighting them.
     sql_row_limit_buf: String,
+    /// When the user clicks "Record" for a shortcut, the action is stored here
+    /// and the next key press captures a new binding. `None` = not recording.
+    recording: Option<ShortcutAction>,
 }
 
 impl SettingsDialog {
@@ -322,26 +335,51 @@ impl SettingsDialog {
         self.font_changed = false;
         self.theme_changed = false;
         self.sql_row_limit_buf = current.sql_default_row_limit.to_string();
+        self.recording = None;
         self.open = true;
     }
 
     /// Draw the dialog. Returns `Some(settings)` when the user clicks Apply.
-    pub fn show(&mut self, ctx: &egui::Context) -> Option<AppSettings> {
+    /// `logo` is an optional texture (the app icon) rendered as a header; passing
+    /// `None` omits it and shows just the title.
+    pub fn show(
+        &mut self,
+        ctx: &egui::Context,
+        logo: Option<&egui::TextureHandle>,
+    ) -> Option<AppSettings> {
         if !self.open {
             return None;
         }
 
         let mut applied: Option<AppSettings> = None;
+        // `.open(&mut open)` gives us egui's built-in close-X (with hover
+        // highlight). We mirror it back to `self.open` after the frame.
+        let mut window_open = self.open;
 
         egui::Window::new("Settings")
+            .open(&mut window_open)
             .resizable(true)
             .collapsible(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .min_width(460.0)
             .default_width(480.0)
-            .default_height(560.0)
+            .default_height(580.0)
             .min_height(360.0)
             .show(ctx, |ui| {
+                // Top header: logo + title, to give the dialog an Octa identity.
+                egui::TopBottomPanel::top("settings_header")
+                    .frame(egui::Frame::default().inner_margin(egui::Margin::symmetric(0, 6)))
+                    .show_inside(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            if let Some(tex) = logo {
+                                let size = egui::vec2(28.0, 28.0);
+                                ui.add(egui::Image::new(tex).fit_to_exact_size(size));
+                                ui.add_space(8.0);
+                            }
+                            ui.label(egui::RichText::new("Octa Settings").strong().size(16.0));
+                        });
+                    });
+
                 // Pin Apply/Cancel to the bottom so they're always reachable
                 // regardless of how much content the scroll area holds.
                 egui::TopBottomPanel::bottom("settings_buttons")
@@ -374,15 +412,20 @@ impl SettingsDialog {
                     });
             });
 
+        // If the user clicked the window's X, `window_open` flipped to false.
+        if !window_open {
+            self.open = false;
+        }
+
         applied
     }
 
     /// Render the collapsible setting groups inside the scroll area.
     fn draw_sections(&mut self, ui: &mut egui::Ui) {
-        // ── Appearance (open by default) ──
+        // ── Appearance ──
         egui::CollapsingHeader::new(egui::RichText::new("Appearance").strong().size(13.0))
             .id_salt("settings_section_appearance")
-            .default_open(true)
+            .default_open(false)
             .show(ui, |ui| {
                 egui::Grid::new("settings_appearance")
                     .num_columns(2)
@@ -500,7 +543,7 @@ impl SettingsDialog {
         // ── Table View ──
         egui::CollapsingHeader::new(egui::RichText::new("Table View").strong().size(13.0))
             .id_salt("settings_section_table")
-            .default_open(true)
+            .default_open(false)
             .show(ui, |ui| {
                 egui::Grid::new("settings_table")
                     .num_columns(2)
@@ -624,6 +667,14 @@ impl SettingsDialog {
                         ui.checkbox(&mut self.draft.color_aligned_columns, "");
                         ui.end_row();
 
+                        ui.label("Warn before un-aligning CSV:").on_hover_text(
+                            "Confirm before turning 'Align Columns' off in the raw\n\
+                             CSV/TSV view — un-aligning reloads the file from disk\n\
+                             and discards in-buffer edits.",
+                        );
+                        ui.checkbox(&mut self.draft.warn_raw_align_reload, "");
+                        ui.end_row();
+
                         ui.label("Notebook output:").on_hover_text(
                             "Code output position in Jupyter Notebook view\n\
                              (only applies to .ipynb files in Notebook view mode)",
@@ -691,6 +742,23 @@ impl SettingsDialog {
                     });
             });
 
+        // ── Shortcuts ──
+        egui::CollapsingHeader::new(egui::RichText::new("Shortcuts").strong().size(13.0))
+            .id_salt("settings_section_shortcuts")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.label(
+                    egui::RichText::new(
+                        "Click 'Record' then press a key combo (with Ctrl / Shift / Alt).\n\
+                         Press Esc to cancel recording. 'Clear' leaves the action unbound.",
+                    )
+                    .weak()
+                    .size(11.0),
+                );
+                ui.add_space(6.0);
+                self.draw_shortcuts_grid(ui);
+            });
+
         // ── Files ──
         egui::CollapsingHeader::new(egui::RichText::new("Files").strong().size(13.0))
             .id_salt("settings_section_files")
@@ -719,4 +787,87 @@ impl SettingsDialog {
                     });
             });
     }
+
+    /// One grid row per [`ShortcutAction`]: name, current combo, Record/Clear/Reset.
+    fn draw_shortcuts_grid(&mut self, ui: &mut egui::Ui) {
+        use strum::IntoEnumIterator;
+        // If the user is recording a binding, capture the next real key press.
+        if let Some(action) = self.recording {
+            let captured = ui.input(capture_combo);
+            if let Some(CaptureResult::Cancel) = captured {
+                self.recording = None;
+            } else if let Some(CaptureResult::Combo(combo)) = captured {
+                self.draft.shortcuts.set(action, combo);
+                self.recording = None;
+            }
+        }
+
+        egui::Grid::new("settings_shortcuts_grid")
+            .num_columns(4)
+            .spacing([12.0, 4.0])
+            .striped(true)
+            .show(ui, |ui| {
+                for action in ShortcutAction::iter() {
+                    ui.label(action.label());
+                    let combo = self.draft.shortcuts.combo(action);
+                    let label_text = if self.recording == Some(action) {
+                        egui::RichText::new("Press any key…").italics()
+                    } else {
+                        egui::RichText::new(combo.label()).monospace()
+                    };
+                    ui.label(label_text);
+                    if self.recording == Some(action) {
+                        if ui.button("Stop").clicked() {
+                            self.recording = None;
+                        }
+                    } else if ui.button("Record").clicked() {
+                        self.recording = Some(action);
+                    }
+                    ui.horizontal(|ui| {
+                        if ui.button("Clear").clicked() {
+                            self.draft.shortcuts.set(action, KeyCombo::UNBOUND);
+                        }
+                        if ui.button("Reset").clicked() {
+                            self.draft.shortcuts.reset(action);
+                        }
+                    });
+                    ui.end_row();
+                }
+            });
+    }
+}
+
+/// Result of a single-frame shortcut capture.
+enum CaptureResult {
+    Cancel,
+    Combo(KeyCombo),
+}
+
+/// While recording, watch for a non-modifier key press and return it with the
+/// current modifier state. Esc cancels.
+fn capture_combo(input: &egui::InputState) -> Option<CaptureResult> {
+    if input.key_pressed(egui::Key::Escape) {
+        return Some(CaptureResult::Cancel);
+    }
+    let mods = input.modifiers;
+    for ev in &input.events {
+        if let egui::Event::Key {
+            key,
+            pressed: true,
+            repeat: false,
+            ..
+        } = ev
+        {
+            if matches!(key, egui::Key::Escape) {
+                return Some(CaptureResult::Cancel);
+            }
+            return Some(CaptureResult::Combo(KeyCombo {
+                key: Some(*key),
+                ctrl: mods.command,
+                shift: mods.shift,
+                alt: mods.alt,
+            }));
+        }
+    }
+    None
 }

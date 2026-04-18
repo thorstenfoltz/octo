@@ -8,6 +8,7 @@ use octa::data::CellValue;
 pub struct SqlAction {
     pub run: bool,
     pub clear: bool,
+    pub export: bool,
 }
 
 /// Render a split-pane SQL editor (top) and result table (bottom).
@@ -28,6 +29,16 @@ pub fn render_sql_view(ui: &mut egui::Ui, tab: &mut TabState) -> SqlAction {
         if ui.button("Clear result").clicked() {
             action.clear = true;
         }
+        let has_result = tab.sql_result.as_ref().is_some_and(|t| t.col_count() > 0);
+        ui.add_enabled_ui(has_result, |ui| {
+            if ui
+                .button("Export…")
+                .on_hover_text("Save the result as CSV, Parquet, JSON, Excel, etc.")
+                .clicked()
+            {
+                action.export = true;
+            }
+        });
         if let Some(rows) = tab.sql_result.as_ref().map(|t| t.row_count()) {
             ui.add_space(12.0);
             ui.label(format!(

@@ -1,5 +1,5 @@
 use octa::data::{CellValue, ColumnInfo, DataTable};
-use octa::sql::run_query;
+use octa::sql::{QueryKind, run_query};
 use std::collections::HashMap;
 
 fn sample_table() -> DataTable {
@@ -51,7 +51,9 @@ fn sample_table() -> DataTable {
 #[test]
 fn test_select_all_returns_all_rows() {
     let table = sample_table();
-    let result = run_query(&table, "SELECT * FROM data ORDER BY id").unwrap();
+    let result = run_query(&table, "SELECT * FROM data ORDER BY id")
+        .unwrap()
+        .table;
     assert_eq!(result.row_count(), 3);
     assert_eq!(result.col_count(), 3);
     assert_eq!(result.get(0, 1), Some(&CellValue::String("Alice".into())));
@@ -60,7 +62,9 @@ fn test_select_all_returns_all_rows() {
 #[test]
 fn test_count_returns_scalar() {
     let table = sample_table();
-    let result = run_query(&table, "SELECT COUNT(*) AS n FROM data").unwrap();
+    let result = run_query(&table, "SELECT COUNT(*) AS n FROM data")
+        .unwrap()
+        .table;
     assert_eq!(result.row_count(), 1);
     assert_eq!(result.col_count(), 1);
     assert_eq!(result.columns[0].name, "n");
@@ -70,7 +74,9 @@ fn test_count_returns_scalar() {
 #[test]
 fn test_where_filter() {
     let table = sample_table();
-    let result = run_query(&table, "SELECT name FROM data WHERE id > 1 ORDER BY id").unwrap();
+    let result = run_query(&table, "SELECT name FROM data WHERE id > 1 ORDER BY id")
+        .unwrap()
+        .table;
     assert_eq!(result.row_count(), 2);
     assert_eq!(result.get(0, 0), Some(&CellValue::String("Bob".into())));
     assert_eq!(result.get(1, 0), Some(&CellValue::String("Charlie".into())));
@@ -83,7 +89,8 @@ fn test_projection_preserves_aliases() {
         &table,
         "SELECT id AS user_id, score * 10 AS scaled FROM data ORDER BY id",
     )
-    .unwrap();
+    .unwrap()
+    .table;
     assert_eq!(result.col_count(), 2);
     assert_eq!(result.columns[0].name, "user_id");
     assert_eq!(result.columns[1].name, "scaled");
@@ -93,7 +100,9 @@ fn test_projection_preserves_aliases() {
 #[test]
 fn test_aggregate_avg() {
     let table = sample_table();
-    let result = run_query(&table, "SELECT AVG(score) AS avg_score FROM data").unwrap();
+    let result = run_query(&table, "SELECT AVG(score) AS avg_score FROM data")
+        .unwrap()
+        .table;
     assert_eq!(result.row_count(), 1);
     match result.get(0, 0) {
         Some(CellValue::Float(f)) => assert!((f - 8.25).abs() < 1e-6),
@@ -132,7 +141,9 @@ fn test_query_against_empty_table() {
         redo_stack: Vec::new(),
         db_meta: None,
     };
-    let result = run_query(&table, "SELECT COUNT(*) FROM data").unwrap();
+    let result = run_query(&table, "SELECT COUNT(*) FROM data")
+        .unwrap()
+        .table;
     assert_eq!(result.get(0, 0), Some(&CellValue::Int(0)));
 }
 
@@ -155,7 +166,9 @@ fn test_quoted_column_names_with_spaces() {
         redo_stack: Vec::new(),
         db_meta: None,
     };
-    let result = run_query(&table, r#"SELECT "first name" FROM data"#).unwrap();
+    let result = run_query(&table, r#"SELECT "first name" FROM data"#)
+        .unwrap()
+        .table;
     assert_eq!(result.get(0, 0), Some(&CellValue::String("Alice".into())));
 }
 
@@ -206,7 +219,9 @@ fn test_large_table_query_completes_quickly() {
         db_meta: None,
     };
     let start = std::time::Instant::now();
-    let result = run_query(&table, "SELECT COUNT(*) AS n FROM data").unwrap();
+    let result = run_query(&table, "SELECT COUNT(*) AS n FROM data")
+        .unwrap()
+        .table;
     let elapsed = start.elapsed();
     assert_eq!(result.get(0, 0), Some(&CellValue::Int(row_count as i64)));
     assert!(
@@ -238,6 +253,63 @@ fn test_null_values_passthrough() {
         redo_stack: Vec::new(),
         db_meta: None,
     };
-    let result = run_query(&table, "SELECT COUNT(v) AS n FROM data").unwrap();
+    let result = run_query(&table, "SELECT COUNT(v) AS n FROM data")
+        .unwrap()
+        .table;
     assert_eq!(result.get(0, 0), Some(&CellValue::Int(2)));
+}
+
+#[test]
+fn test_update_mutates_base_table() {
+    let table = sample_table();
+    let outcome = run_query(&table, "UPDATE data SET name = 'ALICE' WHERE id = 1").unwrap();
+    assert_eq!(outcome.kind, QueryKind::Mutation);
+    assert_eq!(outcome.affected, Some(1));
+    let mutated = outcome.table;
+    assert_eq!(mutated.row_count(), 3);
+    // Column types preserved from the original table.
+    assert_eq!(mutated.columns[0].data_type, "Int64");
+    let alice_row = (0..mutated.row_count())
+        .find(|&r| mutated.get(r, 0) == Some(&CellValue::Int(1)))
+        .expect("id=1 row should still exist");
+    assert_eq!(
+        mutated.get(alice_row, 1),
+        Some(&CellValue::String("ALICE".into()))
+    );
+    assert!(mutated.structural_changes);
+}
+
+#[test]
+fn test_delete_mutates_base_table() {
+    let table = sample_table();
+    let outcome = run_query(&table, "DELETE FROM data WHERE id = 2").unwrap();
+    assert_eq!(outcome.kind, QueryKind::Mutation);
+    assert_eq!(outcome.affected, Some(1));
+    let mutated = outcome.table;
+    assert_eq!(mutated.row_count(), 2);
+    assert!(
+        (0..mutated.row_count()).all(|r| mutated.get(r, 0) != Some(&CellValue::Int(2))),
+        "id=2 should have been deleted",
+    );
+}
+
+#[test]
+fn test_insert_mutates_base_table() {
+    let table = sample_table();
+    let outcome = run_query(
+        &table,
+        "INSERT INTO data (id, name, score) VALUES (4, 'Dana', 6.5)",
+    )
+    .unwrap();
+    assert_eq!(outcome.kind, QueryKind::Mutation);
+    assert_eq!(outcome.affected, Some(1));
+    let mutated = outcome.table;
+    assert_eq!(mutated.row_count(), 4);
+    let dana = (0..mutated.row_count())
+        .find(|&r| mutated.get(r, 0) == Some(&CellValue::Int(4)))
+        .expect("inserted id=4 row should be present");
+    assert_eq!(
+        mutated.get(dana, 1),
+        Some(&CellValue::String("Dana".into()))
+    );
 }

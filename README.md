@@ -80,7 +80,21 @@ are intentionally rejected on save; do those operations in another tool. Single-
 
 ### Linux
 
-Clone the repository and execute the installation script.
+The simplest option is to **download a pre-built binary** from the
+[releases page](https://github.com/thorstenfoltz/octa/releases) and run it
+directly — no installation step is required:
+
+```bash
+chmod +x octa
+./octa                  # run from anywhere
+# or place it on your PATH, e.g. ~/.local/bin/octa
+```
+
+Use `install.sh` only if you want Octa to appear in your application
+launcher with an icon and file associations, or if you want to build from
+source. The script detects whether a pre-built `octa` binary is next to it
+and uses it; otherwise it builds from source, which requires the Rust
+toolchain (install from <https://rustup.rs/>).
 
 ```bash
 # System-wide (installs to /usr/local)
@@ -90,7 +104,8 @@ sudo ./install.sh
 ./install.sh ~/.local
 ```
 
-This compiles the binary, add SVG icon, and desktop entry so Octa appears in your application launcher with file associations for all supported formats.
+Building from source additionally requires a C compiler and the native
+libraries listed in `CLAUDE.md` (GTK, fontconfig, mupdf, etc.).
 
 ### Arch Linux
 
@@ -108,8 +123,20 @@ paru -S octa-bin
 
 ### Windows
 
-Run `install.bat` as Administrator. If it doesn't work, just copy and paste the exe file to the wished location. Please note, Defender will probably prevent
-opening, because of an unknown publisher. Expand the warning completely and accept, then it works.
+The simplest option is to **download `octa.exe`** from the
+[releases page](https://github.com/thorstenfoltz/octa/releases) and run it
+directly — no installation needed. Place it wherever you like (e.g. your
+Desktop or `C:\Tools\`) and double-click to launch.
+
+Optionally, `install.bat` copies the binary into `Program Files\Octa`,
+generates an `.ico` (if ImageMagick is on PATH), and creates a Start Menu
+shortcut. Right-click and choose **Run as administrator**. It does *not*
+modify your `PATH`; open Octa via the Start Menu shortcut or by running
+`"C:\Program Files\Octa\octa.exe"` directly.
+
+**Windows SmartScreen warning:** Octa is not code-signed, so on first
+launch Windows shows *"Windows protected your PC"*. Click **More info**,
+then **Run anyway**. Subsequent launches open without the prompt.
 
 ## Configuration
 

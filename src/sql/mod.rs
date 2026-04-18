@@ -4,6 +4,11 @@
 //! in-memory DuckDB connection, the user's query is executed, and the result
 //! is materialized back into a `DataTable`. Each call uses a fresh connection
 //! — there is no persistent SQL state between runs.
+//!
+//! SELECT queries return rows as a new `DataTable` for display.
+//! UPDATE / INSERT / DELETE (and other mutations) re-export the full contents
+//! of `data` after the statement runs so the caller can replace the base table
+//! — making SQL feel like a real database even for file-backed formats.
 
 use std::collections::HashMap;
 
@@ -12,13 +17,105 @@ use duckdb::{Connection, types::ValueRef};
 
 use crate::data::{CellValue, ColumnInfo, DataTable};
 
-/// Execute `query` against `table`, returning the results as a new `DataTable`.
+/// Classification of a SQL statement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueryKind {
+    /// A read-only query (SELECT etc.). `table` holds the result rows.
+    Select,
+    /// A mutation (INSERT / UPDATE / DELETE / …). `table` holds the full
+    /// contents of `data` after the statement ran, suitable for replacing the
+    /// base table in the caller's UI.
+    Mutation,
+}
+
+/// Result of executing a user query.
+#[derive(Debug, Clone)]
+pub struct QueryOutcome {
+    pub kind: QueryKind,
+    /// Number of rows reported affected by a mutation (None for SELECT).
+    pub affected: Option<usize>,
+    /// For SELECT: the query result. For mutations: the post-mutation contents
+    /// of `data`, rebuilt with the original table's column schema preserved.
+    pub table: DataTable,
+}
+
+/// Execute `query` against `table`, returning a classified outcome.
 /// The table is exposed in SQL as `data`. Identifiers in the schema are quoted,
 /// so column names with spaces or punctuation are preserved.
-pub fn run_query(table: &DataTable, query: &str) -> Result<DataTable> {
+pub fn run_query(table: &DataTable, query: &str) -> Result<QueryOutcome> {
     let conn = Connection::open_in_memory().context("opening in-memory DuckDB")?;
     register_table(&conn, "data", table)?;
-    execute_query(&conn, query)
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Err(anyhow!("Query is empty"));
+    }
+    if is_mutation(trimmed) {
+        let affected = conn.execute(trimmed, [])?;
+        let mut mutated = execute_query(&conn, "SELECT * FROM data")?;
+        // Preserve the original column schema (names + Arrow types) so the
+        // base table keeps its typing. Column counts match as long as the
+        // mutation didn't add/drop columns (ALTER TABLE); fall back to the
+        // query-derived schema if they don't.
+        if mutated.columns.len() == table.columns.len() {
+            mutated.columns = table.columns.clone();
+        }
+        mutated.source_path = table.source_path.clone();
+        mutated.format_name = table.format_name.clone();
+        mutated.structural_changes = true;
+        if let Some(meta) = table.db_meta.as_ref() {
+            // For DB-backed tables, keep the original identity snapshot so
+            // save-time diffing deletes originals and inserts current rows.
+            // We can't map DuckDB's post-mutation rows back to rowids, so
+            // every current row is flagged as "new" (None tag).
+            let row_count = mutated.row_count();
+            mutated.db_meta = Some(crate::data::DbRowMeta {
+                table_name: meta.table_name.clone(),
+                row_tags: vec![None; row_count],
+                original: meta.original.clone(),
+                original_columns: meta.original_columns.clone(),
+            });
+        }
+        return Ok(QueryOutcome {
+            kind: QueryKind::Mutation,
+            affected: Some(affected),
+            table: mutated,
+        });
+    }
+    let result = execute_query(&conn, trimmed)?;
+    Ok(QueryOutcome {
+        kind: QueryKind::Select,
+        affected: None,
+        table: result,
+    })
+}
+
+/// Classify `query` by its leading keyword. Mutating statements do not return
+/// rows via `query()` in DuckDB's Rust bindings, so they must be run through
+/// `execute()` instead. After a mutation we re-select `data` so the user sees
+/// the effect of their change.
+fn is_mutation(query: &str) -> bool {
+    let first = query
+        .split(|c: char| c.is_whitespace() || c == '(')
+        .find(|s| !s.is_empty())
+        .unwrap_or("")
+        .to_ascii_uppercase();
+    matches!(
+        first.as_str(),
+        "INSERT"
+            | "UPDATE"
+            | "DELETE"
+            | "REPLACE"
+            | "MERGE"
+            | "CREATE"
+            | "DROP"
+            | "ALTER"
+            | "TRUNCATE"
+            | "ATTACH"
+            | "DETACH"
+            | "COPY"
+            | "SET"
+            | "PRAGMA"
+    )
 }
 
 fn register_table(conn: &Connection, name: &str, table: &DataTable) -> Result<()> {
@@ -63,10 +160,6 @@ fn register_table(conn: &Connection, name: &str, table: &DataTable) -> Result<()
 
 fn execute_query(conn: &Connection, query: &str) -> Result<DataTable> {
     let trimmed = query.trim();
-    if trimmed.is_empty() {
-        return Err(anyhow!("Query is empty"));
-    }
-
     let mut stmt = conn.prepare(trimmed)?;
     let mut q = stmt.query([])?;
 

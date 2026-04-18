@@ -35,6 +35,9 @@ pub struct TableViewState {
     pub drag_drop_target: Option<usize>,
     /// Multi-selection: selected rows (by actual row index).
     pub selected_rows: HashSet<usize>,
+    /// Display-index anchor for Shift+Arrow row-range selection.
+    /// Seeded on first Shift+Arrow press and cleared on any non-Shift move.
+    pub selection_anchor_display: Option<usize>,
     /// Multi-selection: selected columns (by column index).
     pub selected_cols: HashSet<usize>,
     /// Clipboard content (tab-separated values, rows separated by newlines).
@@ -105,6 +108,13 @@ impl TableViewState {
     /// Set the horizontal scroll offset (used for navigation).
     pub fn set_scroll_x(&mut self, x: f32) {
         self.scroll_x = x;
+    }
+
+    /// Start editing the given cell with the given initial buffer.
+    pub fn begin_edit(&mut self, row: usize, col: usize, text: String) {
+        self.selected_cell = Some((row, col));
+        self.editing_cell = Some((row, col, text));
+        self.edit_needs_focus = true;
     }
 }
 
@@ -226,12 +236,14 @@ pub fn draw_table(
         let data_area_height = view_height - HEADER_HEIGHT - 1.0;
 
         let ctrl = ui.input(|i| i.modifiers.ctrl || i.modifiers.mac_cmd);
+        let shift = ui.input(|i| i.modifiers.shift);
         let arrow_up = ui.input(|i| i.key_pressed(egui::Key::ArrowUp));
         let arrow_down = ui.input(|i| i.key_pressed(egui::Key::ArrowDown));
         let arrow_left = ui.input(|i| i.key_pressed(egui::Key::ArrowLeft));
         let arrow_right = ui.input(|i| i.key_pressed(egui::Key::ArrowRight));
 
-        // Ctrl+Arrow: jump to first/last row or column (like Excel/Sheets)
+        // Ctrl+Arrow: jump to first/last row or column (like Excel/Sheets).
+        // Ctrl wins over Shift — Ctrl+Shift+Arrow still jumps, no range select.
         let jump_first_row = ctrl && arrow_up;
         let jump_last_row = ctrl && arrow_down;
         let jump_first_col = ctrl && arrow_left;
@@ -272,8 +284,29 @@ pub fn draw_table(
 
             let new_row = filtered_rows[new_display];
             state.selected_cell = Some((new_row, new_col));
-            state.selected_rows.clear();
-            state.selected_cols.clear();
+
+            // Shift + vertical arrow extends row selection from the anchor.
+            // Ctrl overrides this (Ctrl+Arrow is jump-to-edge).
+            let extending_rows = shift && !ctrl && (arrow_up || arrow_down);
+            if extending_rows {
+                let anchor = *state.selection_anchor_display.get_or_insert(cur_display);
+                let (lo, hi) = if anchor <= new_display {
+                    (anchor, new_display)
+                } else {
+                    (new_display, anchor)
+                };
+                state.selected_rows.clear();
+                for d in lo..=hi {
+                    if let Some(&r) = filtered_rows.get(d) {
+                        state.selected_rows.insert(r);
+                    }
+                }
+                state.selected_cols.clear();
+            } else {
+                state.selection_anchor_display = None;
+                state.selected_rows.clear();
+                state.selected_cols.clear();
+            }
 
             // Auto-scroll vertically to keep the selected row visible
             let row_top = new_display as f32 * row_height;
@@ -1261,6 +1294,7 @@ fn draw_data_row_direct(
                     // Single click selects just the cell; clear row/col multi-selection
                     state.selected_rows.clear();
                     state.selected_cols.clear();
+                    state.selection_anchor_display = None;
                 }
                 if response.double_clicked() {
                     state.selected_cell = Some((actual_row, col_idx));

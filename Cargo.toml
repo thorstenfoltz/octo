@@ -25,12 +25,13 @@ codegen-units = 1
 
 [dependencies]
 eframe = { version = "0.31", features = ["default"] }
-egui = "0.31"
+egui = { version = "0.31", features = ["serde"] }
 egui_extras = { version = "0.31", features = ["default"] }
 parquet = { version = "54", features = ["default"] }
 arrow = { version = "54", features = ["default"] }
 rfd = "0.15"
 serde = { version = "1", features = ["derive"] }
+strum = { version = "0.26", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 pdf-extract = "0.7"
 printpdf = "0.7"
