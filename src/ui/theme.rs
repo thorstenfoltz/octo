@@ -421,7 +421,10 @@ pub fn apply_theme(ctx: &egui::Context, mode: ThemeMode, font: FontSettings) {
     visuals.widgets.inactive.corner_radius = CornerRadius::same(4);
 
     visuals.widgets.hovered.bg_fill = colors.bg_hover;
-    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, colors.text_primary);
+    // Use accent for fg_stroke on hover so icon-style widgets that only draw
+    // strokes (e.g. egui's window close-X) visibly highlight. Buttons still
+    // look fine because their text is drawn over a hover-filled background.
+    visuals.widgets.hovered.fg_stroke = Stroke::new(1.5, colors.accent);
     visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, colors.accent);
     visuals.widgets.hovered.corner_radius = CornerRadius::same(4);
 

@@ -33,6 +33,7 @@ pub fn draw_status_bar(
     filtered_count: usize,
     search_active: bool,
     nav_input: &mut String,
+    nav_focus_requested: bool,
     zoom_percent: u32,
 ) -> StatusBarAction {
     let mut action = StatusBarAction::default();
@@ -130,6 +131,9 @@ pub fn draw_status_bar(
                     .hint_text("Go to R:C or col name")
                     .font(egui::FontId::new(11.0, egui::FontFamily::Monospace)),
             );
+            if nav_focus_requested {
+                nav_response.request_focus();
+            }
             if nav_response.lost_focus()
                 && ui.input(|i| i.key_pressed(egui::Key::Enter))
                 && !nav_input.is_empty()

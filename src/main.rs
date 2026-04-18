@@ -278,6 +278,8 @@ struct OctaApp {
     show_documentation_dialog: bool,
     /// Show the Update dialog
     show_update_dialog: bool,
+    /// Confirm before reloading the raw CSV/TSV file when un-aligning columns.
+    show_unalign_confirm: bool,
     /// Update check state shared with background thread
     update_state: Arc<Mutex<UpdateState>>,
     status_message: Option<(String, std::time::Instant)>,
@@ -287,6 +289,10 @@ struct OctaApp {
     zoom_percent: u32,
     /// Status bar navigation input buffer.
     nav_input: String,
+    /// Focus the status-bar navigation input next frame (Ctrl+G / Go To Cell).
+    nav_focus_requested: bool,
+    /// Confirm before reloading the file from disk and losing unsaved edits.
+    show_reload_confirm: bool,
     /// Pending modal table picker (DB sources containing multiple tables).
     pending_table_picker: Option<ui::table_picker::TablePickerState>,
 }
@@ -480,11 +486,14 @@ impl OctaApp {
             show_about_dialog: false,
             show_documentation_dialog: false,
             show_update_dialog: false,
+            show_unalign_confirm: false,
             update_state: Arc::new(Mutex::new(UpdateState::Idle)),
             status_message: None,
             recent_files,
             zoom_percent: 100,
             nav_input: String::new(),
+            nav_focus_requested: false,
+            show_reload_confirm: false,
             pending_table_picker: None,
         }
     }
@@ -920,6 +929,163 @@ impl OctaApp {
         }
     }
 
+    /// Apply a text transformation to every selected cell. The target cells are
+    /// the intersection of `selected_rows` × `selected_cols` when both are set;
+    /// otherwise every cell in the selected rows or columns; otherwise the
+    /// single selected cell. Non-string cells are skipped.
+    fn transform_selected_cells(&mut self, transform: fn(&str) -> String) {
+        let tab = &mut self.tabs[self.active_tab];
+        if tab.table.col_count() == 0 {
+            return;
+        }
+        let state = &tab.table_state;
+        let row_count = tab.table.row_count();
+        let col_count = tab.table.col_count();
+
+        let targets: Vec<(usize, usize)> = match (
+            !state.selected_rows.is_empty(),
+            !state.selected_cols.is_empty(),
+            state.selected_cell,
+        ) {
+            (true, true, _) => state
+                .selected_rows
+                .iter()
+                .flat_map(|&r| state.selected_cols.iter().map(move |&c| (r, c)))
+                .collect(),
+            (true, false, _) => state
+                .selected_rows
+                .iter()
+                .flat_map(|&r| (0..col_count).map(move |c| (r, c)))
+                .collect(),
+            (false, true, _) => state
+                .selected_cols
+                .iter()
+                .flat_map(|&c| (0..row_count).map(move |r| (r, c)))
+                .collect(),
+            (false, false, Some(rc)) => vec![rc],
+            _ => Vec::new(),
+        };
+
+        for (r, c) in targets {
+            if r >= row_count || c >= col_count {
+                continue;
+            }
+            if let Some(cv) = tab.table.get(r, c).cloned() {
+                if let data::CellValue::String(s) = cv {
+                    let new_val = transform(&s);
+                    if new_val != s {
+                        tab.table.set(r, c, data::CellValue::String(new_val));
+                    }
+                }
+            }
+        }
+    }
+
+    fn duplicate_selected_rows(&mut self) {
+        let tab = &mut self.tabs[self.active_tab];
+        if tab.table.col_count() == 0 {
+            return;
+        }
+        let mut rows: Vec<usize> = if !tab.table_state.selected_rows.is_empty() {
+            tab.table_state.selected_rows.iter().copied().collect()
+        } else if let Some((r, _)) = tab.table_state.selected_cell {
+            vec![r]
+        } else {
+            return;
+        };
+        // Insert from highest index to lowest so earlier insertions don't shift later targets.
+        rows.sort_unstable_by(|a, b| b.cmp(a));
+        let col_count = tab.table.col_count();
+        for r in rows {
+            if r >= tab.table.row_count() {
+                continue;
+            }
+            let values: Vec<data::CellValue> = (0..col_count)
+                .map(|c| {
+                    tab.table
+                        .get(r, c)
+                        .cloned()
+                        .unwrap_or(data::CellValue::Null)
+                })
+                .collect();
+            tab.table.insert_row(r + 1);
+            for (c, v) in values.into_iter().enumerate() {
+                tab.table.set(r + 1, c, v);
+            }
+        }
+        tab.filter_dirty = true;
+    }
+
+    fn delete_selected_rows(&mut self) {
+        let tab = &mut self.tabs[self.active_tab];
+        if tab.table.col_count() == 0 || tab.table.row_count() == 0 {
+            return;
+        }
+        let mut rows: Vec<usize> = if !tab.table_state.selected_rows.is_empty() {
+            tab.table_state.selected_rows.iter().copied().collect()
+        } else if let Some((r, _)) = tab.table_state.selected_cell {
+            vec![r]
+        } else {
+            return;
+        };
+        rows.sort_unstable_by(|a, b| b.cmp(a));
+        for r in rows {
+            if r < tab.table.row_count() {
+                tab.table.delete_row(r);
+            }
+        }
+        tab.table_state.selected_rows.clear();
+        tab.table_state.selected_cell = None;
+        tab.filter_dirty = true;
+    }
+
+    fn reload_active_file(&mut self) {
+        let Some(path) = self.tabs[self.active_tab].table.source_path.clone() else {
+            return;
+        };
+        let tab = &mut self.tabs[self.active_tab];
+        tab.table.discard_edits();
+        tab.table.clear_modified();
+        tab.raw_content_modified = false;
+        self.load_file(std::path::PathBuf::from(path));
+    }
+
+    fn cycle_view_mode(&mut self) {
+        let tab = &mut self.tabs[self.active_tab];
+        let has_raw = tab.raw_content.is_some();
+        let has_markdown = tab.table.format_name.as_deref() == Some("Markdown");
+        let has_notebook = tab.table.format_name.as_deref() == Some("Jupyter Notebook");
+        let has_pdf = !tab.pdf_page_images.is_empty();
+        let has_json = tab.json_value.is_some();
+        let has_table = tab.table.col_count() > 0 && !has_notebook;
+
+        let mut modes: Vec<ViewMode> = Vec::new();
+        if has_table {
+            modes.push(ViewMode::Table);
+        }
+        if has_raw {
+            modes.push(ViewMode::Raw);
+        }
+        if has_markdown {
+            modes.push(ViewMode::Markdown);
+        }
+        if has_notebook {
+            modes.push(ViewMode::Notebook);
+        }
+        if has_pdf {
+            modes.push(ViewMode::Pdf);
+        }
+        if has_json {
+            modes.push(ViewMode::JsonTree);
+        }
+        if modes.len() < 2 {
+            return;
+        }
+        let current_idx = modes.iter().position(|&m| m == tab.view_mode).unwrap_or(0);
+        let next = modes[(current_idx + 1) % modes.len()];
+        tab.view_mode = next;
+    }
+
     fn save_file_as(&mut self) {
         let mut dialog = rfd::FileDialog::new();
         for (label, exts) in self.registry.save_format_descriptions() {
@@ -934,6 +1100,58 @@ impl OctaApp {
 
         if let Some(path) = dialog.save_file() {
             self.do_save(path);
+        }
+    }
+
+    fn export_sql_result(&mut self) {
+        let Some(result) = self.tabs[self.active_tab].sql_result.clone() else {
+            return;
+        };
+        if result.col_count() == 0 {
+            return;
+        }
+
+        let mut dialog = rfd::FileDialog::new();
+        for (label, exts) in self.registry.save_format_descriptions() {
+            let ext_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
+            dialog = dialog.add_filter(&label, &ext_refs);
+        }
+        dialog = dialog.set_file_name("sql_result.csv");
+
+        let Some(path) = dialog.save_file() else {
+            return;
+        };
+
+        match self.registry.reader_for_path(&path) {
+            Some(reader) if reader.supports_write() => match reader.write_file(&path, &result) {
+                Ok(()) => {
+                    self.status_message = Some((
+                        format!("Exported to {}", path.display()),
+                        std::time::Instant::now(),
+                    ));
+                }
+                Err(e) => {
+                    self.status_message =
+                        Some((format!("Error exporting: {e}"), std::time::Instant::now()));
+                }
+            },
+            Some(reader) => {
+                self.status_message = Some((
+                    format!("Writing is not supported for {} format", reader.name()),
+                    std::time::Instant::now(),
+                ));
+            }
+            None => {
+                self.status_message = Some((
+                    format!(
+                        "No writer available for extension: {}",
+                        path.extension()
+                            .and_then(|e| e.to_str())
+                            .unwrap_or("(none)")
+                    ),
+                    std::time::Instant::now(),
+                ));
+            }
         }
     }
 
@@ -1389,18 +1607,25 @@ impl eframe::App for OctaApp {
         }
 
         // --- Global keyboard shortcuts ---
-        let ctrl_held = ctx.input(|i| i.modifiers.command);
-        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::N)) {
+        // All bindings are read from `self.settings.shortcuts`, which the user
+        // can customize via Settings → Shortcuts. Fixed key handling (Ctrl+1..9
+        // tab jumps, Esc closing the replace bar) stays hard-coded because it
+        // isn't user-configurable.
+        use octa::ui::shortcuts::ShortcutAction as SA;
+        let shortcuts = self.settings.shortcuts.clone();
+        let action_fired = |a: SA| ctx.input(|i| shortcuts.triggered(a, i));
+
+        if action_fired(SA::NewFile) {
             let mut new_tab = TabState::new(self.settings.default_search_mode);
             new_tab.view_mode = ViewMode::Raw;
             new_tab.raw_content = Some(String::new());
             self.tabs.push(new_tab);
             self.active_tab = self.tabs.len() - 1;
         }
-        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::O)) {
+        if action_fired(SA::OpenFile) {
             self.open_file();
         }
-        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::S)) {
+        if action_fired(SA::SaveFile) {
             if self.tabs[self.active_tab].table.source_path.is_some() {
                 self.save_file();
             } else if self.tabs[self.active_tab].table.col_count() > 0
@@ -1409,10 +1634,10 @@ impl eframe::App for OctaApp {
                 self.save_file_as();
             }
         }
-        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::F)) {
+        if action_fired(SA::FocusSearch) {
             self.search_focus_requested = true;
         }
-        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::H)) {
+        if action_fired(SA::ToggleFindReplace) {
             self.tabs[self.active_tab].show_replace_bar =
                 !self.tabs[self.active_tab].show_replace_bar;
             self.search_focus_requested = true;
@@ -1422,15 +1647,14 @@ impl eframe::App for OctaApp {
         {
             self.tabs[self.active_tab].show_replace_bar = false;
         }
-        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::Q)) {
+        if action_fired(SA::QuitApp) {
             if self.tabs[self.active_tab].is_modified() && !self.confirmed_close {
                 self.show_close_confirm = true;
             } else {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
         }
-        // Ctrl+W: close active tab
-        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::W)) {
+        if action_fired(SA::CloseTab) {
             if self.tabs[self.active_tab].is_modified() {
                 self.pending_close_tab = Some(self.active_tab);
                 self.show_close_confirm = true;
@@ -1441,21 +1665,13 @@ impl eframe::App for OctaApp {
                 ));
             }
         }
-        // Ctrl+Tab: next tab
-        if ctrl_held
-            && !ctx.input(|i| i.modifiers.shift)
-            && ctx.input(|i| i.key_pressed(egui::Key::Tab))
-        {
+        if action_fired(SA::NextTab) {
             self.active_tab = (self.active_tab + 1) % self.tabs.len();
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(
                 self.tabs[self.active_tab].title_display(),
             ));
         }
-        // Ctrl+Shift+Tab: previous tab
-        if ctrl_held
-            && ctx.input(|i| i.modifiers.shift)
-            && ctx.input(|i| i.key_pressed(egui::Key::Tab))
-        {
+        if action_fired(SA::PrevTab) {
             if self.active_tab == 0 {
                 self.active_tab = self.tabs.len() - 1;
             } else {
@@ -1465,7 +1681,8 @@ impl eframe::App for OctaApp {
                 self.tabs[self.active_tab].title_display(),
             ));
         }
-        // Ctrl+1 through Ctrl+9: jump to tab by number
+        // Ctrl+1..9: jump to tab by number (not user-configurable)
+        let ctrl_held = ctx.input(|i| i.modifiers.command);
         for n in 1..=9u8 {
             let key = match n {
                 1 => egui::Key::Num1,
@@ -1489,8 +1706,7 @@ impl eframe::App for OctaApp {
                 }
             }
         }
-        if ctrl_held
-            && ctx.input(|i| i.key_pressed(egui::Key::A))
+        if action_fired(SA::SelectAllRows)
             && self.tabs[self.active_tab].table.col_count() > 0
             && self.tabs[self.active_tab].table.row_count() > 0
         {
@@ -1504,20 +1720,85 @@ impl eframe::App for OctaApp {
             }
         }
 
-        // Ctrl+Plus: zoom in, Ctrl+Minus: zoom out, Ctrl+0: reset zoom
-        if ctrl_held
-            && ctx.input(|i| i.key_pressed(egui::Key::Plus) || i.key_pressed(egui::Key::Equals))
-        {
+        // ZoomIn also accepts Ctrl+Equals in addition to the user's binding —
+        // on US layouts Ctrl++ is typed as Ctrl+= by the keyboard driver.
+        let zoom_equals_fallback = shortcuts.combo(SA::ZoomIn).key == Some(egui::Key::Plus)
+            && ctx.input(|i| {
+                i.modifiers.command
+                    && !i.modifiers.alt
+                    && !i.modifiers.shift
+                    && i.key_pressed(egui::Key::Equals)
+            });
+        if action_fired(SA::ZoomIn) || zoom_equals_fallback {
             self.zoom_percent = (self.zoom_percent + 5).min(500);
             self.apply_zoom(ctx);
         }
-        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::Minus)) {
+        if action_fired(SA::ZoomOut) {
             self.zoom_percent = self.zoom_percent.saturating_sub(5).max(25);
             self.apply_zoom(ctx);
         }
-        if ctrl_held && ctx.input(|i| i.key_pressed(egui::Key::Num0)) {
+        if action_fired(SA::ZoomReset) {
             self.zoom_percent = 100;
             self.apply_zoom(ctx);
+        }
+
+        if action_fired(SA::LowercaseSelection) {
+            self.transform_selected_cells(str::to_lowercase);
+        }
+        if action_fired(SA::UppercaseSelection) {
+            self.transform_selected_cells(str::to_uppercase);
+        }
+        if action_fired(SA::SaveFileAs)
+            && (self.tabs[self.active_tab].table.col_count() > 0
+                || self.tabs[self.active_tab].raw_content_modified)
+        {
+            self.save_file_as();
+        }
+        if action_fired(SA::ReloadFile) && self.tabs[self.active_tab].table.source_path.is_some() {
+            if self.tabs[self.active_tab].is_modified() {
+                self.show_reload_confirm = true;
+            } else {
+                self.reload_active_file();
+            }
+        }
+        if action_fired(SA::GoToCell) {
+            self.nav_focus_requested = true;
+        }
+        if action_fired(SA::EditCell) && self.tabs[self.active_tab].table.col_count() > 0 {
+            let tab = &mut self.tabs[self.active_tab];
+            let binary_mode = self.settings.binary_display_mode;
+            if let Some((r, c)) = tab.table_state.selected_cell {
+                let text = tab
+                    .table
+                    .get(r, c)
+                    .map(|v| v.display_with_binary_mode(binary_mode))
+                    .unwrap_or_default();
+                tab.table_state.begin_edit(r, c, text);
+            }
+        }
+        if action_fired(SA::DuplicateRow) {
+            self.duplicate_selected_rows();
+        }
+        if action_fired(SA::DeleteRow) {
+            self.delete_selected_rows();
+        }
+        if action_fired(SA::InsertRowBelow) && self.tabs[self.active_tab].table.col_count() > 0 {
+            let tab = &mut self.tabs[self.active_tab];
+            let insert_at = tab
+                .table_state
+                .selected_cell
+                .map(|(r, _)| r + 1)
+                .unwrap_or(tab.table.row_count());
+            tab.table.insert_row(insert_at);
+            tab.filter_dirty = true;
+        }
+        if action_fired(SA::ToggleSqlPanel)
+            && self.tabs[self.active_tab].view_mode == ViewMode::Table
+        {
+            self.tabs[self.active_tab].sql_panel_open = !self.tabs[self.active_tab].sql_panel_open;
+        }
+        if action_fired(SA::CycleViewMode) {
+            self.cycle_view_mode();
         }
 
         // --- Handle close request ---
@@ -2314,7 +2595,7 @@ impl eframe::App for OctaApp {
         }
 
         // --- Settings dialog ---
-        if let Some(new_settings) = self.settings_dialog.show(ctx) {
+        if let Some(new_settings) = self.settings_dialog.show(ctx, self.logo_texture.as_ref()) {
             let icon_changed = self.settings_dialog.icon_changed;
             let font_changed = self.settings_dialog.font_changed;
             let theme_changed = self.settings_dialog.theme_changed;
@@ -2567,6 +2848,84 @@ Open **Help > Settings** to configure:
             self.show_documentation_dialog = open;
         }
 
+        // --- Un-align confirmation ---
+        if self.show_unalign_confirm {
+            let mut confirm = false;
+            let mut cancel = false;
+            egui::Window::new("Discard aligned edits?")
+                .resizable(false)
+                .collapsible(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label(
+                        "Turning off 'Align Columns' reloads the file from disk.\n\
+                         Unsaved changes in the raw view will be lost.",
+                    );
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("Reload and discard").clicked() {
+                            confirm = true;
+                        }
+                        if ui.button("Keep aligned").clicked() {
+                            cancel = true;
+                        }
+                        ui.add_space(12.0);
+                        ui.label(
+                            RichText::new(
+                                "(You can disable this warning in Settings → File-Specific.)",
+                            )
+                            .weak()
+                            .size(11.0),
+                        );
+                    });
+                });
+            if confirm {
+                let tab = &mut self.tabs[self.active_tab];
+                if let (Some(content), Some(path)) =
+                    (tab.raw_content.as_mut(), tab.table.source_path.clone())
+                {
+                    if let Ok(original) = std::fs::read_to_string(&path) {
+                        *content = original;
+                        tab.raw_content_modified = false;
+                        tab.raw_view_formatted = false;
+                    }
+                }
+                self.show_unalign_confirm = false;
+            } else if cancel {
+                self.show_unalign_confirm = false;
+            }
+        }
+
+        // --- Reload confirm dialog ---
+        if self.show_reload_confirm {
+            let mut confirm = false;
+            let mut cancel = false;
+            egui::Window::new("Discard unsaved changes?")
+                .resizable(false)
+                .collapsible(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label(
+                        "Reloading will replace your current edits with the contents on disk.",
+                    );
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("Reload and discard").clicked() {
+                            confirm = true;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            cancel = true;
+                        }
+                    });
+                });
+            if confirm {
+                self.show_reload_confirm = false;
+                self.reload_active_file();
+            } else if cancel {
+                self.show_reload_confirm = false;
+            }
+        }
+
         // --- About dialog ---
         if self.show_about_dialog {
             egui::Window::new("About Octa")
@@ -2683,6 +3042,7 @@ Open **Help > Settings** to configure:
                     filtered_count,
                     search_active,
                     &mut self.nav_input,
+                    std::mem::take(&mut self.nav_focus_requested),
                     self.zoom_percent,
                 )
             })
@@ -2745,14 +3105,42 @@ Open **Help > Settings** to configure:
                 let mut snapshot = tab.table.clone();
                 snapshot.apply_edits();
                 match octa::sql::run_query(&snapshot, &query) {
-                    Ok(result) => {
-                        tab.sql_result = Some(result);
-                        tab.sql_error = None;
-                    }
+                    Ok(outcome) => match outcome.kind {
+                        octa::sql::QueryKind::Select => {
+                            tab.sql_result = Some(outcome.table);
+                            tab.sql_error = None;
+                        }
+                        octa::sql::QueryKind::Mutation => {
+                            // Apply the mutation to the base table directly so
+                            // INSERT / UPDATE / DELETE affect the data, not just
+                            // a result set. Selection / widths / per-tab UI state
+                            // are reset because row/column identity may have changed.
+                            tab.table = outcome.table;
+                            tab.table_state = TableViewState::default();
+                            tab.filter_dirty = true;
+                            tab.sql_result = None;
+                            tab.sql_error = None;
+                            let rows = tab.table.row_count();
+                            let affected = outcome.affected.unwrap_or(0);
+                            self.status_message = Some((
+                                format!(
+                                    "SQL applied: {} row(s) affected — table now {} row(s)",
+                                    affected, rows
+                                ),
+                                std::time::Instant::now(),
+                            ));
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Title(
+                                self.tabs[self.active_tab].title_display(),
+                            ));
+                        }
+                    },
                     Err(e) => {
                         tab.sql_error = Some(e.to_string());
                     }
                 }
+            }
+            if sql_action.export {
+                self.export_sql_result();
             }
         }
 
@@ -2811,13 +3199,17 @@ Open **Help > Settings** to configure:
 
             // --- Raw text view ---
             if self.tabs[self.active_tab].view_mode == ViewMode::Raw {
-                view_modes::render_raw_view(
+                let raw_action = view_modes::render_raw_view(
                     ui,
                     &mut self.tabs[self.active_tab],
                     self.theme_mode,
                     self.settings.color_aligned_columns,
                     self.settings.tab_size,
+                    self.settings.warn_raw_align_reload,
                 );
+                if raw_action.confirm_unalign {
+                    self.show_unalign_confirm = true;
+                }
                 return;
             }
 

@@ -21,14 +21,24 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [[ -f "$SCRIPT_DIR/octa" ]]; then
 	BINARY="$SCRIPT_DIR/octa"
 	echo "Using pre-built binary."
-elif command -v cargo &>/dev/null; then
+elif [[ -f "$SCRIPT_DIR/target/release/octa" ]]; then
+	BINARY="$SCRIPT_DIR/target/release/octa"
+	echo "Using previously built binary at target/release/octa."
+else
+	if ! command -v cargo &>/dev/null; then
+		echo "Error: No pre-built binary found next to this script and Rust/Cargo is not installed."
+		echo
+		echo "You have two options:"
+		echo "  1. Download a pre-built release from"
+		echo "     https://github.com/thorstenfoltz/octa/releases"
+		echo "     and either place the 'octa' binary next to this script and rerun,"
+		echo "     or just copy it to a directory on your PATH (no install needed)."
+		echo "  2. Install the Rust toolchain from https://rustup.rs/ and rerun this script."
+		exit 1
+	fi
 	echo "Building Octa (release)..."
 	cargo build --release
 	BINARY="$SCRIPT_DIR/target/release/octa"
-else
-	echo "Error: No pre-built binary found and cargo is not installed."
-	echo "Install Rust from https://rustup.rs/ or download a pre-built release."
-	exit 1
 fi
 
 echo "Installing binary to $BIN_DIR..."
