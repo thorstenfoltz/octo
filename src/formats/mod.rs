@@ -10,7 +10,10 @@ pub mod markdown_reader;
 pub mod orc_reader;
 pub mod parquet_reader;
 pub mod pdf_reader;
+pub mod sas_reader;
+pub mod spss_reader;
 pub mod sqlite_reader;
+pub mod stata_reader;
 pub mod text_reader;
 pub mod toml_reader;
 pub mod xml_reader;
@@ -98,6 +101,9 @@ impl FormatRegistry {
         registry.register(Box::new(markdown_reader::MarkdownReader));
         registry.register(Box::new(sqlite_reader::SqliteReader));
         registry.register(Box::new(duckdb_reader::DuckDbReader));
+        registry.register(Box::new(sas_reader::SasFormatReader));
+        registry.register(Box::new(spss_reader::SpssReader));
+        registry.register(Box::new(stata_reader::StataReader));
         registry.register(Box::new(text_reader::TextReader));
         registry
     }

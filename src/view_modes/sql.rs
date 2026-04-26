@@ -3,6 +3,7 @@ use crate::ui::settings::SqlPanelPosition;
 
 use eframe::egui;
 use octa::data::CellValue;
+use octa::ui::status_bar::format_number;
 
 /// User actions emitted by the SQL view in a single frame.
 #[derive(Debug, Clone, Default)]
@@ -252,7 +253,9 @@ pub fn render_sql_view(
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new(format!(
-                        "\u{26a0} Result based on {loaded} of {total} rows currently loaded."
+                        "\u{26a0} Result based on {} of {} rows currently loaded.",
+                        format_number(loaded),
+                        format_number(total),
                     ))
                     .small()
                     .color(egui::Color32::from_rgb(200, 160, 50)),
@@ -306,6 +309,31 @@ pub fn render_sql_view(
         ui.add_space(2.0);
     }
     let editor_response = editor_response.expect("editor panel always renders");
+
+    // Right-click context menu on the SQL editor: selection-aware Copy +
+    // whole-buffer Copy All.
+    {
+        let buffer = tab.sql_query.clone();
+        editor_response.clone().context_menu(|ui| {
+            let selection = super::text_ops::selected_text(ui.ctx(), editor_id, &buffer);
+            let copy_label = if selection.is_some() {
+                "Copy"
+            } else {
+                "Copy (no selection)"
+            };
+            let copy_btn = ui.add_enabled(selection.is_some(), egui::Button::new(copy_label));
+            if copy_btn.clicked() {
+                if let Some(s) = selection {
+                    ui.ctx().copy_text(s);
+                }
+                ui.close_menu();
+            }
+            if ui.button("Copy All").clicked() {
+                ui.ctx().copy_text(buffer.clone());
+                ui.close_menu();
+            }
+        });
+    }
 
     // Apply the chosen suggestion: replace the current prefix, move the caret
     // to the end of the inserted text, refocus the editor.
@@ -394,11 +422,11 @@ fn draw_sql_editor(
             let line_count = tab.sql_query.lines().count().max(1);
             let trailing = tab.sql_query.ends_with('\n');
             let effective = if trailing { line_count + 1 } else { line_count };
-            let digits = effective.to_string().len().max(2);
+            let digits = format_number(effective).len().max(2);
             let desired_rows = 8.max(effective);
 
             let numbers: String = (1..=effective)
-                .map(|n| format!("{n:>width$}", width = digits))
+                .map(|n| format!("{:>width$}", format_number(n), width = digits))
                 .collect::<Vec<_>>()
                 .join("\n");
 

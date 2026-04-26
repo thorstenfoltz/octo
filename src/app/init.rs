@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use eframe::egui;
 
-use octa::ui::settings::{AppSettings, SettingsDialog};
+use octa::ui::settings::{AppSettings, IconVariant, SettingsDialog};
 
 use super::state::{OctaApp, TabState, UpdateState};
 
@@ -41,7 +41,11 @@ pub(crate) const COLUMN_TYPES: &[&str] = &[
 ];
 
 impl OctaApp {
-    pub(crate) fn new(initial_file: Option<std::path::PathBuf>, settings: AppSettings) -> Self {
+    pub(crate) fn new(
+        initial_file: Option<std::path::PathBuf>,
+        settings: AppSettings,
+        resolved_icon: IconVariant,
+    ) -> Self {
         let theme_mode = settings.default_theme;
         let search_mode = settings.default_search_mode;
         let recent_files = Self::load_recent_files();
@@ -52,6 +56,7 @@ impl OctaApp {
             registry: octa::formats::FormatRegistry::new(),
             theme_mode,
             settings,
+            resolved_icon,
             settings_dialog: SettingsDialog::default(),
             search_focus_requested: false,
             show_close_confirm: false,

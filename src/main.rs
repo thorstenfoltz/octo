@@ -63,7 +63,8 @@ fn main() -> eframe::Result<()> {
     };
 
     let settings = AppSettings::load();
-    let icon_svg = settings.icon_variant.svg_source();
+    let resolved_icon = settings.icon_variant.resolve();
+    let icon_svg = resolved_icon.svg_source();
     let icon = render_icon(icon_svg);
     let default_theme = settings.default_theme;
 
@@ -93,7 +94,11 @@ fn main() -> eframe::Result<()> {
                     custom_path: Some(settings.custom_font_path.as_str()),
                 },
             );
-            Ok(Box::new(OctaApp::new(initial_file, settings)))
+            Ok(Box::new(OctaApp::new(
+                initial_file,
+                settings,
+                resolved_icon,
+            )))
         }),
     )
 }

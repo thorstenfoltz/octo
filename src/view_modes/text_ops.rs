@@ -19,7 +19,11 @@ impl CaseOp {
 }
 
 /// Translate a character range from egui's cursor into a byte range.
-fn char_range_to_byte_range(s: &str, start: usize, end: usize) -> std::ops::Range<usize> {
+pub(crate) fn char_range_to_byte_range(
+    s: &str,
+    start: usize,
+    end: usize,
+) -> std::ops::Range<usize> {
     let mut byte_start = s.len();
     let mut byte_end = s.len();
     for (char_idx, (byte_idx, _)) in s.char_indices().enumerate() {
@@ -70,6 +74,25 @@ pub fn apply_case_to_selection(
     }
     buffer.replace_range(byte_range, &replaced);
     true
+}
+
+/// Returns the substring currently selected in the TextEdit identified by
+/// `text_edit_id`. Returns `None` when there is no selection or when the
+/// selection is empty.
+pub fn selected_text(ctx: &egui::Context, text_edit_id: egui::Id, buffer: &str) -> Option<String> {
+    let state = egui::TextEdit::load_state(ctx, text_edit_id)?;
+    let range = state.cursor.char_range()?;
+    let a = range.primary.index;
+    let b = range.secondary.index;
+    let (start, end) = if a <= b { (a, b) } else { (b, a) };
+    if start >= end {
+        return None;
+    }
+    let byte_range = char_range_to_byte_range(buffer, start, end);
+    if byte_range.start >= byte_range.end || byte_range.end > buffer.len() {
+        return None;
+    }
+    Some(buffer[byte_range].to_string())
 }
 
 #[cfg(test)]

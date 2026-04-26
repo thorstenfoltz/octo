@@ -20,6 +20,9 @@ An application for viewing data files. Octa opens files in a spreadsheet-like ta
 | HDF5                | yes  | no    |
 | SQLite              | yes  | yes   |
 | DuckDB              | yes  | yes   |
+| SAS (.sas7bdat)     | yes  | no    |
+| SPSS (.sav, .zsav)  | yes  | yes   |
+| Stata (.dta)        | yes  | yes   |
 | XML                 | yes  | yes   |
 | TOML                | yes  | yes   |
 | YAML                | yes  | yes   |
@@ -67,7 +70,7 @@ Unknown file extensions are opened as plain text.
 
 - CSV delimiter auto-detection (comma, semicolon, pipe, tab) and manual selection
 - Auto-update check from GitHub releases
-- Cross-platform: Linux and Windows
+- Cross-platform: Linux, macOS, and Windows
 
 ## Installation
 
@@ -131,11 +134,43 @@ modify your `PATH`; open Octa via the Start Menu shortcut or by running
 launch Windows shows *"Windows protected your PC"*. Click **More info**,
 then **Run anyway**. Subsequent launches open without the prompt.
 
+### macOS
+
+The simplest option is to **download the macOS `.app` bundle** from the
+[releases page](https://github.com/thorstenfoltz/octa/releases). The
+release artifact targets Apple Silicon. Drop `Octa.app` into
+`/Applications` (or anywhere else) and double-click to launch.
+
+**First-launch unsigned-app warning:** Octa is not code-signed or
+notarized, so macOS quarantines the app the first time you launch it.
+You'll see *"Octa.app cannot be opened because the developer cannot be
+verified"*. Two ways around it:
+
+- Right-click the app icon in Finder, choose **Open**, then click **Open**
+  in the confirmation dialog. macOS remembers the choice for that copy
+  of the app.
+- Or remove the quarantine attribute from a terminal:
+
+```bash
+xattr -d com.apple.quarantine /Applications/Octa.app
+```
+
+To build from source, install the Rust toolchain (<https://rustup.rs/>)
+and the native dependencies via Homebrew, then `cargo build --release`:
+
+```bash
+brew install mupdf-tools harfbuzz freetype jpeg openjpeg gtk+3
+cargo build --release
+```
+
+The resulting binary lives at `target/release/octa`.
+
 ## Configuration
 
 Settings are stored in:
 
 - **Linux:** `$XDG_CONFIG_HOME/octa/settings.toml` (defaults to `~/.config/octa/settings.toml`)
+- **macOS:** `~/Library/Application Support/Octa/settings.toml`
 - **Windows:** `%APPDATA%\Octa\settings.toml`
 
 ## License

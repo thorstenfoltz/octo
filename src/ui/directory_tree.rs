@@ -169,6 +169,13 @@ fn draw_dir(
         let is_open = is_dir && state.expanded.contains(&entry);
         let resp = draw_row(ui, depth, is_dir, is_open, &name)
             .on_hover_text(entry.to_string_lossy().as_ref());
+        let copy_name = name.clone();
+        resp.context_menu(|ui| {
+            if ui.button("Copy name").clicked() {
+                ui.ctx().copy_text(copy_name.clone());
+                ui.close_menu();
+            }
+        });
         if resp.clicked() {
             if is_dir {
                 if state.expanded.contains(&entry) {

@@ -44,7 +44,9 @@ pub(crate) fn render_settings_dialog(app: &mut OctaApp, ctx: &egui::Context) {
         app.apply_zoom(ctx);
     }
     if icon_changed {
-        let svg_src = app.settings.icon_variant.svg_source();
+        // Re-roll for `Random`; identity for any concrete variant.
+        app.resolved_icon = app.settings.icon_variant.resolve();
+        let svg_src = app.resolved_icon.svg_source();
         let opt = resvg::usvg::Options::default();
         if let Ok(tree) = resvg::usvg::Tree::from_str(svg_src, &opt) {
             let size = tree.size();
