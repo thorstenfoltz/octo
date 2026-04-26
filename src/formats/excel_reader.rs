@@ -1,7 +1,7 @@
 use crate::data::{CellValue, ColumnInfo, DataTable};
 use crate::formats::FormatReader;
 use anyhow::Result;
-use calamine::{Data, Reader, open_workbook_auto};
+use calamine::{open_workbook_auto, Data, Reader};
 use rust_xlsxwriter::Workbook;
 use std::path::Path;
 

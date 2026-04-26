@@ -1,5 +1,8 @@
 ## Features
 
+- Read SAS (`.sas7bdat`), SPSS (`.sav`, `.zsav`), and Stata (`.dta`) files via pure-Rust parsers — no system libraries required
+- Add a `Random` icon-color mode and make it the new default: every Octa launch now picks a fresh color from the 12 built-in palettes
+- Right-click → Copy / Copy All available across content views (raw text editor, SQL editor, PDF view, directory tree); selection-aware where the view has a TextEdit selection
 - Add a macOS release artifact: tagged releases now publish a native Apple Silicon `.app` bundle alongside the existing platform builds
 - Add macOS installation guidance covering unsigned-app startup behavior and Finder / terminal launch options
 - Add cut support and configurable copy, cut, and paste shortcuts, with context-menu entries and table-side handling for remapped bindings

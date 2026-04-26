@@ -8,7 +8,7 @@ use eframe::egui;
 use octa::data::{self, DataTable, ViewMode};
 use octa::formats::FormatRegistry;
 use octa::ui;
-use ui::settings::{AppSettings, SettingsDialog};
+use ui::settings::{AppSettings, IconVariant, SettingsDialog};
 use ui::table_view::TableViewState;
 use ui::theme::ThemeMode;
 
@@ -103,6 +103,10 @@ pub(crate) struct OctaApp {
     pub(crate) registry: FormatRegistry,
     pub(crate) theme_mode: ThemeMode,
     pub(crate) settings: AppSettings,
+    /// The concrete icon variant in use for this session. Equals
+    /// `settings.icon_variant` for non-Random; for Random, holds the
+    /// once-per-launch rolled color so toolbar/window icons stay consistent.
+    pub(crate) resolved_icon: IconVariant,
     pub(crate) settings_dialog: SettingsDialog,
     /// Whether the search text field should be focused next frame.
     pub(crate) search_focus_requested: bool,

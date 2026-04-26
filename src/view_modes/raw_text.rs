@@ -261,8 +261,22 @@ pub fn render_raw_view(
                 });
             });
 
-        // Right-click context menu
+        // Right-click context menu (selection-aware Copy + whole-content Copy All)
+        let editor_id = egui::Id::new("raw_text_editor");
         raw_area.context_menu(|ui| {
+            let selection = super::text_ops::selected_text(ui.ctx(), editor_id, &content_for_copy);
+            let copy_label = if selection.is_some() {
+                "Copy"
+            } else {
+                "Copy (no selection)"
+            };
+            let copy_btn = ui.add_enabled(selection.is_some(), egui::Button::new(copy_label));
+            if copy_btn.clicked() {
+                if let Some(s) = selection {
+                    ui.ctx().copy_text(s);
+                }
+                ui.close_menu();
+            }
             if ui.button("Copy All").clicked() {
                 ui.ctx().copy_text(content_for_copy.clone());
                 ui.close_menu();

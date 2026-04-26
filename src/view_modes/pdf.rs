@@ -71,7 +71,7 @@ pub fn render_pdf_view(
                     // Selectable text below the page image
                     if !page_text.is_empty() {
                         ui.add_space(4.0);
-                        egui::Frame::new()
+                        let frame_resp = egui::Frame::new()
                             .fill(colors.bg_secondary)
                             .stroke(Stroke::new(1.0, colors.border_subtle))
                             .corner_radius(4.0)
@@ -89,6 +89,18 @@ pub fn render_pdf_view(
                                     .selectable(true),
                                 );
                             });
+                        let copy_page = page_text.clone();
+                        let copy_all_pages = tab.pdf_page_texts.join("\n\n");
+                        frame_resp.response.context_menu(|ui| {
+                            if ui.button("Copy page text").clicked() {
+                                ui.ctx().copy_text(copy_page.clone());
+                                ui.close_menu();
+                            }
+                            if ui.button("Copy all pages").clicked() {
+                                ui.ctx().copy_text(copy_all_pages.clone());
+                                ui.close_menu();
+                            }
+                        });
                     }
                     ui.add_space(16.0);
                     ui.separator();

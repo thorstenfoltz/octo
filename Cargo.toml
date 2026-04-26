@@ -59,6 +59,11 @@ arrow58 = { package = "arrow", version = "58", default-features = false, feature
 hdf5-reader = "0.2.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
 duckdb = { version = "1", features = ["bundled"] }
+rand = "0.8"
+sas7bdat = { version = "0.2", default-features = false, features = ["time"] }
+ambers = "0.4"
+arrow57 = { package = "arrow", version = "57", default-features = false }
+dta = "0.4"
 
 [build-dependencies]
 winresource = "0.1"

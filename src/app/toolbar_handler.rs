@@ -66,7 +66,7 @@ impl OctaApp {
             return;
         }
         let opt = resvg::usvg::Options::default();
-        let svg_src = self.settings.icon_variant.svg_source();
+        let svg_src = self.resolved_icon.svg_source();
         let Ok(tree) = resvg::usvg::Tree::from_str(svg_src, &opt) else {
             return;
         };

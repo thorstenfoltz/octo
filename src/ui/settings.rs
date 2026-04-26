@@ -130,8 +130,13 @@ impl WindowSize {
 }
 
 /// Available icon color variants (matching assets/octa-*.svg files).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `Random` is a meta-variant: it stays as `Random` in the persisted settings,
+/// but at every Octa launch it picks one of the concrete variants via
+/// [`IconVariant::resolve`] and uses that for the actual app/window icon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum IconVariant {
+    Random,
     Rose,
     Amber,
     Blue,
@@ -148,6 +153,23 @@ pub enum IconVariant {
 
 impl IconVariant {
     pub const ALL: &[IconVariant] = &[
+        Self::Random,
+        Self::Rose,
+        Self::Amber,
+        Self::Blue,
+        Self::Cyan,
+        Self::Emerald,
+        Self::Indigo,
+        Self::Lime,
+        Self::Orange,
+        Self::Purple,
+        Self::Red,
+        Self::Slate,
+        Self::Teal,
+    ];
+
+    /// All concrete (non-Random) variants — what `Random` rolls between.
+    pub const CONCRETE: &[IconVariant] = &[
         Self::Rose,
         Self::Amber,
         Self::Blue,
@@ -164,6 +186,7 @@ impl IconVariant {
 
     pub fn label(self) -> &'static str {
         match self {
+            Self::Random => "Random",
             Self::Rose => "Rose",
             Self::Amber => "Amber",
             Self::Blue => "Blue",
@@ -180,8 +203,11 @@ impl IconVariant {
     }
 
     /// Returns the SVG source for this icon variant (compile-time embedded).
+    /// For `Random`, returns a multi-color rosette used only as a preview.
+    /// Callers that render the actual app icon must call [`Self::resolve`] first.
     pub fn svg_source(self) -> &'static str {
         match self {
+            Self::Random => include_str!("../../assets/octa-random.svg"),
             Self::Rose => include_str!("../../assets/octa-rose.svg"),
             Self::Amber => include_str!("../../assets/octa-amber.svg"),
             Self::Blue => include_str!("../../assets/octa-blue.svg"),
@@ -197,10 +223,24 @@ impl IconVariant {
         }
     }
 
+    /// Resolve a concrete variant: returns `self` for any concrete variant; for
+    /// `Random`, picks one of [`Self::CONCRETE`] uniformly at random.
+    pub fn resolve(self) -> IconVariant {
+        use rand::seq::SliceRandom;
+        if self == Self::Random {
+            *Self::CONCRETE
+                .choose(&mut rand::thread_rng())
+                .unwrap_or(&Self::Rose)
+        } else {
+            self
+        }
+    }
+
     /// Preview color for the icon picker UI.
     pub fn preview_color(self) -> egui::Color32 {
         use egui::Color32;
         match self {
+            Self::Random => Color32::from_rgb(0x99, 0x99, 0x99),
             Self::Rose => Color32::from_rgb(0xe1, 0x1d, 0x48),
             Self::Amber => Color32::from_rgb(0xf5, 0x9e, 0x0b),
             Self::Blue => Color32::from_rgb(0x3b, 0x82, 0xf6),
@@ -321,7 +361,7 @@ impl Default for AppSettings {
         Self {
             font_size: 13.0,
             default_theme: ThemeMode::Light,
-            icon_variant: IconVariant::Rose,
+            icon_variant: IconVariant::Random,
             default_search_mode: SearchMode::Plain,
             show_row_numbers: true,
             alternating_row_colors: true,
