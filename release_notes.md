@@ -6,7 +6,7 @@
 - Surface **Undo / Redo in the Edit menu**, with the current keybinding shown next to each entry and disabled state when the stacks are empty
 - Move **Undo / Redo into the customizable shortcut system** (Settings > Shortcuts) so the default Ctrl+Z / Ctrl+Y bindings can be rebound; they now appear in the auto-generated shortcut documentation
 - Add two new UI themes — **Manga** (cream-paper light theme with sakura-pink and sky-blue accents on bold ink-black text) and **Gentleman** (deep walnut and burgundy dark theme with champagne-gold accents on warm parchment text)
-- New **R Dataset** reader for `.rds` files (read-only) — opens `data.frame` and `tibble` saved with `saveRDS()`; supports logical, integer, double, character, factor, `Date`, and `POSIXct` columns, 
+- New **R Dataset** reader for `.rds` files (read-only) — opens `data.frame` and `tibble` saved with `saveRDS()`; supports logical, integer, double, character, factor, `Date`, and `POSIXct` columns,
   with `NA` rendered as empty cells. Powered by the pure-Rust `rds2rust` crate, no R runtime required
 - New **DBF / dBase** reader and writer — opens the `.dbf` sidecars of shapefile bundles, government and legacy data exports, and dBase III/IV/FoxPro files. Round-trip via the pure-Rust `dbase` crate
 - **HDF5 compound datasets** now decode real values — DataFrames written by pandas/PyTables (`df.to_hdf(..., format="table")`) previously rendered every cell as the literal placeholder `(compound)`; numeric and fixed-string fields now show actual data
