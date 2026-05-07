@@ -4,11 +4,31 @@
 use std::sync::{Arc, Mutex};
 
 use octa::data::{self, DataTable, ViewMode};
-use octa::formats::{self};
+use octa::formats::{self, FormatReader};
 use octa::ui;
 use octa::ui::table_view::TableViewState;
 
 use super::state::{OctaApp, TabState};
+
+/// Whether a format-name string belongs to a text-shaped reader (one whose
+/// `read_file` opens UTF-8 text on disk). Only these formats are eligible to
+/// fall back to a raw text view when parsing fails — binary formats would
+/// render as garbage. Update this set when adding a new text reader.
+fn format_is_text_fallback_eligible(format_name: &str) -> bool {
+    matches!(
+        format_name,
+        "CSV"
+            | "TSV"
+            | "JSON"
+            | "JSONL"
+            | "XML"
+            | "YAML"
+            | "TOML"
+            | "Markdown"
+            | "Jupyter Notebook"
+            | "Text"
+    )
+}
 
 /// Whether the post-load date-inference pass should run for a given format.
 /// Binary formats with their own typed-date support (Parquet, Arrow, SQLite,
@@ -306,8 +326,52 @@ impl OctaApp {
         match reader.read_file(&path) {
             Ok(table) => self.apply_loaded_table(path, table),
             Err(e) => {
+                let format_name = reader.name().to_string();
+                if format_is_text_fallback_eligible(&format_name) {
+                    self.fallback_to_raw_text(path, format_name, e);
+                } else {
+                    self.status_message = Some((
+                        format!("Error reading file: {}", e),
+                        std::time::Instant::now(),
+                    ));
+                }
+            }
+        }
+    }
+
+    /// Open a file as plain text after a parse failure, surfacing a banner
+    /// above the raw view that explains the original format's error. Only
+    /// invoked for text-shaped formats — binary formats (parquet, xlsx, …)
+    /// would render as garbage and skip this fallback.
+    fn fallback_to_raw_text(
+        &mut self,
+        path: std::path::PathBuf,
+        format_name: String,
+        err: anyhow::Error,
+    ) {
+        let file_size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        if file_size > 500_000_000 {
+            self.status_message = Some((
+                format!(
+                    "Failed to parse {format_name}: {err}. File too large (>500MB) for raw fallback."
+                ),
+                std::time::Instant::now(),
+            ));
+            return;
+        }
+        let banner = format!("Failed to parse as {format_name}: {err}");
+        match formats::text_reader::TextReader.read_file(&path) {
+            Ok(table) => {
+                self.apply_loaded_table(path, table);
+                let tab = &mut self.tabs[self.active_tab];
+                tab.view_mode = ViewMode::Raw;
+                tab.parse_error_banner = Some(banner);
+            }
+            Err(text_err) => {
                 self.status_message = Some((
-                    format!("Error reading file: {}", e),
+                    format!(
+                        "Failed to parse as {format_name}: {err}. Raw text fallback also failed: {text_err}"
+                    ),
                     std::time::Instant::now(),
                 ));
             }
@@ -426,7 +490,9 @@ impl OctaApp {
             tab.sql_panel_open =
                 self.settings.sql_panel_default_open && tab.view_mode == ViewMode::Table;
 
+            tab.parse_error_banner = None;
             tab.json_value = None;
+            tab.yaml_value = None;
             tab.json_tree_expanded.clear();
             if matches!(
                 tab.table.format_name.as_deref(),
@@ -435,10 +501,17 @@ impl OctaApp {
                 if let Some(ref content) = tab.raw_content {
                     tab.json_value = serde_json::from_str(content).ok();
                 }
+            } else if matches!(tab.table.format_name.as_deref(), Some("YAML")) {
+                if let Some(ref content) = tab.raw_content {
+                    tab.yaml_value = serde_yaml::from_str::<serde_yaml::Value>(content)
+                        .ok()
+                        .map(|v| octa::formats::yaml_reader::yaml_to_json(&v));
+                }
             }
-            tab.json_file_max_depth = tab
-                .json_value
-                .as_ref()
+            // Both trees share the depth+expand tracking fields, since only
+            // one tree view is shown per tab at a time.
+            let tree_root = tab.json_value.as_ref().or(tab.yaml_value.as_ref());
+            tab.json_file_max_depth = tree_root
                 .map(octa::data::json_util::max_json_depth)
                 .unwrap_or(0);
             tab.json_expand_depth = tab.json_file_max_depth;

@@ -45,6 +45,8 @@ impl OctaApp {
                     tab.table.format_name.as_deref() == Some("Markdown"),
                     tab.table.format_name.as_deref() == Some("Jupyter Notebook"),
                     tab.json_value.is_some(),
+                    tab.yaml_value.is_some(),
+                    self.readonly_mode,
                     tab.sql_panel_open,
                     self.zoom_percent,
                     self.logo_texture.as_ref(),
@@ -204,6 +206,10 @@ impl OctaApp {
         if action.toggle_sql_panel {
             let tab = &mut self.tabs[self.active_tab];
             tab.sql_panel_open = !tab.sql_panel_open;
+        }
+
+        if action.toggle_readonly {
+            self.toggle_readonly();
         }
 
         if action.search_focus {

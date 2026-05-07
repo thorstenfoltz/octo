@@ -117,7 +117,11 @@ impl OctaApp {
                 return;
             }
             if self.tabs[self.active_tab].view_mode == ViewMode::Markdown {
-                view_modes::render_markdown_view(ui, &mut self.tabs[self.active_tab]);
+                view_modes::render_markdown_view(
+                    ui,
+                    &mut self.tabs[self.active_tab],
+                    self.readonly_mode,
+                );
                 return;
             }
             if self.tabs[self.active_tab].view_mode == ViewMode::Raw {
@@ -129,6 +133,7 @@ impl OctaApp {
                     self.settings.color_aligned_columns,
                     self.settings.tab_size,
                     self.settings.warn_raw_align_reload,
+                    self.readonly_mode,
                 );
                 if raw_action.confirm_unalign {
                     self.show_unalign_confirm = true;
@@ -137,6 +142,14 @@ impl OctaApp {
             }
             if self.tabs[self.active_tab].view_mode == ViewMode::JsonTree {
                 view_modes::render_json_tree_view(
+                    ui,
+                    &mut self.tabs[self.active_tab],
+                    self.theme_mode,
+                );
+                return;
+            }
+            if self.tabs[self.active_tab].view_mode == ViewMode::YamlTree {
+                view_modes::render_yaml_tree_view(
                     ui,
                     &mut self.tabs[self.active_tab],
                     self.theme_mode,
@@ -154,6 +167,7 @@ impl OctaApp {
             self.handle_table_clipboard(ctx);
 
             let os_has_clipboard = self.os_clipboard_has_text();
+            let readonly = self.readonly_mode;
             let tab = &mut self.tabs[self.active_tab];
             let filtered = tab.filtered_rows.clone();
             let os_has_clip = tab.table_state.clipboard.is_some() || os_has_clipboard;
@@ -173,6 +187,7 @@ impl OctaApp {
                 self.settings.binary_display_mode,
                 self.welcome_logo_texture.as_ref(),
                 &self.settings.shortcuts,
+                readonly,
             );
 
             self.handle_table_interaction(interaction);

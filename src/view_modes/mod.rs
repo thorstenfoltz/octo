@@ -6,7 +6,7 @@ mod raw_text;
 mod sql;
 pub mod text_ops;
 
-pub use json_tree::render_json_tree_view;
+pub use json_tree::{render_json_tree_view, render_yaml_tree_view};
 pub use markdown::render_markdown_view;
 pub use notebook::render_notebook_view;
 pub use pdf::render_pdf_view;

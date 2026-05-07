@@ -11,24 +11,25 @@ An application for viewing data files. Octa opens files in a spreadsheet-like ta
 | Format              | Read | Write |
 |---------------------|------|-------|
 | Parquet             | yes  | yes   |
-| CSV / TSV           | yes  | yes   |
-| JSON / JSON Lines   | yes  | yes   |
-| Excel               | yes  | yes   |
+| CSV/TSV             | yes  | yes   |
+| JSON/JSON Lines     | yes  | yes   |
+| Excel/ODS           | yes  | yes   |
 | Arrow IPC / Feather | yes  | yes   |
 | Avro                | yes  | yes   |
 | ORC                 | yes  | yes   |
 | HDF5                | yes  | no    |
+| NetCDF v3 (.nc)     | yes  | no    |
 | SQLite              | yes  | yes   |
 | DuckDB              | yes  | yes   |
 | SAS (.sas7bdat)     | yes  | no    |
 | SPSS (.sav, .zsav)  | yes  | yes   |
 | Stata (.dta)        | yes  | yes   |
 | R (.rds)            | yes  | no    |
-| DBF / dBase (.dbf)  | yes  | yes   |
+| DBF/dBase (.dbf)    | yes  | yes   |
 | XML                 | yes  | yes   |
 | TOML                | yes  | yes   |
 | YAML                | yes  | yes   |
-| PDF                 | yes  | yes   |
+| PDF                 | yes  | no    |
 | Jupyter Notebook    | yes  | yes   |
 | Markdown            | yes  | yes   |
 | Plain Text          | yes  | yes   |
@@ -50,11 +51,15 @@ Unknown file extensions are opened as plain text.
 ### Multiple View Modes
 
 - **Table View** -- structured spreadsheet display (default)
-- **Raw Text View** -- source text with line numbers and optional column alignment
-- **Markdown View** -- rendered CommonMark preview
+- **Raw Text View** -- source text with line numbers and optional column alignment. Shows a dismissible orange banner when the originally-detected format failed to parse and the file fell back to plain text.
+- **Markdown View** -- rendered CommonMark preview, with a Preview / Split / Edit toggle in the toolbar. Split mode places a TextEdit beside the preview for live editing.
+- **JSON Tree View** -- collapsible Firefox-style tree, available for `.json` and `.jsonl` files
+- **YAML Tree View** -- same tree renderer as JSON Tree, available for `.yaml`/`.yml` files
 - **Notebook View** -- rendered Jupyter notebook with code cells, markdown cells, and outputs
 - **PDF View** -- page-by-page rendered output
 - **SQL Query View** -- write a query against the current table (exposed as `data`) and see results beneath
+
+Press F4 to cycle through the available view modes for the current tab. F8 toggles a session-only **read-only mode** that disables every editing path (cell edits, structural changes, marks, undo/redo, raw text editor) while still allowing copy and Save-As.
 
 ### Editing
 
@@ -154,7 +159,15 @@ verified"*. Two ways around it:
 - Or remove the quarantine attribute from a terminal:
 
 ```bash
+# Locate the bundle and confirm its quarantine attribute is present
+find /Applications -maxdepth 1 -name "Octa.app" -exec xattr {} \;
+
+# Strip the attribute (top-level only — macOS only quarantines the bundle)
 xattr -d com.apple.quarantine /Applications/Octa.app
+
+# If the strip above fails with "No such xattr: …" but the warning persists,
+# fall back to the recursive form once (handles "Octa.app is damaged"):
+# xattr -cr /Applications/Octa.app
 ```
 
 To build from source, install the Rust toolchain (<https://rustup.rs/>)

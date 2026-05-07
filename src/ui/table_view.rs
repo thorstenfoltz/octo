@@ -360,6 +360,7 @@ pub fn draw_table(
     binary_display_mode: BinaryDisplayMode,
     welcome_logo_texture: Option<&egui::TextureHandle>,
     shortcuts: &Shortcuts,
+    readonly: bool,
 ) -> TableInteraction {
     let colors = ThemeColors::for_mode(theme_mode);
     let row_height = (font_size * 2.0).max(DEFAULT_ROW_HEIGHT);
@@ -787,6 +788,7 @@ pub fn draw_table(
                 cell_line_breaks,
                 binary_display_mode,
                 actual_row_height,
+                readonly,
             );
         }
 
@@ -1459,6 +1461,7 @@ fn draw_data_row_direct(
     cell_line_breaks: bool,
     binary_display_mode: BinaryDisplayMode,
     row_height: f32,
+    readonly: bool,
 ) {
     let is_multi_selected_row = state.selected_rows.contains(&actual_row);
 
@@ -1693,7 +1696,7 @@ fn draw_data_row_direct(
                     state.selected_cells.clear();
                     state.selection_anchor_display = None;
                 }
-                if response.double_clicked() {
+                if response.double_clicked() && !readonly {
                     state.selected_cell = Some((actual_row, col_idx));
                     let current_text = table
                         .get(actual_row, col_idx)

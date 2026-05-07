@@ -61,6 +61,8 @@ pub struct ToolbarAction {
     /// Logo in the top-left was clicked. Wired to a hidden easter-egg counter
     /// in the app shell — most users never trigger it.
     pub logo_clicked: bool,
+    /// Toggle session-only read-only mode (also bound to F8 by default).
+    pub toggle_readonly: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -87,6 +89,8 @@ pub fn draw_toolbar(
     has_markdown: bool,
     has_notebook: bool,
     has_json: bool,
+    has_yaml: bool,
+    readonly_mode: bool,
     sql_panel_open: bool,
     zoom_percent: u32,
     logo_texture: Option<&egui::TextureHandle>,
@@ -430,6 +434,22 @@ pub fn draw_toolbar(
                         action.view_mode_changed = Some(ViewMode::JsonTree);
                         ui.close_menu();
                     }
+                }
+                if has_yaml {
+                    let is_yaml_tree = current_view_mode == ViewMode::YamlTree;
+                    let yaml_btn = ui.radio(is_yaml_tree, "YAML Tree");
+                    if yaml_btn.clicked() {
+                        action.view_mode_changed = Some(ViewMode::YamlTree);
+                        ui.close_menu();
+                    }
+                }
+
+                ui.separator();
+                let combo = shortcuts.combo(ShortcutAction::ToggleReadOnly);
+                let label = format!("Read-only mode  ({})", combo.label());
+                if ui.checkbox(&mut readonly_mode.clone(), label).clicked() {
+                    action.toggle_readonly = true;
+                    ui.close_menu();
                 }
 
                 ui.separator();

@@ -177,6 +177,18 @@ jobs:
           </plist>
           EOF
 
+      - name: Ad-hoc codesign the bundle
+        run: |
+          # Sign the inner binary first, then seal the bundle. Ad-hoc (`-`) is
+          # not Developer ID — Gatekeeper still warns — but it converts the
+          # "Octa.app is damaged" dead-end into the standard "unidentified
+          # developer" dialog, where right-click → Open works.
+          codesign --force --sign - --timestamp=none \
+            --identifier dev.octa.Octa \
+            Octa.app/Contents/MacOS/octa
+          codesign --force --sign - --timestamp=none Octa.app
+          codesign --verify --verbose Octa.app
+
       - name: Package macOS release
         run: |
           DIR="octa-${VERSION}-macos-aarch64"

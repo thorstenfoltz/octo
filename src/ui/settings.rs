@@ -149,6 +149,9 @@ pub enum IconVariant {
     Red,
     Slate,
     Teal,
+    White,
+    Black,
+    Pink,
 }
 
 impl IconVariant {
@@ -166,6 +169,9 @@ impl IconVariant {
         Self::Red,
         Self::Slate,
         Self::Teal,
+        Self::White,
+        Self::Black,
+        Self::Pink,
     ];
 
     /// All concrete (non-Random) variants — what `Random` rolls between.
@@ -182,6 +188,9 @@ impl IconVariant {
         Self::Red,
         Self::Slate,
         Self::Teal,
+        Self::White,
+        Self::Black,
+        Self::Pink,
     ];
 
     pub fn label(self) -> &'static str {
@@ -199,6 +208,9 @@ impl IconVariant {
             Self::Red => "Red",
             Self::Slate => "Slate",
             Self::Teal => "Teal",
+            Self::White => "White",
+            Self::Black => "Black",
+            Self::Pink => "Pink",
         }
     }
 
@@ -220,6 +232,9 @@ impl IconVariant {
             Self::Red => include_str!("../../assets/octa-red.svg"),
             Self::Slate => include_str!("../../assets/octa-slate.svg"),
             Self::Teal => include_str!("../../assets/octa-teal.svg"),
+            Self::White => include_str!("../../assets/octa-white.svg"),
+            Self::Black => include_str!("../../assets/octa-black.svg"),
+            Self::Pink => include_str!("../../assets/octa-pink.svg"),
         }
     }
 
@@ -255,6 +270,9 @@ impl IconVariant {
             Self::Red => Color32::from_rgb(0xef, 0x44, 0x44),
             Self::Slate => Color32::from_rgb(0x64, 0x74, 0x8b),
             Self::Teal => Color32::from_rgb(0x14, 0xb8, 0xa6),
+            Self::White => Color32::from_rgb(0xf8, 0xfa, 0xfc),
+            Self::Black => Color32::from_rgb(0x0f, 0x17, 0x2a),
+            Self::Pink => Color32::from_rgb(0xec, 0x48, 0x99),
         }
     }
 }
@@ -357,6 +375,12 @@ pub struct AppSettings {
     /// comes up at [`AppSettings::window_size`] instead.
     #[serde(default = "default_true")]
     pub start_maximized: bool,
+    /// Whether to pop a confirmation modal each time read-only mode is
+    /// toggled (via shortcut or menu). Setting to `false` silences the
+    /// notice; the read-only state still flips, you just don't see the
+    /// pop-up. Default `true`.
+    #[serde(default = "default_true")]
+    pub show_readonly_notice: bool,
 }
 
 fn default_true() -> bool {
@@ -409,6 +433,7 @@ impl Default for AppSettings {
             shortcuts: Shortcuts::default(),
             window_size: WindowSize::default(),
             start_maximized: true,
+            show_readonly_notice: true,
         }
     }
 }
@@ -988,6 +1013,14 @@ impl SettingsDialog {
                              shown as 2026-05-02). Disable to silence the warning.",
                         );
                         ui.checkbox(&mut self.draft.warn_on_date_format_change, "");
+                        ui.end_row();
+
+                        ui.label("Read-only mode notice:").on_hover_text(
+                            "Pop a confirmation modal each time read-only mode\n\
+                             is toggled (via F8 or the View menu). Turn off to\n\
+                             flip the state silently.",
+                        );
+                        ui.checkbox(&mut self.draft.show_readonly_notice, "");
                         ui.end_row();
 
                         ui.label("Notebook output:").on_hover_text(

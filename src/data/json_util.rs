@@ -154,6 +154,106 @@ pub fn set_json_value_at_path(
     Err("Path traversal did not reach a leaf".to_string())
 }
 
+/// Walk to a container at `path` and return a mutable reference to it. Used
+/// by `rename_object_key_at_path` and `add_object_key_at_path` so the caller
+/// can mutate the container's keys/items without having to round-trip through
+/// `set_json_value_at_path`.
+fn navigate_mut<'r>(root: &'r mut Value, path: &str) -> Result<&'r mut Value, String> {
+    if path.is_empty() {
+        return Ok(root);
+    }
+    let segments = parse_path_segments(path);
+    let mut current = root;
+    for seg in &segments {
+        if seg.starts_with('[') && seg.ends_with(']') {
+            let idx_str = &seg[1..seg.len() - 1];
+            let idx: usize = idx_str
+                .parse()
+                .map_err(|_| format!("Invalid array index: {idx_str}"))?;
+            let arr = current
+                .as_array_mut()
+                .ok_or_else(|| format!("Expected array at segment '{seg}'"))?;
+            if idx >= arr.len() {
+                return Err(format!(
+                    "Array index {idx} out of bounds (len {})",
+                    arr.len()
+                ));
+            }
+            current = &mut arr[idx];
+        } else {
+            let obj = current
+                .as_object_mut()
+                .ok_or_else(|| format!("Expected object at key '{seg}'"))?;
+            current = obj
+                .get_mut(seg.as_str())
+                .ok_or_else(|| format!("Key '{seg}' not found"))?;
+        }
+    }
+    Ok(current)
+}
+
+/// Rename an object key while preserving the surrounding insertion order.
+/// `parent_path` points at the containing object (`""` for root). Returns an
+/// error if the parent isn't an object, the old key doesn't exist, or the new
+/// name collides with an existing sibling.
+pub fn rename_object_key_at_path(
+    root: &mut Value,
+    parent_path: &str,
+    old_key: &str,
+    new_key: &str,
+) -> Result<(), String> {
+    if new_key.is_empty() {
+        return Err("Key cannot be empty".to_string());
+    }
+    if old_key == new_key {
+        return Ok(());
+    }
+    let parent = navigate_mut(root, parent_path)?;
+    let obj = parent
+        .as_object_mut()
+        .ok_or_else(|| "Parent is not an object".to_string())?;
+    if !obj.contains_key(old_key) {
+        return Err(format!("Key '{old_key}' not found"));
+    }
+    if obj.contains_key(new_key) {
+        return Err(format!("Key '{new_key}' already exists"));
+    }
+    // serde_json::Map preserves insertion order; rebuild it so the renamed
+    // entry appears in the same position rather than at the end.
+    let mut rebuilt = serde_json::Map::with_capacity(obj.len());
+    for (k, v) in std::mem::take(obj).into_iter() {
+        if k == old_key {
+            rebuilt.insert(new_key.to_string(), v);
+        } else {
+            rebuilt.insert(k, v);
+        }
+    }
+    *obj = rebuilt;
+    Ok(())
+}
+
+/// Append a new key/value pair to an object at `parent_path`. Errors if the
+/// parent isn't an object, the key already exists, or the key is empty.
+pub fn add_object_key_at_path(
+    root: &mut Value,
+    parent_path: &str,
+    new_key: &str,
+    new_value: Value,
+) -> Result<(), String> {
+    if new_key.is_empty() {
+        return Err("Key cannot be empty".to_string());
+    }
+    let parent = navigate_mut(root, parent_path)?;
+    let obj = parent
+        .as_object_mut()
+        .ok_or_else(|| "Parent is not an object".to_string())?;
+    if obj.contains_key(new_key) {
+        return Err(format!("Key '{new_key}' already exists"));
+    }
+    obj.insert(new_key.to_string(), new_value);
+    Ok(())
+}
+
 /// Compute the maximum nesting depth of a JSON value.
 ///
 /// Leaf values (string, number, bool, null) have depth 0.
@@ -201,4 +301,64 @@ pub fn parse_json_edit(input: &str) -> Value {
         return Value::Number(num);
     }
     Value::String(input.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn rename_top_level_key_preserves_order() {
+        let mut v = json!({ "a": 1, "b": 2, "c": 3 });
+        rename_object_key_at_path(&mut v, "", "b", "B").unwrap();
+        let s = serde_json::to_string(&v).unwrap();
+        assert_eq!(s, r#"{"a":1,"B":2,"c":3}"#);
+    }
+
+    #[test]
+    fn rename_nested_key() {
+        let mut v = json!({ "outer": { "inner": 42 } });
+        rename_object_key_at_path(&mut v, "outer", "inner", "INNER").unwrap();
+        assert_eq!(v["outer"]["INNER"], 42);
+    }
+
+    #[test]
+    fn rename_collision_errors() {
+        let mut v = json!({ "a": 1, "b": 2 });
+        let err = rename_object_key_at_path(&mut v, "", "a", "b").unwrap_err();
+        assert!(err.contains("already exists"), "got {err}");
+    }
+
+    #[test]
+    fn rename_array_path_errors_clearly() {
+        let mut v = json!({ "arr": [1, 2, 3] });
+        // The synthesized "key" of an array element is its index — not
+        // renamable. The path navigator stops short and reports the type
+        // mismatch.
+        let err = rename_object_key_at_path(&mut v, "arr", "0", "first").unwrap_err();
+        assert!(err.contains("not found") || err.contains("not an object"));
+    }
+
+    #[test]
+    fn add_object_key_appends() {
+        let mut v = json!({ "a": 1 });
+        add_object_key_at_path(&mut v, "", "b", json!(2)).unwrap();
+        let s = serde_json::to_string(&v).unwrap();
+        assert_eq!(s, r#"{"a":1,"b":2}"#);
+    }
+
+    #[test]
+    fn add_object_key_collision_errors() {
+        let mut v = json!({ "a": 1 });
+        let err = add_object_key_at_path(&mut v, "", "a", json!(2)).unwrap_err();
+        assert!(err.contains("already exists"));
+    }
+
+    #[test]
+    fn add_object_key_empty_name_errors() {
+        let mut v = json!({});
+        let err = add_object_key_at_path(&mut v, "", "", json!(null)).unwrap_err();
+        assert!(err.contains("empty"));
+    }
 }

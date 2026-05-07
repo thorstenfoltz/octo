@@ -266,6 +266,11 @@ pub enum ShortcutAction {
     /// skipped. No-op when the focus is in a TextEdit so the keypress can
     /// reach the editor.
     CycleViewMode,
+    /// Toggle session-only read-only mode. Disables every editing path
+    /// (cell edits, structural changes, marks, undo/redo, cut/paste,
+    /// SQL DML). Persists for the current session only — every launch
+    /// starts editable.
+    ToggleReadOnly,
 }
 
 impl ShortcutAction {
@@ -313,6 +318,7 @@ impl ShortcutAction {
             Self::OpenDocumentation => "Open documentation",
             Self::OpenColumnInspector => "Open column inspector",
             Self::CycleViewMode => "Cycle view mode",
+            Self::ToggleReadOnly => "Toggle read-only mode",
         }
     }
 
@@ -362,6 +368,7 @@ impl ShortcutAction {
             Self::OpenDocumentation => KeyCombo::plain(Key::F1),
             Self::OpenColumnInspector => KeyCombo::ctrl(Key::I),
             Self::CycleViewMode => KeyCombo::plain(Key::F4),
+            Self::ToggleReadOnly => KeyCombo::plain(Key::F8),
         }
     }
 }

@@ -171,8 +171,19 @@ pub(crate) struct TabState {
     /// Pending vertical scroll offset for the markdown view's ScrollArea —
     /// set when the user clicks a `#fragment` link, applied next frame.
     pub(crate) markdown_scroll_target: Option<f32>,
+    /// Layout mode for the Markdown view (Preview / Split / Edit). Default
+    /// is `Split` so live editing is the out-of-the-box experience.
+    pub(crate) markdown_layout: data::MarkdownLayout,
+    /// Cached output of `pre_render_html` keyed by content hash. Avoids
+    /// re-running 8+ regex passes on every keystroke when the user edits
+    /// markdown in the split view.
+    pub(crate) markdown_render_cache: Option<(u64, String)>,
     pub(crate) json_tree_expanded: std::collections::HashSet<String>,
     pub(crate) json_value: Option<serde_json::Value>,
+    /// Parsed YAML root, converted to a `serde_json::Value` so the same tree
+    /// renderer handles both formats. Populated at load time for `.yaml`/`.yml`
+    /// files and consumed by `render_yaml_tree_view`. `None` for non-YAML tabs.
+    pub(crate) yaml_value: Option<serde_json::Value>,
     pub(crate) json_expand_depth: usize,
     pub(crate) json_expand_depth_str: String,
     /// Maximum nesting depth of `json_value`, computed once at load. Cached
@@ -184,6 +195,18 @@ pub(crate) struct TabState {
     /// Width snapshot of the displayed JSON value when entering edit mode,
     /// so the TextEdit doesn't shrink as the user types.
     pub(crate) json_edit_width: Option<f32>,
+    /// Key currently being renamed in the JSON/YAML tree. Stored as the
+    /// key's *full path* (e.g. `users[0].name`); the parent path and old
+    /// key name are derived by `split_key_path` at commit time.
+    pub(crate) tree_key_edit_path: Option<String>,
+    /// Live buffer for the key-rename TextEdit. Initialized with the key
+    /// being renamed; committed via Enter, cancelled via Escape.
+    pub(crate) tree_key_edit_buffer: String,
+    /// One-shot scratch state for the "Add new key" prompt rendered on
+    /// expanded objects. Tracks which container path is being targeted
+    /// plus the new-key buffer. `None` when no add prompt is active.
+    pub(crate) tree_add_key_path: Option<String>,
+    pub(crate) tree_add_key_buffer: String,
     pub(crate) show_add_column_dialog: bool,
     pub(crate) new_col_name: String,
     pub(crate) new_col_type: String,
@@ -221,6 +244,11 @@ pub(crate) struct TabState {
     /// Set to true when this tab represents an empty (0-byte) file. Renders
     /// the easter-egg ASCII art instead of the table view.
     pub(crate) empty_file_placeholder: bool,
+    /// Dismissible warning banner shown above the raw text editor when the
+    /// originally-detected format failed to parse and we fell back to plain
+    /// text. Contains the format name and the parser's error message. `None`
+    /// when no banner is active.
+    pub(crate) parse_error_banner: Option<String>,
 }
 
 pub(crate) struct OctaApp {
@@ -316,4 +344,27 @@ pub(crate) struct OctaApp {
     /// `theme_mode == Rainbow` so the surrounding code can keep using
     /// `theme_mode` without surprise.
     pub(crate) rainbow_active: bool,
+    /// Session-only read-only mode. When `true`, every editing path
+    /// (cell edits, structural changes, marks, undo/redo, cut/paste,
+    /// raw-text editor, SQL DML) short-circuits. Toggled via the
+    /// `ToggleReadOnly` shortcut (default F8). NOT persisted — every
+    /// launch starts editable.
+    pub(crate) readonly_mode: bool,
+    /// Pending modal that announces the current read-only state
+    /// (enabled / disabled). `None` while no notice is queued. Shown
+    /// once per toggle; suppressible globally via Settings.
+    pub(crate) pending_readonly_notice: Option<ReadOnlyNotice>,
+}
+
+/// Snapshot of a read-only-toggle event used by the notice modal. Captures
+/// the post-toggle state so the dialog text reads correctly even if the
+/// user re-toggles before dismissing.
+pub(crate) struct ReadOnlyNotice {
+    pub(crate) is_active: bool,
+    /// Holds the live "Don't show this again" checkbox state across frames.
+    /// Initialized when the notice is queued; on OK we copy this value
+    /// back to `AppSettings.show_readonly_notice`. Without this field the
+    /// checkbox would flicker because the dialog body re-derives its
+    /// initial value from settings every frame.
+    pub(crate) suppress_future: bool,
 }
