@@ -50,8 +50,19 @@ pub fn render_raw_view(
     color_aligned_columns: bool,
     tab_size: usize,
     warn_unalign: bool,
+    readonly: bool,
 ) -> RawAction {
     let mut action = RawAction::default();
+
+    // Parse-error fallback banner: shown when load_file failed to parse the
+    // detected format and dropped the user into the raw text view. Dismissable
+    // — clicking ✕ clears `tab.parse_error_banner` for the rest of the session.
+    if let Some(banner_text) = tab.parse_error_banner.clone() {
+        if render_parse_error_banner(ui, &banner_text, theme_mode) {
+            tab.parse_error_banner = None;
+        }
+    }
+
     if let Some(ref mut content) = tab.raw_content {
         let colors = ui::theme::ThemeColors::for_mode(theme_mode);
 
@@ -294,6 +305,7 @@ pub fn render_raw_view(
                             .font(mono_font)
                             .desired_width(f32::INFINITY)
                             .lock_focus(true)
+                            .interactive(!readonly)
                             .layouter(&mut colored_layouter.clone())
                             .show(ui)
                     } else {
@@ -302,6 +314,7 @@ pub fn render_raw_view(
                             .font(mono_font)
                             .desired_width(f32::INFINITY)
                             .lock_focus(true)
+                            .interactive(!readonly)
                             .text_color(colors.text_primary)
                             .layouter(&mut nowrap_layouter.clone())
                             .show(ui)
@@ -310,8 +323,9 @@ pub fn render_raw_view(
                     // Replace any literal \t egui may have inserted with spaces,
                     // then manually insert spaces at the cursor for our Tab handling.
                     // We must do the \t replacement first so we can adjust the cursor
-                    // position to account for any expansion.
-                    let had_tabs = content.contains('\t');
+                    // position to account for any expansion. Skipped under read-only
+                    // — `interactive(false)` already prevents new tab insertions.
+                    let had_tabs = !readonly && content.contains('\t');
                     if had_tabs {
                         // Track cursor so we can restore it after replacement
                         let cursor_idx = output
@@ -333,7 +347,7 @@ pub fn render_raw_view(
                         output.state.store(ui.ctx(), output.response.id);
                         tab.raw_content_modified = true;
                     }
-                    if output.response.changed() && !had_tabs {
+                    if output.response.changed() && !had_tabs && !readonly {
                         tab.raw_content_modified = true;
                     }
                 });
@@ -483,9 +497,16 @@ pub(crate) fn split_delimited_line_ranges(
                     ranges.push(field_start..i);
                     field_start = i + c.len_utf8();
                     at_field_start = true;
-                } else if at_field_start && i == field_start && allowed_quotes.contains(&c) {
+                } else if at_field_start && allowed_quotes.contains(&c) {
                     in_quote = Some(c);
                     at_field_start = false;
+                } else if at_field_start && c.is_ascii_whitespace() && c != delimiter {
+                    // Skip leading whitespace before the opening quote so that
+                    // `format_delimited_text`'s `"<delim> "` joiner (which leaves
+                    // a space between delimiter and the next field's quote) still
+                    // groups the quoted field into a single column range. The
+                    // `c != delimiter` guard keeps TSV parsing correct: tabs are
+                    // separators, not skippable whitespace.
                 } else {
                     at_field_start = false;
                 }
@@ -597,6 +618,48 @@ fn split_delimited_line(
     }
     fields.push(cur);
     fields
+}
+
+/// Render a dismissible orange warning banner. Returns `true` when the user
+/// clicked the close button so the caller can clear the banner state.
+fn render_parse_error_banner(ui: &mut egui::Ui, message: &str, theme_mode: ThemeMode) -> bool {
+    let (bg, fg) = if theme_mode.is_dark() {
+        (
+            egui::Color32::from_rgb(0x4a, 0x2a, 0x14),
+            egui::Color32::from_rgb(0xff, 0xc8, 0x82),
+        )
+    } else {
+        (
+            egui::Color32::from_rgb(0xff, 0xee, 0xd6),
+            egui::Color32::from_rgb(0x8a, 0x4a, 0x10),
+        )
+    };
+    let mut dismissed = false;
+    egui::Frame::new()
+        .fill(bg)
+        .stroke(egui::Stroke::new(1.0, fg))
+        .corner_radius(4.0)
+        .inner_margin(egui::Margin::symmetric(10, 8))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("\u{26a0}").color(fg).size(16.0));
+                ui.add_space(4.0);
+                ui.label(RichText::new(message).color(fg));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Use the same × glyph as the tab-strip close button so
+                    // dismiss icons across the app are visually consistent.
+                    if ui
+                        .button(RichText::new("\u{00D7}").color(fg).strong().size(16.0))
+                        .on_hover_text("Dismiss")
+                        .clicked()
+                    {
+                        dismissed = true;
+                    }
+                });
+            });
+        });
+    ui.add_space(4.0);
+    dismissed
 }
 
 #[cfg(test)]
@@ -720,5 +783,53 @@ mod tests {
         assert_eq!(r.len(), 2);
         assert!(formatted[r[0].clone()].starts_with('"'));
         assert!(formatted[r[0].clone()].contains("1,2,3,4,5"));
+    }
+
+    #[test]
+    fn ranges_round_trip_after_alignment_two_quoted_fields() {
+        // After alignment the join inserts a space after each delimiter, so
+        // the second quoted field starts with whitespace before its quote.
+        // The tokenizer must still group it into one range.
+        let raw = r#""1,2","foo,bar""#;
+        let formatted = format_delimited_text(raw, ',', RawCsvQuote::Double, RawCsvEscape::Doubled);
+        let r = split_delimited_line_ranges(
+            &formatted,
+            ',',
+            RawCsvQuote::Double,
+            RawCsvEscape::Doubled,
+        );
+        assert_eq!(
+            r.len(),
+            2,
+            "formatted line {formatted:?} should still tokenize as 2 columns"
+        );
+        assert!(formatted[r[0].clone()].contains("1,2"));
+        assert!(formatted[r[1].clone()].contains("foo,bar"));
+    }
+
+    #[test]
+    fn ranges_tsv_with_tab_delimiter_does_not_eat_tabs() {
+        // Tab is the delimiter here, so the leading-whitespace skip MUST NOT
+        // consume tab characters — they are separators, not padding.
+        let line = "a\t\"b\tc\"\td";
+        let r = split_delimited_line_ranges(line, '\t', RawCsvQuote::Double, RawCsvEscape::Doubled);
+        assert_eq!(r.len(), 3);
+        assert_eq!(&line[r[0].clone()], "a");
+        assert_eq!(&line[r[1].clone()], "\"b\tc\"");
+        assert_eq!(&line[r[2].clone()], "d");
+    }
+
+    #[test]
+    fn ranges_backslash_escape_at_field_start() {
+        // A literal backslash at field start shouldn't be confused with the
+        // quote-mode escape handling (which only applies inside quotes).
+        let line = r#"\"a,b"#;
+        let r =
+            split_delimited_line_ranges(line, ',', RawCsvQuote::Double, RawCsvEscape::Backslash);
+        // Field starts with `\` (not a quote), so no quote mode entered;
+        // delimiter still splits.
+        assert_eq!(r.len(), 2);
+        assert_eq!(&line[r[0].clone()], r#"\"a"#);
+        assert_eq!(&line[r[1].clone()], "b");
     }
 }

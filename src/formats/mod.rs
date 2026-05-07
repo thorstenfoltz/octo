@@ -9,6 +9,7 @@ pub mod hdf5_reader;
 pub mod json_reader;
 pub mod jupyter_reader;
 pub mod markdown_reader;
+pub mod netcdf_reader;
 pub mod orc_reader;
 pub mod parquet_reader;
 pub mod pdf_reader;
@@ -110,6 +111,7 @@ impl FormatRegistry {
         registry.register(Box::new(stata_reader::StataReader));
         registry.register(Box::new(dbf_reader::DbfReader));
         registry.register(Box::new(rds_reader::RdsReader));
+        registry.register(Box::new(netcdf_reader::NetCdfReader));
         registry.register(Box::new(text_reader::TextReader));
         registry
     }

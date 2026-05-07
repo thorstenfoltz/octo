@@ -1412,5 +1412,14 @@ fn apply_fonts(ctx: &egui::Context, font: &FontSettings) {
                 .insert(FontFamily::Name(Arc::from("custom")), vec!["custom".into()]);
         }
     }
+    // Bundled bold face used by the markdown preview renderer for `**text**`.
+    // egui's default fonts don't include a bold variant, so `RichText::strong()`
+    // only tweaks color — the markdown renderer needs a real bold glyph set
+    // to show weight contrast.
+    static BOLD_BYTES: &[u8] = include_bytes!("../../assets/Roboto-Bold.ttf");
+    defs.font_data
+        .insert("bold".into(), Arc::new(FontData::from_static(BOLD_BYTES)));
+    defs.families
+        .insert(FontFamily::Name(Arc::from("bold")), vec!["bold".into()]);
     ctx.set_fonts(defs);
 }

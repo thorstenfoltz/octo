@@ -64,6 +64,8 @@ arrow57 = { package = "arrow", version = "57", default-features = false }
 dta = "0.5"
 dbase = "0.7"
 rds2rust = "0.1.41"
+netcdf3 = "0.6"
+pulldown-cmark = { version = "0.12", default-features = false }
 
 [build-dependencies]
 winresource = "0.1"

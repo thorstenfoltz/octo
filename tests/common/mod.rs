@@ -93,7 +93,41 @@ pub fn ensure_fixtures() {
                 }
             }
         }
+
+        // NetCDF v3 can't be written via the FormatReader trait (the reader
+        // is intentionally read-only) but the `netcdf3` crate exposes a
+        // FileWriter. Generate a small fixture once so `tests/netcdf_tests.rs`
+        // has something to load.
+        let nc_path = fixture_path("sample.nc");
+        if !nc_path.exists() {
+            write_netcdf3_fixture(&nc_path);
+        }
     });
+}
+
+/// Build a 5-row NetCDF v3 fixture with two 1D variables (`temperature: f64`,
+/// `count: i32`) sharing dimension `time`. Used by `tests/netcdf_tests.rs`.
+fn write_netcdf3_fixture(path: &PathBuf) {
+    use netcdf3::{DataSet, FileWriter};
+
+    let mut data_set = DataSet::new();
+    data_set.add_fixed_dim("time", 5).unwrap();
+    data_set
+        .add_var_f64::<&str>("temperature", &["time"])
+        .unwrap();
+    data_set.add_var_i32::<&str>("count", &["time"]).unwrap();
+
+    let mut writer = FileWriter::open(path).unwrap();
+    writer
+        .set_def(&data_set, netcdf3::Version::Classic, 0)
+        .unwrap();
+    writer
+        .write_var_f64("temperature", &[20.0_f64, 21.5, 22.0, 19.5, 18.0])
+        .unwrap();
+    writer
+        .write_var_i32("count", &[10_i32, 20, 30, 25, 15])
+        .unwrap();
+    writer.close().unwrap();
 }
 
 fn pdf_table() -> DataTable {

@@ -93,6 +93,8 @@ impl OctaApp {
             logo_click_count: 0,
             logo_last_click: None,
             rainbow_active: false,
+            readonly_mode: false,
+            pending_readonly_notice: None,
         }
     }
 

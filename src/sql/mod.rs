@@ -61,6 +61,13 @@ pub fn run_query(table: &DataTable, query: &str) -> Result<QueryOutcome> {
             table: egg,
         });
     }
+    if let Some(egg) = h2o_easter_egg(trimmed) {
+        return Ok(QueryOutcome {
+            kind: QueryKind::Select,
+            affected: None,
+            table: egg,
+        });
+    }
     let conn = Connection::open_in_memory().context("opening in-memory DuckDB")?;
     register_table(&conn, "data", table)?;
     if is_mutation(trimmed) {
@@ -448,6 +455,170 @@ fn stars_easter_egg(query: &str) -> Option<DataTable> {
     })
 }
 
+/// Easter egg: `SELECT * FROM h2o` returns a hand-crafted table of ocean
+/// zones. Same matching rules as `octopuses_easter_egg`.
+fn h2o_easter_egg(query: &str) -> Option<DataTable> {
+    let normalized = query
+        .trim_end_matches(';')
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase();
+    if normalized != "select * from h2o" {
+        return None;
+    }
+    let columns = vec![
+        ColumnInfo {
+            name: "id".into(),
+            data_type: "Int64".into(),
+        },
+        ColumnInfo {
+            name: "zone".into(),
+            data_type: "Utf8".into(),
+        },
+        ColumnInfo {
+            name: "depth_m".into(),
+            data_type: "Int64".into(),
+        },
+        ColumnInfo {
+            name: "temperature_c".into(),
+            data_type: "Float64".into(),
+        },
+        ColumnInfo {
+            name: "salinity_psu".into(),
+            data_type: "Float64".into(),
+        },
+        ColumnInfo {
+            name: "pressure_atm".into(),
+            data_type: "Float64".into(),
+        },
+        ColumnInfo {
+            name: "fact".into(),
+            data_type: "Utf8".into(),
+        },
+    ];
+    let entries: &[(i64, &str, i64, f64, f64, f64, &str)] = &[
+        (
+            1,
+            "Sunlight (Epipelagic)",
+            100,
+            20.0,
+            35.0,
+            10.0,
+            "Where photosynthesis happens; most marine life lives here.",
+        ),
+        (
+            2,
+            "Twilight (Mesopelagic)",
+            500,
+            10.0,
+            34.9,
+            50.0,
+            "Bioluminescence becomes the primary light source.",
+        ),
+        (
+            3,
+            "Midnight (Bathypelagic)",
+            2000,
+            4.0,
+            34.8,
+            200.0,
+            "Pitch dark, near-freezing, home of the giant squid.",
+        ),
+        (
+            4,
+            "Abyss (Abyssopelagic)",
+            5000,
+            2.5,
+            34.7,
+            500.0,
+            "Vast plains of fine sediment; pressure crushes most submarines.",
+        ),
+        (
+            5,
+            "Hadal (Hadalpelagic)",
+            10000,
+            1.5,
+            34.7,
+            1000.0,
+            "Ocean trenches — Mariana, Tonga, Kermadec.",
+        ),
+        (
+            6,
+            "Surface mixed layer",
+            20,
+            22.0,
+            35.2,
+            3.0,
+            "Wind and waves keep this layer thoroughly stirred.",
+        ),
+        (
+            7,
+            "Thermocline",
+            300,
+            14.0,
+            35.1,
+            30.0,
+            "Sharp temperature drop; sound waves bend through it.",
+        ),
+        (
+            8,
+            "Halocline",
+            150,
+            16.0,
+            36.5,
+            15.0,
+            "Salinity gradient — freshwater plumes float on saltwater.",
+        ),
+        (
+            9,
+            "Hydrothermal vent",
+            2500,
+            350.0,
+            34.6,
+            250.0,
+            "Superheated water hosts entire chemosynthetic ecosystems.",
+        ),
+        (
+            10,
+            "Polar ice cap base",
+            5,
+            -1.8,
+            32.0,
+            1.5,
+            "Saltwater stays liquid below the freshwater freezing point.",
+        ),
+    ];
+    let rows = entries
+        .iter()
+        .map(|(id, zone, depth, temp, sal, pres, fact)| {
+            vec![
+                CellValue::Int(*id),
+                CellValue::String((*zone).to_string()),
+                CellValue::Int(*depth),
+                CellValue::Float(*temp),
+                CellValue::Float(*sal),
+                CellValue::Float(*pres),
+                CellValue::String((*fact).to_string()),
+            ]
+        })
+        .collect();
+    Some(DataTable {
+        columns,
+        rows,
+        edits: HashMap::new(),
+        source_path: None,
+        format_name: Some("\u{1f30a} H2O".to_string()),
+        structural_changes: false,
+        total_rows: None,
+        row_offset: 0,
+        marks: HashMap::new(),
+        undo_stack: Vec::new(),
+        redo_stack: Vec::new(),
+        db_meta: None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -499,5 +670,24 @@ mod tests {
             msg.contains("octopuses"),
             "expected DuckDB to complain about missing table `octopuses`, got: {msg}"
         );
+    }
+
+    #[test]
+    fn h2o_egg_triggers_case_insensitively() {
+        let t = empty_table();
+        for q in [
+            "SELECT * FROM h2o",
+            "select * from h2o",
+            "  SELECT   *   FROM   H2O  ",
+            "SELECT * FROM h2o;",
+        ] {
+            let out = run_query(&t, q).expect(q);
+            assert_eq!(out.kind, QueryKind::Select);
+            assert_eq!(out.table.col_count(), 7);
+            assert_eq!(out.table.row_count(), 10);
+            assert_eq!(out.table.columns[0].name, "id");
+            assert_eq!(out.table.columns[1].name, "zone");
+            assert_eq!(out.table.columns[3].data_type, "Float64");
+        }
     }
 }

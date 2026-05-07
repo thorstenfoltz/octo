@@ -235,7 +235,10 @@ impl OctaApp {
         if action_fired(SA::GoToCell) {
             self.nav_focus_requested = true;
         }
-        if action_fired(SA::EditCell) && self.tabs[self.active_tab].table.col_count() > 0 {
+        if action_fired(SA::EditCell)
+            && self.tabs[self.active_tab].table.col_count() > 0
+            && !self.is_readonly()
+        {
             let tab = &mut self.tabs[self.active_tab];
             let binary_mode = self.settings.binary_display_mode;
             if let Some((r, c)) = tab.table_state.selected_cell {
@@ -247,13 +250,16 @@ impl OctaApp {
                 tab.table_state.begin_edit(r, c, text);
             }
         }
-        if action_fired(SA::DuplicateRow) {
+        if action_fired(SA::DuplicateRow) && !self.is_readonly() {
             self.duplicate_selected_rows();
         }
-        if action_fired(SA::DeleteRow) {
+        if action_fired(SA::DeleteRow) && !self.is_readonly() {
             self.delete_selected_rows();
         }
-        if action_fired(SA::InsertRowBelow) && self.tabs[self.active_tab].table.col_count() > 0 {
+        if action_fired(SA::InsertRowBelow)
+            && self.tabs[self.active_tab].table.col_count() > 0
+            && !self.is_readonly()
+        {
             let tab = &mut self.tabs[self.active_tab];
             let insert_at = tab
                 .table_state
@@ -274,13 +280,13 @@ impl OctaApp {
         // / search bar undoes *text*, not the table, and so the F-key dialog
         // shortcuts don't pop a window out from under the user mid-typing.
         if !text_edit_focused {
-            if action_fired(SA::Undo) {
+            if action_fired(SA::Undo) && !self.is_readonly() {
                 self.do_undo();
             }
-            if action_fired(SA::Redo) {
+            if action_fired(SA::Redo) && !self.is_readonly() {
                 self.do_redo();
             }
-            if action_fired(SA::Mark) {
+            if action_fired(SA::Mark) && !self.is_readonly() {
                 let color = self.settings.default_mark_color;
                 self.mark_selection_default(color);
             }
@@ -303,6 +309,9 @@ impl OctaApp {
                     tab.view_mode = modes[next_idx];
                 }
             }
+            if action_fired(SA::ToggleReadOnly) {
+                self.toggle_readonly();
+            }
         }
 
         // --- Handle close request ---
@@ -312,6 +321,25 @@ impl OctaApp {
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.show_close_confirm = true;
+        }
+    }
+
+    /// Single chokepoint for "is the app currently locked". Every editing
+    /// path that gates on read-only mode should call this rather than
+    /// reading `self.readonly_mode` directly, so the gate stays auditable.
+    pub(crate) fn is_readonly(&self) -> bool {
+        self.readonly_mode
+    }
+
+    /// Flip the read-only mode flag. Queues a notice modal unless the user
+    /// previously checked "Don't show this again".
+    pub(crate) fn toggle_readonly(&mut self) {
+        self.readonly_mode = !self.readonly_mode;
+        if self.settings.show_readonly_notice {
+            self.pending_readonly_notice = Some(super::state::ReadOnlyNotice {
+                is_active: self.readonly_mode,
+                suppress_future: false,
+            });
         }
     }
 }

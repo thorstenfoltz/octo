@@ -8,17 +8,29 @@ This build is for Apple Silicon (arm64) Macs.
 
 Drag `Octa.app` into `/Applications` (or `~/Applications`).
 
-Because the app is **not signed or notarized**, the first launch will be blocked by Gatekeeper. To open it anyway:
+The app is **ad-hoc signed but not notarized**, so macOS Gatekeeper will warn the first time you launch it. You have two options to bypass the warning:
 
-1. Control-click `Octa.app` in Finder and choose **Open**, then confirm in the dialog.
+**Option A — clear the quarantine attribute (always works):**
 
-   *Or*, from a terminal, clear the quarantine attribute:
+```bash
+# Locate the bundle and confirm its quarantine attribute is present
+find /Applications -maxdepth 1 -name "Octa.app" -exec xattr {} \;
 
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/Octa.app
-   ```
+# Strip the attribute (top-level only — macOS only quarantines the bundle)
+xattr -d com.apple.quarantine /Applications/Octa.app
 
-2. After the first successful launch, double-clicking works normally.
+# If the strip above fails with "No such xattr: …" but the warning persists,
+# fall back to the recursive form once (handles "Octa.app is damaged"):
+# xattr -cr /Applications/Octa.app
+```
+
+After that, double-clicking opens the app normally.
+
+**Option B — right-click → Open:**
+
+Control-click `Octa.app` in Finder and choose **Open**, then confirm in the Gatekeeper dialog. After the first successful launch, double-clicking works normally.
+
+> ⚠️  If you see "Octa.app is damaged and can't be opened" with only a "Move to Trash" button, your copy was extracted before the ad-hoc signature was applied — use the `xattr -cr` fallback shown above.
 
 ## Run from the command line
 

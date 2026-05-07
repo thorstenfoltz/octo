@@ -43,14 +43,21 @@ impl TabState {
             bg_file_exhausted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             commonmark_cache: egui_commonmark::CommonMarkCache::default(),
             markdown_scroll_target: None,
+            markdown_layout: data::MarkdownLayout::default(),
+            markdown_render_cache: None,
             json_tree_expanded: std::collections::HashSet::new(),
             json_value: None,
+            yaml_value: None,
             json_expand_depth: 1,
             json_expand_depth_str: "1".to_string(),
             json_file_max_depth: 0,
             json_edit_path: None,
             json_edit_buffer: String::new(),
             json_edit_width: None,
+            tree_key_edit_path: None,
+            tree_key_edit_buffer: String::new(),
+            tree_add_key_path: None,
+            tree_add_key_buffer: String::new(),
             show_add_column_dialog: false,
             new_col_name: String::new(),
             new_col_type: "String".to_string(),
@@ -71,6 +78,7 @@ impl TabState {
             column_inspector_selected: std::collections::HashSet::new(),
             column_inspector_anchor: None,
             empty_file_placeholder: false,
+            parse_error_banner: None,
         }
     }
 
@@ -88,6 +96,7 @@ impl TabState {
         let has_markdown = self.table.format_name.as_deref() == Some("Markdown");
         let has_pdf = !self.pdf_page_images.is_empty();
         let has_json = self.json_value.is_some();
+        let has_yaml = self.yaml_value.is_some();
         let has_raw = self.raw_content.is_some();
 
         if !has_notebook {
@@ -107,6 +116,9 @@ impl TabState {
         }
         if has_json {
             modes.push(ViewMode::JsonTree);
+        }
+        if has_yaml {
+            modes.push(ViewMode::YamlTree);
         }
         modes
     }
@@ -200,10 +212,16 @@ impl OctaApp {
                                 if tab_label_resp.clicked() {
                                     tab_to_activate = Some(idx);
                                 }
-                                // Close button
+                                // Close button. The leading spacing lives
+                                // outside the label so the response rect tightly
+                                // hugs the × glyph — that way the hover overlay
+                                // (painted at rect.center) sits exactly where
+                                // egui drew the original glyph and no horizontal
+                                // shift is visible on hover.
+                                ui.add_space(6.0);
                                 let close_resp = ui.add(
                                     egui::Label::new(
-                                        egui::RichText::new("  \u{00D7}")
+                                        egui::RichText::new("\u{00D7}")
                                             .size(14.0)
                                             .color(colors.text_muted),
                                     )
@@ -211,14 +229,14 @@ impl OctaApp {
                                 );
                                 if close_resp.hovered() {
                                     ctx.set_cursor_icon(egui::CursorIcon::Default);
-                                    let r = close_resp.rect.shrink2(egui::vec2(2.0, 1.0));
+                                    let r = close_resp.rect.expand2(egui::vec2(3.0, 1.0));
                                     ui.painter().rect_filled(
                                         r,
                                         3.0,
                                         colors.accent.gamma_multiply(0.25),
                                     );
                                     ui.painter().text(
-                                        r.center(),
+                                        close_resp.rect.center(),
                                         egui::Align2::CENTER_CENTER,
                                         "\u{00D7}",
                                         egui::FontId::proportional(14.0),

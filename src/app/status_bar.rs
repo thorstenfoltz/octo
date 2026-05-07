@@ -33,6 +33,7 @@ impl OctaApp {
                     &mut self.nav_input,
                     std::mem::take(&mut self.nav_focus_requested),
                     self.zoom_percent,
+                    self.readonly_mode,
                 )
             })
             .inner;

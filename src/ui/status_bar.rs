@@ -1,4 +1,4 @@
-use egui::{Align, Layout, RichText, Ui};
+use egui::{Align, Color32, Layout, RichText, Ui};
 
 use super::table_view::TableViewState;
 use super::theme::{ThemeColors, ThemeMode};
@@ -37,12 +37,25 @@ pub fn draw_status_bar(
     nav_input: &mut String,
     nav_focus_requested: bool,
     zoom_percent: u32,
+    readonly: bool,
 ) -> StatusBarAction {
     let mut action = StatusBarAction::default();
     let colors = ThemeColors::for_mode(theme_mode);
 
     ui.horizontal(|ui| {
         ui.add_space(8.0);
+
+        if readonly {
+            // Plain text instead of a lock emoji — many bundled fonts lack
+            // U+1F512 and render it as a tofu / replacement glyph.
+            ui.label(
+                RichText::new("[Read-only]")
+                    .size(11.0)
+                    .color(Color32::from_rgb(0xc0, 0x6a, 0x10))
+                    .strong(),
+            );
+            ui.separator();
+        }
 
         if table.col_count() > 0 {
             // File info

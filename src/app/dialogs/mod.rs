@@ -13,6 +13,7 @@ pub(crate) mod date_ambiguity;
 pub(crate) mod delete_columns;
 pub(crate) mod documentation;
 pub(crate) mod raw_perf_prompt;
+pub(crate) mod readonly_notice;
 pub(crate) mod reload_confirm;
 pub(crate) mod settings;
 pub(crate) mod table_picker;
@@ -31,6 +32,7 @@ impl OctaApp {
         unsaved_changes::render_open_confirm_dialog(self, ctx);
         table_picker::render_table_picker(self, ctx);
         raw_perf_prompt::render_raw_perf_prompt_dialog(self, ctx);
+        readonly_notice::render_readonly_notice_dialog(self, ctx);
         date_ambiguity::render_date_ambiguity_dialog(self, ctx);
         settings::render_settings_dialog(self, ctx);
         documentation::render_documentation_dialog(self, ctx);

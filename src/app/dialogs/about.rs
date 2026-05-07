@@ -26,6 +26,22 @@ fn author_names(raw: &str) -> String {
         .join(", ")
 }
 
+/// Open `mailto:<addr>` via the platform's default URL handler. egui's
+/// built-in `hyperlink_to` routes through the `webbrowser` crate, which on
+/// some platforms ignores the `mailto:` scheme and falls back to opening
+/// the address as a web URL — so we shell out to the OS handler directly.
+fn open_mailto(email: &str) {
+    let url = format!("mailto:{}", email);
+    #[cfg(target_os = "linux")]
+    let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg(&url).spawn();
+    #[cfg(target_os = "windows")]
+    let _ = std::process::Command::new("cmd")
+        .args(["/C", "start", "", &url])
+        .spawn();
+}
+
 /// Easter egg: clicking the "Octa" title eight times (one per tentacle)
 /// reveals a hidden line. Counter is kept in egui's transient memory store
 /// keyed by this id, so it survives frames but resets on app restart.
@@ -61,7 +77,12 @@ pub(crate) fn render_about_dialog(app: &mut OctaApp, ctx: &egui::Context) {
                 ui.add_space(8.0);
                 ui.label(format!("Author: {}", author_names(AUTHORS)));
                 ui.add_space(4.0);
-                ui.hyperlink_to(EMAIL, format!("mailto:{}", EMAIL));
+                let email_link = ui
+                    .add(egui::Link::new(EMAIL))
+                    .on_hover_text(format!("mailto:{}", EMAIL));
+                if email_link.clicked() {
+                    open_mailto(EMAIL);
+                }
                 ui.add_space(4.0);
                 if ui.hyperlink_to("GitHub Repository", REPOSITORY).clicked() {
                     // egui opens the link automatically
