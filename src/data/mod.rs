@@ -40,9 +40,10 @@ pub enum MarkdownLayout {
 }
 
 /// Search/filter mode for the table.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SearchMode {
     /// Plain case-insensitive substring match.
+    #[default]
     Plain,
     /// Wildcard: `*` = any chars, `?` = single char. Escape with `\*` and `\?`.
     Wildcard,
@@ -57,12 +58,6 @@ impl SearchMode {
             Self::Wildcard => "Wildcard",
             Self::Regex => "Regex",
         }
-    }
-}
-
-impl Default for SearchMode {
-    fn default() -> Self {
-        Self::Plain
     }
 }
 
@@ -178,13 +173,12 @@ impl CellValue {
                     .collect::<Vec<_>>()
                     .join(" "),
                 BinaryDisplayMode::Text => {
-                    if let Ok(s) = std::str::from_utf8(b) {
-                        if !s.is_empty()
-                            && s.chars()
-                                .all(|c| !c.is_control() || c == '\n' || c == '\r' || c == '\t')
-                        {
-                            return s.to_string();
-                        }
+                    if let Ok(s) = std::str::from_utf8(b)
+                        && !s.is_empty()
+                        && s.chars()
+                            .all(|c| !c.is_control() || c == '\n' || c == '\r' || c == '\t')
+                    {
+                        return s.to_string();
                     }
                     // Fall back to hex for non-printable / invalid UTF-8
                     b.iter()
@@ -761,10 +755,10 @@ impl DataTable {
             });
             self.redo_stack.clear();
             self.rows.remove(index);
-            if let Some(meta) = self.db_meta.as_mut() {
-                if index < meta.row_tags.len() {
-                    meta.row_tags.remove(index);
-                }
+            if let Some(meta) = self.db_meta.as_mut()
+                && index < meta.row_tags.len()
+            {
+                meta.row_tags.remove(index);
             }
             // Clean up edits referencing this row or higher
             let mut new_edits = HashMap::new();
@@ -902,11 +896,11 @@ impl DataTable {
         self.redo_stack.clear();
         let row = self.rows.remove(from);
         self.rows.insert(to, row);
-        if let Some(meta) = self.db_meta.as_mut() {
-            if from < meta.row_tags.len() {
-                let tag = meta.row_tags.remove(from);
-                meta.row_tags.insert(to.min(meta.row_tags.len()), tag);
-            }
+        if let Some(meta) = self.db_meta.as_mut()
+            && from < meta.row_tags.len()
+        {
+            let tag = meta.row_tags.remove(from);
+            meta.row_tags.insert(to.min(meta.row_tags.len()), tag);
         }
         // Remap edits
         let mut new_edits = HashMap::new();
@@ -1108,10 +1102,10 @@ impl DataTable {
             };
             col.data_type = "Utf8".to_string();
         }
-        if let Some(meta) = self.db_meta.as_mut() {
-            if !meta.row_tags.is_empty() {
-                meta.row_tags.remove(0);
-            }
+        if let Some(meta) = self.db_meta.as_mut()
+            && !meta.row_tags.is_empty()
+        {
+            meta.row_tags.remove(0);
         }
         // Shift row keys (edits + marks) by -1, drop anything at row 0.
         let mut new_edits = HashMap::new();
@@ -1299,10 +1293,10 @@ impl DataTable {
                 UndoAction::InsertRow { index } => {
                     if index < self.rows.len() {
                         self.rows.remove(index);
-                        if let Some(meta) = self.db_meta.as_mut() {
-                            if index < meta.row_tags.len() {
-                                meta.row_tags.remove(index);
-                            }
+                        if let Some(meta) = self.db_meta.as_mut()
+                            && index < meta.row_tags.len()
+                        {
+                            meta.row_tags.remove(index);
                         }
                         // Shift edits back
                         let mut new_edits = HashMap::new();
@@ -1420,10 +1414,10 @@ impl DataTable {
                     if col_idx < self.columns.len() {
                         self.columns[col_idx].data_type = old_type.clone();
                         for (row_idx, row) in self.rows.iter_mut().enumerate() {
-                            if col_idx < row.len() {
-                                if let Some(val) = old_values.get(row_idx) {
-                                    row[col_idx] = val.clone();
-                                }
+                            if col_idx < row.len()
+                                && let Some(val) = old_values.get(row_idx)
+                            {
+                                row[col_idx] = val.clone();
                             }
                         }
                         // Restore edits for this column from old values
@@ -1480,10 +1474,10 @@ impl DataTable {
                 UndoAction::DeleteRow { index, .. } => {
                     if index < self.rows.len() {
                         self.rows.remove(index);
-                        if let Some(meta) = self.db_meta.as_mut() {
-                            if index < meta.row_tags.len() {
-                                meta.row_tags.remove(index);
-                            }
+                        if let Some(meta) = self.db_meta.as_mut()
+                            && index < meta.row_tags.len()
+                        {
+                            meta.row_tags.remove(index);
                         }
                         let mut new_edits = HashMap::new();
                         for (&(r, c), v) in &self.edits {
@@ -1575,10 +1569,10 @@ impl DataTable {
                     if col_idx < self.columns.len() {
                         self.columns[col_idx].data_type = new_type.clone();
                         for (row_idx, row) in self.rows.iter_mut().enumerate() {
-                            if col_idx < row.len() {
-                                if let Some(val) = new_values.get(row_idx) {
-                                    row[col_idx] = val.clone();
-                                }
+                            if col_idx < row.len()
+                                && let Some(val) = new_values.get(row_idx)
+                            {
+                                row[col_idx] = val.clone();
                             }
                         }
                         // Restore edits for this column from new values

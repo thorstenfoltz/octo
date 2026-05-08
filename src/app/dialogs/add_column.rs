@@ -119,8 +119,7 @@ pub(crate) fn render_add_column_dialog(app: &mut OctaApp, ctx: &egui::Context) {
         app.tabs[app.active_tab]
             .table
             .insert_column(idx, col_name, col_type);
-        if formula_text.starts_with('=') {
-            let formula_body = &formula_text[1..];
+        if let Some(formula_body) = formula_text.strip_prefix('=') {
             let row_count = app.tabs[app.active_tab].table.row_count();
             for row in 0..row_count {
                 let shifted = shift_formula_row(formula_body, row);

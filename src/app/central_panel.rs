@@ -23,23 +23,23 @@ impl OctaApp {
             ui::theme::paint_background_decoration(ui.painter(), ui.max_rect(), self.theme_mode);
 
             // Status message — auto-fades after 10s.
-            if let Some((ref msg, instant)) = self.status_message {
-                if instant.elapsed().as_secs() < 10 {
-                    let colors = ui::theme::ThemeColors::for_mode(self.theme_mode);
-                    let color = if msg.starts_with("Saved") {
-                        colors.success
-                    } else if msg.starts_with('\u{1f419}') {
-                        // Easter-egg messages (kraken, etc.) get the accent.
-                        colors.accent
-                    } else {
-                        colors.error
-                    };
-                    ui.horizontal(|ui| {
-                        ui.add_space(8.0);
-                        ui.label(egui::RichText::new(msg).color(color).size(12.0));
-                    });
-                    ui.add_space(4.0);
-                }
+            if let Some((ref msg, instant)) = self.status_message
+                && instant.elapsed().as_secs() < 10
+            {
+                let colors = ui::theme::ThemeColors::for_mode(self.theme_mode);
+                let color = if msg.starts_with("Saved") {
+                    colors.success
+                } else if msg.starts_with('\u{1f419}') {
+                    // Easter-egg messages (kraken, etc.) get the accent.
+                    colors.accent
+                } else {
+                    colors.error
+                };
+                ui.horizontal(|ui| {
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new(msg).color(color).size(12.0));
+                });
+                ui.add_space(4.0);
             }
 
             // Date format-change banner. Stays visible until the user
@@ -380,21 +380,22 @@ impl OctaApp {
         }
 
         let tab = &mut self.tabs[self.active_tab];
-        if let Some((col_idx, new_name)) = interaction.rename_column {
-            if col_idx < tab.table.columns.len() && !new_name.is_empty() {
-                tab.table.columns[col_idx].name = new_name;
-                tab.table.structural_changes = true;
-                tab.table_state.widths_initialized = false;
-            }
+        if let Some((col_idx, new_name)) = interaction.rename_column
+            && col_idx < tab.table.columns.len()
+            && !new_name.is_empty()
+        {
+            tab.table.columns[col_idx].name = new_name;
+            tab.table.structural_changes = true;
+            tab.table_state.widths_initialized = false;
         }
 
-        if let Some((col_idx, new_type)) = interaction.change_col_type {
-            if !tab.table.convert_column(col_idx, &new_type) {
-                self.status_message = Some((
-                    format!("Cannot convert column to {new_type}: some values are incompatible"),
-                    std::time::Instant::now(),
-                ));
-            }
+        if let Some((col_idx, new_type)) = interaction.change_col_type
+            && !tab.table.convert_column(col_idx, &new_type)
+        {
+            self.status_message = Some((
+                format!("Cannot convert column to {new_type}: some values are incompatible"),
+                std::time::Instant::now(),
+            ));
         }
 
         let tab = &mut self.tabs[self.active_tab];
@@ -419,36 +420,34 @@ impl OctaApp {
             tab.table_state.editing_cell = None;
             tab.filter_dirty = true;
         }
-        if interaction.ctx_delete_row {
-            if let Some((row, col)) = tab.table_state.selected_cell {
-                tab.table.delete_row(row);
-                tab.table_state.editing_cell = None;
-                if tab.table.row_count() == 0 {
-                    tab.table_state.selected_cell = None;
-                } else {
-                    let new_row = row.min(tab.table.row_count() - 1);
-                    tab.table_state.selected_cell = Some((new_row, col));
-                }
-                tab.filter_dirty = true;
+        if interaction.ctx_delete_row
+            && let Some((row, col)) = tab.table_state.selected_cell
+        {
+            tab.table.delete_row(row);
+            tab.table_state.editing_cell = None;
+            if tab.table.row_count() == 0 {
+                tab.table_state.selected_cell = None;
+            } else {
+                let new_row = row.min(tab.table.row_count() - 1);
+                tab.table_state.selected_cell = Some((new_row, col));
             }
+            tab.filter_dirty = true;
         }
-        if interaction.ctx_move_row_up {
-            if let Some((row, col)) = tab.table_state.selected_cell {
-                if row > 0 {
-                    tab.table.move_row(row, row - 1);
-                    tab.table_state.selected_cell = Some((row - 1, col));
-                    tab.filter_dirty = true;
-                }
-            }
+        if interaction.ctx_move_row_up
+            && let Some((row, col)) = tab.table_state.selected_cell
+            && row > 0
+        {
+            tab.table.move_row(row, row - 1);
+            tab.table_state.selected_cell = Some((row - 1, col));
+            tab.filter_dirty = true;
         }
-        if interaction.ctx_move_row_down {
-            if let Some((row, col)) = tab.table_state.selected_cell {
-                if row + 1 < tab.table.row_count() {
-                    tab.table.move_row(row, row + 1);
-                    tab.table_state.selected_cell = Some((row + 1, col));
-                    tab.filter_dirty = true;
-                }
-            }
+        if interaction.ctx_move_row_down
+            && let Some((row, col)) = tab.table_state.selected_cell
+            && row + 1 < tab.table.row_count()
+        {
+            tab.table.move_row(row, row + 1);
+            tab.table_state.selected_cell = Some((row + 1, col));
+            tab.filter_dirty = true;
         }
 
         // --- Context menu: column operations ---
@@ -464,40 +463,40 @@ impl OctaApp {
         }
         if interaction.ctx_move_col_left {
             let tab = &mut self.tabs[self.active_tab];
-            if let Some((row, col)) = tab.table_state.selected_cell {
-                if col > 0 {
-                    tab.table.move_column(col, col - 1);
-                    tab.table_state.selected_cell = Some((row, col - 1));
-                    tab.table_state.widths_initialized = false;
-                }
+            if let Some((row, col)) = tab.table_state.selected_cell
+                && col > 0
+            {
+                tab.table.move_column(col, col - 1);
+                tab.table_state.selected_cell = Some((row, col - 1));
+                tab.table_state.widths_initialized = false;
             }
         }
         if interaction.ctx_move_col_right {
             let tab = &mut self.tabs[self.active_tab];
-            if let Some((row, col)) = tab.table_state.selected_cell {
-                if col + 1 < tab.table.col_count() {
-                    tab.table.move_column(col, col + 1);
-                    tab.table_state.selected_cell = Some((row, col + 1));
-                    tab.table_state.widths_initialized = false;
-                }
+            if let Some((row, col)) = tab.table_state.selected_cell
+                && col + 1 < tab.table.col_count()
+            {
+                tab.table.move_column(col, col + 1);
+                tab.table_state.selected_cell = Some((row, col + 1));
+                tab.table_state.widths_initialized = false;
             }
         }
 
         // --- Copy / Paste ---
         let tab = &mut self.tabs[self.active_tab];
-        if interaction.ctx_copy_cell {
-            if let Some((row, col)) = tab.table_state.selected_cell {
-                let text = tab
-                    .table
-                    .get(row, col)
-                    .map(|v| v.to_string())
-                    .unwrap_or_default();
-                tab.table_state.clipboard = Some(text.clone());
-                if let Some(ref cb) = self.os_clipboard {
-                    if let Ok(mut cb) = cb.lock() {
-                        let _ = cb.set_text(&text);
-                    }
-                }
+        if interaction.ctx_copy_cell
+            && let Some((row, col)) = tab.table_state.selected_cell
+        {
+            let text = tab
+                .table
+                .get(row, col)
+                .map(|v| v.to_string())
+                .unwrap_or_default();
+            tab.table_state.clipboard = Some(text.clone());
+            if let Some(ref cb) = self.os_clipboard
+                && let Ok(mut cb) = cb.lock()
+            {
+                let _ = cb.set_text(&text);
             }
         }
         if interaction.ctx_copy {

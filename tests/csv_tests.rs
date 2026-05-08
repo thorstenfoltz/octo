@@ -28,7 +28,7 @@ fn test_infer_int() {
 
 #[test]
 fn test_infer_float() {
-    assert_eq!(infer_cell_value("3.14"), CellValue::Float(3.14));
+    assert_eq!(infer_cell_value("2.5"), CellValue::Float(2.5));
     assert_eq!(infer_cell_value("-0.5"), CellValue::Float(-0.5));
 }
 

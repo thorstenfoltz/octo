@@ -69,7 +69,7 @@ fn test_cell_value_display_int() {
 #[test]
 fn test_cell_value_display_float() {
     assert_eq!(CellValue::Float(3.0).to_string(), "3.0");
-    assert_eq!(CellValue::Float(3.14).to_string(), "3.14");
+    assert_eq!(CellValue::Float(2.5).to_string(), "2.5");
 }
 
 #[test]
@@ -237,8 +237,8 @@ fn test_parse_like_int() {
 #[test]
 fn test_parse_like_float() {
     assert_eq!(
-        CellValue::parse_like(&CellValue::Float(0.0), "3.14"),
-        CellValue::Float(3.14)
+        CellValue::parse_like(&CellValue::Float(0.0), "2.5"),
+        CellValue::Float(2.5)
     );
     assert_eq!(
         CellValue::parse_like(&CellValue::Float(0.0), "xyz"),
@@ -690,7 +690,7 @@ fn test_string_to_int_invalid() {
 #[test]
 fn test_string_to_float_valid() {
     assert!(can_convert_value(
-        &CellValue::String("3.14".into()),
+        &CellValue::String("2.5".into()),
         "Float64"
     ));
 }
@@ -751,7 +751,7 @@ fn test_float_to_int_whole() {
 
 #[test]
 fn test_float_to_int_fractional() {
-    assert!(!can_convert_value(&CellValue::Float(3.14), "Int64"));
+    assert!(!can_convert_value(&CellValue::Float(2.5), "Int64"));
 }
 
 #[test]
@@ -790,7 +790,7 @@ fn test_parse_like_roundtrip_preserves_int() {
 
 #[test]
 fn test_parse_like_roundtrip_preserves_float() {
-    let original = CellValue::Float(3.14);
+    let original = CellValue::Float(2.5);
     let text = original.to_string();
     let parsed = CellValue::parse_like(&original, &text);
     assert_eq!(parsed, original);
@@ -1032,8 +1032,8 @@ fn test_convert_value_int_to_string() {
 #[test]
 fn test_convert_value_float_to_string() {
     assert_eq!(
-        convert_value(&CellValue::Float(3.14), "String"),
-        CellValue::String("3.14".into())
+        convert_value(&CellValue::Float(2.5), "String"),
+        CellValue::String("2.5".into())
     );
 }
 
@@ -1048,8 +1048,8 @@ fn test_convert_value_string_to_int() {
 #[test]
 fn test_convert_value_string_to_float() {
     assert_eq!(
-        convert_value(&CellValue::String("3.14".into()), "Float64"),
-        CellValue::Float(3.14)
+        convert_value(&CellValue::String("2.5".into()), "Float64"),
+        CellValue::Float(2.5)
     );
 }
 
@@ -1222,12 +1222,11 @@ fn test_convert_column_same_type_noop() {
     // Should succeed but not push undo action (it's a no-op)
     assert!(
         table.undo_stack.is_empty()
-            || table
+            || !table
                 .undo_stack
                 .last()
                 .map(|a| matches!(a, UndoAction::ConvertColumn { .. }))
                 .unwrap_or(false)
-                == false
     );
 }
 

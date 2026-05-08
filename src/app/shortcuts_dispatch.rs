@@ -208,10 +208,10 @@ impl OctaApp {
                 view_modes::text_ops::apply_case_to_selection(ctx, sql_id, &mut tab.sql_query, op);
             } else if focused == Some(raw_id) {
                 let tab = &mut self.tabs[self.active_tab];
-                if let Some(ref mut content) = tab.raw_content {
-                    if view_modes::text_ops::apply_case_to_selection(ctx, raw_id, content, op) {
-                        tab.raw_content_modified = true;
-                    }
+                if let Some(ref mut content) = tab.raw_content
+                    && view_modes::text_ops::apply_case_to_selection(ctx, raw_id, content, op)
+                {
+                    tab.raw_content_modified = true;
                 }
             } else if lower_fired {
                 self.transform_selected_cells(str::to_lowercase);

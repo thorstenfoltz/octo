@@ -28,7 +28,7 @@ fn test_json_int() {
 
 #[test]
 fn test_json_float() {
-    assert_eq!(json_value_to_cell(&json!(3.14)), CellValue::Float(3.14));
+    assert_eq!(json_value_to_cell(&json!(2.5)), CellValue::Float(2.5));
 }
 
 #[test]

@@ -99,8 +99,8 @@ fn test_arrow_int64() {
 
 #[test]
 fn test_arrow_float64() {
-    let arr = Float64Array::from(vec![Some(3.14), None]);
-    assert_eq!(arrow_value_to_cell(&arr, 0), CellValue::Float(3.14));
+    let arr = Float64Array::from(vec![Some(2.5), None]);
+    assert_eq!(arrow_value_to_cell(&arr, 0), CellValue::Float(2.5));
     assert_eq!(arrow_value_to_cell(&arr, 1), CellValue::Null);
 }
 

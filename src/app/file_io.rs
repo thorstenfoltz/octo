@@ -202,10 +202,10 @@ pub(crate) fn load_remaining_parquet_rows(
         }
     }
 
-    if !batch_buf.is_empty() {
-        if let Ok(mut buf) = buffer.lock() {
-            buf.append(&mut batch_buf);
-        }
+    if !batch_buf.is_empty()
+        && let Ok(mut buf) = buffer.lock()
+    {
+        buf.append(&mut batch_buf);
     }
 
     if loaded < max_rows {
@@ -501,12 +501,12 @@ impl OctaApp {
                 if let Some(ref content) = tab.raw_content {
                     tab.json_value = serde_json::from_str(content).ok();
                 }
-            } else if matches!(tab.table.format_name.as_deref(), Some("YAML")) {
-                if let Some(ref content) = tab.raw_content {
-                    tab.yaml_value = serde_yaml::from_str::<serde_yaml::Value>(content)
-                        .ok()
-                        .map(|v| octa::formats::yaml_reader::yaml_to_json(&v));
-                }
+            } else if matches!(tab.table.format_name.as_deref(), Some("YAML"))
+                && let Some(ref content) = tab.raw_content
+            {
+                tab.yaml_value = serde_yaml::from_str::<serde_yaml::Value>(content)
+                    .ok()
+                    .map(|v| octa::formats::yaml_reader::yaml_to_json(&v));
             }
             // Both trees share the depth+expand tracking fields, since only
             // one tree view is shown per tab at a time.
@@ -665,10 +665,10 @@ impl OctaApp {
             let ext_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
             dialog = dialog.add_filter(&label, &ext_refs);
         }
-        if let Some(ref source) = self.tabs[self.active_tab].table.source_path {
-            if let Some(name) = std::path::Path::new(source).file_name() {
-                dialog = dialog.set_file_name(name.to_string_lossy().to_string());
-            }
+        if let Some(ref source) = self.tabs[self.active_tab].table.source_path
+            && let Some(name) = std::path::Path::new(source).file_name()
+        {
+            dialog = dialog.set_file_name(name.to_string_lossy().to_string());
         }
 
         if let Some(path) = dialog.save_file() {
@@ -741,26 +741,26 @@ impl OctaApp {
 
     pub(crate) fn do_save_tab(&mut self, tab_idx: usize, path: std::path::PathBuf) {
         let tab = &mut self.tabs[tab_idx];
-        if tab.raw_content_modified {
-            if let Some(ref content) = tab.raw_content {
-                match std::fs::write(&path, content) {
-                    Ok(()) => {
-                        tab.table.source_path = Some(path.to_string_lossy().to_string());
-                        tab.raw_content_modified = false;
-                        self.status_message = Some((
-                            format!("Saved to {}", path.display()),
-                            std::time::Instant::now(),
-                        ));
-                    }
-                    Err(e) => {
-                        self.status_message = Some((
-                            format!("Error saving file: {}", e),
-                            std::time::Instant::now(),
-                        ));
-                    }
+        if tab.raw_content_modified
+            && let Some(ref content) = tab.raw_content
+        {
+            match std::fs::write(&path, content) {
+                Ok(()) => {
+                    tab.table.source_path = Some(path.to_string_lossy().to_string());
+                    tab.raw_content_modified = false;
+                    self.status_message = Some((
+                        format!("Saved to {}", path.display()),
+                        std::time::Instant::now(),
+                    ));
                 }
-                return;
+                Err(e) => {
+                    self.status_message = Some((
+                        format!("Error saving file: {}", e),
+                        std::time::Instant::now(),
+                    ));
+                }
             }
+            return;
         }
 
         if tab.table.format_name.as_deref() == Some("CSV") && tab.csv_delimiter != b',' {

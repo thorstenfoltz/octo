@@ -140,10 +140,10 @@ fn render_value_tree(ui: &mut egui::Ui, tab: &mut TabState, theme_mode: ThemeMod
                 .desired_width(30.0)
                 .horizontal_align(egui::Align::Center),
         );
-        if response.changed() {
-            if let Ok(n) = tab.json_expand_depth_str.parse::<usize>() {
-                tab.json_expand_depth = n.min(file_max_depth);
-            }
+        if response.changed()
+            && let Ok(n) = tab.json_expand_depth_str.parse::<usize>()
+        {
+            tab.json_expand_depth = n.min(file_max_depth);
         }
         if response.lost_focus() {
             tab.json_expand_depth = tab.json_expand_depth.min(file_max_depth);
@@ -163,10 +163,10 @@ fn render_value_tree(ui: &mut egui::Ui, tab: &mut TabState, theme_mode: ThemeMod
         }
     } else if collapse_all {
         tab.json_tree_expanded.clear();
-    } else if let Some(d) = apply_depth {
-        if let Some(v) = kind.value(tab) {
-            tab.json_tree_expanded = json_util::collect_json_paths(v, Some(d));
-        }
+    } else if let Some(d) = apply_depth
+        && let Some(v) = kind.value(tab)
+    {
+        tab.json_tree_expanded = json_util::collect_json_paths(v, Some(d));
     }
 
     let remaining_rect = ui.available_rect_before_wrap();
@@ -252,10 +252,10 @@ fn render_value_tree(ui: &mut egui::Ui, tab: &mut TabState, theme_mode: ThemeMod
                                         .font(mono())
                                         .color(colors.text_primary),
                                 );
-                                if *is_object {
-                                    if ui.small_button("+").on_hover_text("Add key").clicked() {
-                                        add_key_request = Some(row.path.clone());
-                                    }
+                                if *is_object
+                                    && ui.small_button("+").on_hover_text("Add key").clicked()
+                                {
+                                    add_key_request = Some(row.path.clone());
                                 }
                             } else {
                                 let summary = if *is_object {
@@ -377,10 +377,10 @@ fn render_value_tree(ui: &mut egui::Ui, tab: &mut TabState, theme_mode: ThemeMod
         }
     }
 
-    if let Some(p) = toggle_path {
-        if !tab.json_tree_expanded.remove(&p) {
-            tab.json_tree_expanded.insert(p);
-        }
+    if let Some(p) = toggle_path
+        && !tab.json_tree_expanded.remove(&p)
+    {
+        tab.json_tree_expanded.insert(p);
     }
     if let Some((path, buf)) = edit_request {
         tab.json_edit_path = Some(path);
@@ -402,11 +402,11 @@ fn render_value_tree(ui: &mut egui::Ui, tab: &mut TabState, theme_mode: ThemeMod
                 Some(root) => json_util::set_json_value_at_path(root, edit_path, new_value).is_ok(),
                 None => false,
             };
-            if mutated {
-                if let Some(serialized) = kind.value(tab).and_then(|v| kind.serialize_pretty(v)) {
-                    tab.raw_content = Some(serialized);
-                    tab.raw_content_modified = true;
-                }
+            if mutated
+                && let Some(serialized) = kind.value(tab).and_then(|v| kind.serialize_pretty(v))
+            {
+                tab.raw_content = Some(serialized);
+                tab.raw_content_modified = true;
             }
         }
         tab.json_edit_path = None;
@@ -429,12 +429,11 @@ fn render_value_tree(ui: &mut egui::Ui, tab: &mut TabState, theme_mode: ThemeMod
                     }
                     None => false,
                 };
-                if mutated {
-                    if let Some(serialized) = kind.value(tab).and_then(|v| kind.serialize_pretty(v))
-                    {
-                        tab.raw_content = Some(serialized);
-                        tab.raw_content_modified = true;
-                    }
+                if mutated
+                    && let Some(serialized) = kind.value(tab).and_then(|v| kind.serialize_pretty(v))
+                {
+                    tab.raw_content = Some(serialized);
+                    tab.raw_content_modified = true;
                 }
             }
         }
@@ -459,12 +458,11 @@ fn render_value_tree(ui: &mut egui::Ui, tab: &mut TabState, theme_mode: ThemeMod
                     .is_ok(),
                     None => false,
                 };
-                if mutated {
-                    if let Some(serialized) = kind.value(tab).and_then(|v| kind.serialize_pretty(v))
-                    {
-                        tab.raw_content = Some(serialized);
-                        tab.raw_content_modified = true;
-                    }
+                if mutated
+                    && let Some(serialized) = kind.value(tab).and_then(|v| kind.serialize_pretty(v))
+                {
+                    tab.raw_content = Some(serialized);
+                    tab.raw_content_modified = true;
                 }
             }
         }

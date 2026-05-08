@@ -17,8 +17,8 @@ fn test_toml_integer() {
 
 #[test]
 fn test_toml_float() {
-    let v = toml::Value::Float(3.14);
-    assert_eq!(toml_to_json(&v), json!(3.14));
+    let v = toml::Value::Float(2.5);
+    assert_eq!(toml_to_json(&v), json!(2.5));
 }
 
 #[test]

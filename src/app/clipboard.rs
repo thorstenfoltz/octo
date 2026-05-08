@@ -153,10 +153,10 @@ impl OctaApp {
     pub(crate) fn do_copy(&mut self) {
         if let Some(text) = self.copy_selection_to_string() {
             self.tabs[self.active_tab].table_state.clipboard = Some(text.clone());
-            if let Some(ref cb) = self.os_clipboard {
-                if let Ok(mut cb) = cb.lock() {
-                    let _ = cb.set_text(&text);
-                }
+            if let Some(ref cb) = self.os_clipboard
+                && let Ok(mut cb) = cb.lock()
+            {
+                let _ = cb.set_text(&text);
             }
         }
     }
@@ -171,19 +171,19 @@ impl OctaApp {
             self.tabs[self.active_tab].table_state.clipboard.clone()
         };
 
-        if let Some(text) = text {
-            if !text.is_empty() {
-                self.paste_text_into_table(&text);
-            }
+        if let Some(text) = text
+            && !text.is_empty()
+        {
+            self.paste_text_into_table(&text);
         }
     }
 
     /// Check if the OS clipboard has text content.
     pub(crate) fn os_clipboard_has_text(&self) -> bool {
-        if let Some(ref cb) = self.os_clipboard {
-            if let Ok(mut cb) = cb.lock() {
-                return cb.get_text().map(|t| !t.is_empty()).unwrap_or(false);
-            }
+        if let Some(ref cb) = self.os_clipboard
+            && let Ok(mut cb) = cb.lock()
+        {
+            return cb.get_text().map(|t| !t.is_empty()).unwrap_or(false);
         }
         false
     }
