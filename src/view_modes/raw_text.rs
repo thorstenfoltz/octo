@@ -57,10 +57,10 @@ pub fn render_raw_view(
     // Parse-error fallback banner: shown when load_file failed to parse the
     // detected format and dropped the user into the raw text view. Dismissable
     // — clicking ✕ clears `tab.parse_error_banner` for the rest of the session.
-    if let Some(banner_text) = tab.parse_error_banner.clone() {
-        if render_parse_error_banner(ui, &banner_text, theme_mode) {
-            tab.parse_error_banner = None;
-        }
+    if let Some(banner_text) = tab.parse_error_banner.clone()
+        && render_parse_error_banner(ui, &banner_text, theme_mode)
+    {
+        tab.parse_error_banner = None;
     }
 
     if let Some(ref mut content) = tab.raw_content {
@@ -171,17 +171,18 @@ pub fn render_raw_view(
                 // (now-stale) quote/escape choices don't leak through.
                 let mode_changed =
                     prev_quote != tab.raw_csv_quote || prev_escape != tab.raw_csv_escape;
-                if mode_changed && tab.raw_view_formatted {
-                    if let Some(ref original) = tab.raw_content_original {
-                        let delim = tab.csv_delimiter as char;
-                        *content = format_delimited_text(
-                            original,
-                            delim,
-                            tab.raw_csv_quote,
-                            tab.raw_csv_escape,
-                        );
-                        tab.raw_content_modified = true;
-                    }
+                if mode_changed
+                    && tab.raw_view_formatted
+                    && let Some(ref original) = tab.raw_content_original
+                {
+                    let delim = tab.csv_delimiter as char;
+                    *content = format_delimited_text(
+                        original,
+                        delim,
+                        tab.raw_csv_quote,
+                        tab.raw_csv_escape,
+                    );
+                    tab.raw_content_modified = true;
                 }
             });
             ui.add_space(2.0);
@@ -514,11 +515,11 @@ pub(crate) fn split_delimited_line_ranges(
             Some(q) => match escape {
                 RawCsvEscape::Doubled => {
                     if c == q {
-                        if let Some(&(_, next)) = iter.peek() {
-                            if next == q {
-                                iter.next();
-                                continue;
-                            }
+                        if let Some(&(_, next)) = iter.peek()
+                            && next == q
+                        {
+                            iter.next();
+                            continue;
                         }
                         in_quote = None;
                     }

@@ -128,10 +128,10 @@ impl OctaApp {
         if action.open_file {
             self.open_file();
         }
-        if action.open_directory {
-            if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                self.directory_tree = Some(ui::directory_tree::DirectoryTreeState::new(path));
-            }
+        if action.open_directory
+            && let Some(path) = rfd::FileDialog::new().pick_folder()
+        {
+            self.directory_tree = Some(ui::directory_tree::DirectoryTreeState::new(path));
         }
         if action.close_directory {
             self.directory_tree = None;
@@ -245,36 +245,34 @@ impl OctaApp {
             self.tabs[self.active_tab].table_state.editing_cell = None;
             self.tabs[self.active_tab].filter_dirty = true;
         }
-        if action.delete_row {
-            if let Some((row, col)) = self.tabs[self.active_tab].table_state.selected_cell {
-                self.tabs[self.active_tab].table.delete_row(row);
-                self.tabs[self.active_tab].table_state.editing_cell = None;
-                if self.tabs[self.active_tab].table.row_count() == 0 {
-                    self.tabs[self.active_tab].table_state.selected_cell = None;
-                } else {
-                    let new_row = row.min(self.tabs[self.active_tab].table.row_count() - 1);
-                    self.tabs[self.active_tab].table_state.selected_cell = Some((new_row, col));
-                }
-                self.tabs[self.active_tab].filter_dirty = true;
+        if action.delete_row
+            && let Some((row, col)) = self.tabs[self.active_tab].table_state.selected_cell
+        {
+            self.tabs[self.active_tab].table.delete_row(row);
+            self.tabs[self.active_tab].table_state.editing_cell = None;
+            if self.tabs[self.active_tab].table.row_count() == 0 {
+                self.tabs[self.active_tab].table_state.selected_cell = None;
+            } else {
+                let new_row = row.min(self.tabs[self.active_tab].table.row_count() - 1);
+                self.tabs[self.active_tab].table_state.selected_cell = Some((new_row, col));
             }
+            self.tabs[self.active_tab].filter_dirty = true;
         }
-        if action.move_row_up {
-            if let Some((row, col)) = self.tabs[self.active_tab].table_state.selected_cell {
-                if row > 0 {
-                    self.tabs[self.active_tab].table.move_row(row, row - 1);
-                    self.tabs[self.active_tab].table_state.selected_cell = Some((row - 1, col));
-                    self.tabs[self.active_tab].filter_dirty = true;
-                }
-            }
+        if action.move_row_up
+            && let Some((row, col)) = self.tabs[self.active_tab].table_state.selected_cell
+            && row > 0
+        {
+            self.tabs[self.active_tab].table.move_row(row, row - 1);
+            self.tabs[self.active_tab].table_state.selected_cell = Some((row - 1, col));
+            self.tabs[self.active_tab].filter_dirty = true;
         }
-        if action.move_row_down {
-            if let Some((row, col)) = self.tabs[self.active_tab].table_state.selected_cell {
-                if row + 1 < self.tabs[self.active_tab].table.row_count() {
-                    self.tabs[self.active_tab].table.move_row(row, row + 1);
-                    self.tabs[self.active_tab].table_state.selected_cell = Some((row + 1, col));
-                    self.tabs[self.active_tab].filter_dirty = true;
-                }
-            }
+        if action.move_row_down
+            && let Some((row, col)) = self.tabs[self.active_tab].table_state.selected_cell
+            && row + 1 < self.tabs[self.active_tab].table.row_count()
+        {
+            self.tabs[self.active_tab].table.move_row(row, row + 1);
+            self.tabs[self.active_tab].table_state.selected_cell = Some((row + 1, col));
+            self.tabs[self.active_tab].filter_dirty = true;
         }
 
         if action.add_column {
@@ -290,23 +288,21 @@ impl OctaApp {
         if action.delete_column && self.tabs[self.active_tab].table.col_count() > 0 {
             self.open_delete_columns_dialog();
         }
-        if action.move_col_left {
-            if let Some((row, col)) = self.tabs[self.active_tab].table_state.selected_cell {
-                if col > 0 {
-                    self.tabs[self.active_tab].table.move_column(col, col - 1);
-                    self.tabs[self.active_tab].table_state.selected_cell = Some((row, col - 1));
-                    self.tabs[self.active_tab].table_state.widths_initialized = false;
-                }
-            }
+        if action.move_col_left
+            && let Some((row, col)) = self.tabs[self.active_tab].table_state.selected_cell
+            && col > 0
+        {
+            self.tabs[self.active_tab].table.move_column(col, col - 1);
+            self.tabs[self.active_tab].table_state.selected_cell = Some((row, col - 1));
+            self.tabs[self.active_tab].table_state.widths_initialized = false;
         }
-        if action.move_col_right {
-            if let Some((row, col)) = self.tabs[self.active_tab].table_state.selected_cell {
-                if col + 1 < self.tabs[self.active_tab].table.col_count() {
-                    self.tabs[self.active_tab].table.move_column(col, col + 1);
-                    self.tabs[self.active_tab].table_state.selected_cell = Some((row, col + 1));
-                    self.tabs[self.active_tab].table_state.widths_initialized = false;
-                }
-            }
+        if action.move_col_right
+            && let Some((row, col)) = self.tabs[self.active_tab].table_state.selected_cell
+            && col + 1 < self.tabs[self.active_tab].table.col_count()
+        {
+            self.tabs[self.active_tab].table.move_column(col, col + 1);
+            self.tabs[self.active_tab].table_state.selected_cell = Some((row, col + 1));
+            self.tabs[self.active_tab].table_state.widths_initialized = false;
         }
         if let Some(col_idx) = action.sort_rows_asc_by {
             self.tabs[self.active_tab]

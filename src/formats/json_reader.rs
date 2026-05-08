@@ -84,11 +84,12 @@ pub fn json_to_table(value: Value, path: &Path, format_name: &str) -> Result<Dat
             // column, not turned into rows of `"value"`.
             let mut found = None;
             for (_, v) in map {
-                if let Value::Array(arr) = v {
-                    if !arr.is_empty() && arr.iter().any(|e| matches!(e, Value::Object(_))) {
-                        found = Some(arr.clone());
-                        break;
-                    }
+                if let Value::Array(arr) = v
+                    && !arr.is_empty()
+                    && arr.iter().any(|e| matches!(e, Value::Object(_)))
+                {
+                    found = Some(arr.clone());
+                    break;
                 }
             }
             found.unwrap_or_else(|| vec![value.clone()])

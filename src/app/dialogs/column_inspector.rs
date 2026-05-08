@@ -495,10 +495,10 @@ pub(crate) fn render_column_inspector_dialog(app: &mut OctaApp, ctx: &egui::Cont
 
     // Double-click on an inspector row jumps to that column in the
     // underlying table.
-    if let Some(pos) = double_clicked_outer {
-        if let Some(&col_idx) = order.get(pos) {
-            select_in_table = Some(vec![col_idx]);
-        }
+    if let Some(pos) = double_clicked_outer
+        && let Some(&col_idx) = order.get(pos)
+    {
+        select_in_table = Some(vec![col_idx]);
     }
 
     if select_all_requested {
@@ -530,23 +530,23 @@ pub(crate) fn render_column_inspector_dialog(app: &mut OctaApp, ctx: &egui::Cont
         tab.column_inspector_selected.clear();
         tab.column_inspector_anchor = None;
     }
-    if let Some(cols) = select_in_table {
-        if !cols.is_empty() {
-            let n = cols.len();
-            apply_select_in_table(tab, &cols);
-            status_message = Some(if n == 1 {
-                let name = tab
-                    .table
-                    .columns
-                    .get(cols[0])
-                    .map(|c| c.name.as_str())
-                    .unwrap_or("?")
-                    .to_string();
-                format!("Selected column '{}' in table", name)
-            } else {
-                format!("Selected {} columns in table", n)
-            });
-        }
+    if let Some(cols) = select_in_table
+        && !cols.is_empty()
+    {
+        let n = cols.len();
+        apply_select_in_table(tab, &cols);
+        status_message = Some(if n == 1 {
+            let name = tab
+                .table
+                .columns
+                .get(cols[0])
+                .map(|c| c.name.as_str())
+                .unwrap_or("?")
+                .to_string();
+            format!("Selected column '{}' in table", name)
+        } else {
+            format!("Selected {} columns in table", n)
+        });
     }
     if let Some(msg) = status_message {
         app.status_message = Some((msg, std::time::Instant::now()));

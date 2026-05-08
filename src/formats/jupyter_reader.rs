@@ -120,12 +120,12 @@ fn extract_outputs(value: Option<&Value>) -> String {
             }
             "execute_result" | "display_data" => {
                 // Prefer text/plain from the data dict
-                if let Some(data) = output.get("data") {
-                    if let Some(text) = data.get("text/plain") {
-                        let t = extract_multiline(Some(text));
-                        if !t.is_empty() {
-                            parts.push(t);
-                        }
+                if let Some(data) = output.get("data")
+                    && let Some(text) = data.get("text/plain")
+                {
+                    let t = extract_multiline(Some(text));
+                    if !t.is_empty() {
+                        parts.push(t);
                     }
                 }
             }
@@ -169,13 +169,12 @@ fn write_notebook(path: &Path, table: &DataTable) -> Result<()> {
             Value::Array(vec![])
         } else {
             let mut lines = source_lines;
-            if !source.ends_with('\n') {
-                if let Some(last) = lines.last_mut() {
-                    if let Value::String(s) = last {
-                        // Remove the trailing \n we added
-                        s.pop();
-                    }
-                }
+            if !source.ends_with('\n')
+                && let Some(last) = lines.last_mut()
+                && let Value::String(s) = last
+            {
+                // Remove the trailing \n we added
+                s.pop();
             }
             Value::Array(lines)
         };

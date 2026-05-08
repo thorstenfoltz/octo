@@ -14,11 +14,11 @@ impl OctaApp {
             return;
         };
         let mut drained = false;
-        if let Ok(mut buf) = buffer.try_lock() {
-            if !buf.is_empty() {
-                self.tabs[self.active_tab].table.rows.append(&mut *buf);
-                drained = true;
-            }
+        if let Ok(mut buf) = buffer.try_lock()
+            && !buf.is_empty()
+        {
+            self.tabs[self.active_tab].table.rows.append(&mut *buf);
+            drained = true;
         }
         let loading_done = self.tabs[self.active_tab]
             .bg_loading_done

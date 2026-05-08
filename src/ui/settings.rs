@@ -652,10 +652,10 @@ impl SettingsDialog {
                 .show_inside(ui, |ui| {
                     ui.horizontal(|ui| {
                         if ui.button("Apply").clicked() {
-                            if let Ok(n) = self.sql_row_limit_buf.trim().parse::<usize>() {
-                                if n >= 1 {
-                                    self.draft.sql_default_row_limit = n;
-                                }
+                            if let Ok(n) = self.sql_row_limit_buf.trim().parse::<usize>()
+                                && n >= 1
+                            {
+                                self.draft.sql_default_row_limit = n;
                             }
                             applied = Some(self.draft.clone());
                             self.open = false;
@@ -813,13 +813,12 @@ impl SettingsDialog {
                                     .hint_text("(none — .ttf, .otf, or .ttc)")
                                     .desired_width(220.0),
                             );
-                            if ui.button("Browse...").clicked() {
-                                if let Some(p) = rfd::FileDialog::new()
+                            if ui.button("Browse...").clicked()
+                                && let Some(p) = rfd::FileDialog::new()
                                     .add_filter("Font (.ttf, .otf, .ttc)", &["ttf", "otf", "ttc"])
                                     .pick_file()
-                                {
-                                    self.draft.custom_font_path = p.to_string_lossy().into_owned();
-                                }
+                            {
+                                self.draft.custom_font_path = p.to_string_lossy().into_owned();
                             }
                             if !self.draft.custom_font_path.is_empty()
                                 && ui.button("Clear").clicked()

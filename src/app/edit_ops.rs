@@ -48,12 +48,12 @@ impl OctaApp {
             if r >= row_count || c >= col_count {
                 continue;
             }
-            if let Some(cv) = tab.table.get(r, c).cloned() {
-                if let data::CellValue::String(s) = cv {
-                    let new_val = transform(&s);
-                    if new_val != s {
-                        tab.table.set(r, c, data::CellValue::String(new_val));
-                    }
+            if let Some(cv) = tab.table.get(r, c).cloned()
+                && let data::CellValue::String(s) = cv
+            {
+                let new_val = transform(&s);
+                if new_val != s {
+                    tab.table.set(r, c, data::CellValue::String(new_val));
                 }
             }
         }
@@ -179,10 +179,10 @@ impl OctaApp {
     pub(crate) fn open_delete_columns_dialog(&mut self) {
         let tab = &mut self.tabs[self.active_tab];
         tab.delete_col_selection = vec![false; tab.table.col_count()];
-        if let Some((_, col)) = tab.table_state.selected_cell {
-            if col < tab.delete_col_selection.len() {
-                tab.delete_col_selection[col] = true;
-            }
+        if let Some((_, col)) = tab.table_state.selected_cell
+            && col < tab.delete_col_selection.len()
+        {
+            tab.delete_col_selection[col] = true;
         }
         tab.show_delete_columns_dialog = true;
     }
@@ -211,10 +211,10 @@ impl OctaApp {
             .map(|&orig| old_widths.get(orig).copied().unwrap_or(120.0))
             .collect();
 
-        if let Some((row, col)) = tab.table_state.selected_cell {
-            if let Some(new_col) = order.iter().position(|&orig| orig == col) {
-                tab.table_state.selected_cell = Some((row, new_col));
-            }
+        if let Some((row, col)) = tab.table_state.selected_cell
+            && let Some(new_col) = order.iter().position(|&orig| orig == col)
+        {
+            tab.table_state.selected_cell = Some((row, new_col));
         }
 
         tab.table.reorder_columns(&order);

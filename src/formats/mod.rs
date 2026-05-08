@@ -128,14 +128,13 @@ impl FormatRegistry {
             .extension()
             .and_then(|e| e.to_str())
             .map(|e| e.to_lowercase());
-        if let Some(ref ext) = ext {
-            if let Some(reader) = self
+        if let Some(ref ext) = ext
+            && let Some(reader) = self
                 .readers
                 .iter()
                 .find(|r| r.extensions().contains(&ext.as_str()))
-            {
-                return Some(reader.as_ref());
-            }
+        {
+            return Some(reader.as_ref());
         }
         // Fallback: use Text reader for unknown/missing extensions
         self.readers

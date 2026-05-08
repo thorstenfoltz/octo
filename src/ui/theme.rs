@@ -1403,14 +1403,14 @@ fn primary_family(font: &FontSettings) -> FontFamily {
 /// changes), but egui caches by content hash so repeats are cheap.
 fn apply_fonts(ctx: &egui::Context, font: &FontSettings) {
     let mut defs = FontDefinitions::default();
-    if let Some(path) = font.custom_path.filter(|p| !p.is_empty()) {
-        if let Ok(bytes) = std::fs::read(path) {
-            defs.font_data
-                .insert("custom".into(), Arc::new(FontData::from_owned(bytes)));
-            // Custom font becomes a named family that style maps to Body.
-            defs.families
-                .insert(FontFamily::Name(Arc::from("custom")), vec!["custom".into()]);
-        }
+    if let Some(path) = font.custom_path.filter(|p| !p.is_empty())
+        && let Ok(bytes) = std::fs::read(path)
+    {
+        defs.font_data
+            .insert("custom".into(), Arc::new(FontData::from_owned(bytes)));
+        // Custom font becomes a named family that style maps to Body.
+        defs.families
+            .insert(FontFamily::Name(Arc::from("custom")), vec!["custom".into()]);
     }
     // Bundled bold face used by the markdown preview renderer for `**text**`.
     // egui's default fonts don't include a bold variant, so `RichText::strong()`

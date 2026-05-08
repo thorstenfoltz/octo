@@ -225,28 +225,29 @@ pub fn parse_nav_input(input: &str, table: &DataTable) -> Option<(usize, usize)>
     }
 
     // Try C<n> — column only
-    if let Some(stripped) = input.strip_prefix('C').or_else(|| input.strip_prefix('c')) {
-        if let Ok(n) = stripped.parse::<usize>() {
-            if n >= 1 && n <= table.col_count() {
-                return Some((0, n - 1));
-            }
-        }
+    if let Some(stripped) = input.strip_prefix('C').or_else(|| input.strip_prefix('c'))
+        && let Ok(n) = stripped.parse::<usize>()
+        && n >= 1
+        && n <= table.col_count()
+    {
+        return Some((0, n - 1));
     }
 
     // Try R<n> — row only
-    if let Some(stripped) = input.strip_prefix('R').or_else(|| input.strip_prefix('r')) {
-        if let Ok(n) = stripped.parse::<usize>() {
-            if n >= 1 && n <= table.row_count() {
-                return Some((n - 1, 0));
-            }
-        }
+    if let Some(stripped) = input.strip_prefix('R').or_else(|| input.strip_prefix('r'))
+        && let Ok(n) = stripped.parse::<usize>()
+        && n >= 1
+        && n <= table.row_count()
+    {
+        return Some((n - 1, 0));
     }
 
     // Try pure number — row
-    if let Ok(n) = input.parse::<usize>() {
-        if n >= 1 && n <= table.row_count() {
-            return Some((n - 1, 0));
-        }
+    if let Ok(n) = input.parse::<usize>()
+        && n >= 1
+        && n <= table.row_count()
+    {
+        return Some((n - 1, 0));
     }
 
     // Try column name (case-insensitive)
@@ -280,10 +281,11 @@ fn parse_col_part(s: &str, table: &DataTable) -> Option<usize> {
         .strip_prefix('C')
         .or_else(|| s.strip_prefix('c'))
         .unwrap_or(s);
-    if let Ok(n) = num_str.parse::<usize>() {
-        if n >= 1 && n <= table.col_count() {
-            return Some(n - 1);
-        }
+    if let Ok(n) = num_str.parse::<usize>()
+        && n >= 1
+        && n <= table.col_count()
+    {
+        return Some(n - 1);
     }
     // Try column name
     let lower = s.to_lowercase();

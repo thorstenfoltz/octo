@@ -151,26 +151,27 @@ pub fn page_texts_from_table(table: &DataTable) -> Vec<String> {
     };
     let mut max_page = 0usize;
     for row_idx in 0..table.row_count() {
-        if let Some(CellValue::Int(p)) = table.get(row_idx, page_col) {
-            if *p > 0 {
-                max_page = max_page.max(*p as usize);
-            }
+        if let Some(CellValue::Int(p)) = table.get(row_idx, page_col)
+            && *p > 0
+        {
+            max_page = max_page.max(*p as usize);
         }
     }
     let mut buckets: Vec<String> = vec![String::new(); max_page];
     for row_idx in 0..table.row_count() {
-        if let Some(CellValue::Int(p)) = table.get(row_idx, page_col) {
-            if *p > 0 && (*p as usize) <= max_page {
-                let bucket = &mut buckets[(*p as usize) - 1];
-                if !bucket.is_empty() {
-                    bucket.push('\n');
-                }
-                let text = table
-                    .get(row_idx, text_col)
-                    .map(|v| v.to_string())
-                    .unwrap_or_default();
-                bucket.push_str(&text);
+        if let Some(CellValue::Int(p)) = table.get(row_idx, page_col)
+            && *p > 0
+            && (*p as usize) <= max_page
+        {
+            let bucket = &mut buckets[(*p as usize) - 1];
+            if !bucket.is_empty() {
+                bucket.push('\n');
             }
+            let text = table
+                .get(row_idx, text_col)
+                .map(|v| v.to_string())
+                .unwrap_or_default();
+            bucket.push_str(&text);
         }
     }
     buckets

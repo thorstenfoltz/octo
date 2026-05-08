@@ -229,7 +229,7 @@ fn parse_negative_integer() {
 
 #[test]
 fn parse_float() {
-    assert_eq!(parse_json_edit("3.14"), json!(3.14));
+    assert_eq!(parse_json_edit("2.5"), json!(2.5));
 }
 
 #[test]

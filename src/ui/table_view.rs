@@ -126,7 +126,7 @@ fn row_at_offset(offsets: &[f32], scroll_y: f32) -> usize {
     let mut lo = 0usize;
     let mut hi = offsets.len().saturating_sub(2);
     while lo < hi {
-        let mid = lo + (hi - lo + 1) / 2;
+        let mid = lo + (hi - lo).div_ceil(2);
         if offsets[mid] <= scroll_y {
             lo = mid;
         } else {
@@ -381,7 +381,7 @@ pub fn draw_table(
     if table.col_count() == 0 {
         ui.vertical_centered(|ui| {
             let avail = ui.available_size();
-            let logo_size = (avail.x.min(avail.y) * 0.55).min(512.0).max(128.0);
+            let logo_size = (avail.x.min(avail.y) * 0.55).clamp(128.0, 512.0);
             ui.add_space((avail.y - logo_size - 40.0).max(0.0) / 2.0);
             if let Some(tex) = welcome_logo_texture {
                 ui.add(egui::Image::new(egui::load::SizedTexture::new(
@@ -497,47 +497,50 @@ pub fn draw_table(
 
         let mut handled = false;
 
-        if cell_extend_mode && (ext_up || ext_down) {
-            if let Some((cur_row, cur_col)) = state.selected_cell {
-                let cur_display = filtered_rows
-                    .iter()
-                    .position(|&r| r == cur_row)
-                    .unwrap_or(0);
-                let new_display = if ext_up {
-                    cur_display.saturating_sub(1)
-                } else {
-                    (cur_display + 1).min(filtered_rows.len().saturating_sub(1))
-                };
-                if let Some(&new_row) = filtered_rows.get(new_display) {
-                    state.selected_cells.insert((cur_row, cur_col));
-                    state.selected_cells.insert((new_row, cur_col));
-                    state.selected_cell = Some((new_row, cur_col));
-                    scroll_row_into_view(
-                        state,
-                        new_display,
-                        row_height,
-                        data_area_height,
-                        max_scroll_y,
-                    );
-                }
-                handled = true;
+        if cell_extend_mode
+            && (ext_up || ext_down)
+            && let Some((cur_row, cur_col)) = state.selected_cell
+        {
+            let cur_display = filtered_rows
+                .iter()
+                .position(|&r| r == cur_row)
+                .unwrap_or(0);
+            let new_display = if ext_up {
+                cur_display.saturating_sub(1)
+            } else {
+                (cur_display + 1).min(filtered_rows.len().saturating_sub(1))
+            };
+            if let Some(&new_row) = filtered_rows.get(new_display) {
+                state.selected_cells.insert((cur_row, cur_col));
+                state.selected_cells.insert((new_row, cur_col));
+                state.selected_cell = Some((new_row, cur_col));
+                scroll_row_into_view(
+                    state,
+                    new_display,
+                    row_height,
+                    data_area_height,
+                    max_scroll_y,
+                );
             }
+            handled = true;
         }
 
-        if !handled && cell_extend_mode && (ext_left || ext_right) {
-            if let Some((cur_row, cur_col)) = state.selected_cell {
-                let col_count = table.col_count();
-                let new_col = if ext_left {
-                    cur_col.saturating_sub(1)
-                } else {
-                    (cur_col + 1).min(col_count.saturating_sub(1))
-                };
-                state.selected_cells.insert((cur_row, cur_col));
-                state.selected_cells.insert((cur_row, new_col));
-                state.selected_cell = Some((cur_row, new_col));
-                scroll_col_into_view(state, new_col, view_width, max_scroll_x);
-                handled = true;
-            }
+        if !handled
+            && cell_extend_mode
+            && (ext_left || ext_right)
+            && let Some((cur_row, cur_col)) = state.selected_cell
+        {
+            let col_count = table.col_count();
+            let new_col = if ext_left {
+                cur_col.saturating_sub(1)
+            } else {
+                (cur_col + 1).min(col_count.saturating_sub(1))
+            };
+            state.selected_cells.insert((cur_row, cur_col));
+            state.selected_cells.insert((cur_row, new_col));
+            state.selected_cell = Some((cur_row, new_col));
+            scroll_col_into_view(state, new_col, view_width, max_scroll_x);
+            handled = true;
         }
 
         if row_block_selected && (ext_up || ext_down) {
@@ -693,11 +696,11 @@ pub fn draw_table(
             }
         })
     });
-    if let Some(text) = paste_from_event {
-        if state.editing_cell.is_none() {
-            interaction.ctx_paste = true;
-            interaction.paste_text = Some(text);
-        }
+    if let Some(text) = paste_from_event
+        && state.editing_cell.is_none()
+    {
+        interaction.ctx_paste = true;
+        interaction.paste_text = Some(text);
     }
 
     let (panel_rect, _) =
@@ -837,12 +840,12 @@ pub fn draw_table(
         }
 
         let track_response = ui.interact(track_rect, ui.id().with("vscroll_track"), Sense::click());
-        if track_response.clicked() {
-            if let Some(pos) = track_response.interact_pointer_pos() {
-                let click_fraction = (pos.y - scrollbar_track_top) / scrollbar_track_height;
-                state.scroll_y = (click_fraction * total_content_height - view_height / 2.0)
-                    .clamp(0.0, max_scroll);
-            }
+        if track_response.clicked()
+            && let Some(pos) = track_response.interact_pointer_pos()
+        {
+            let click_fraction = (pos.y - scrollbar_track_top) / scrollbar_track_height;
+            state.scroll_y =
+                (click_fraction * total_content_height - view_height / 2.0).clamp(0.0, max_scroll);
         }
     }
 
@@ -889,12 +892,12 @@ pub fn draw_table(
         }
 
         let track_response = ui.interact(track_rect, ui.id().with("hscroll_track"), Sense::click());
-        if track_response.clicked() {
-            if let Some(pos) = track_response.interact_pointer_pos() {
-                let click_fraction = (pos.x - scrollbar_track_left) / scrollbar_track_width;
-                state.scroll_x =
-                    (click_fraction * total_col_width - view_width / 2.0).clamp(0.0, max_scroll);
-            }
+        if track_response.clicked()
+            && let Some(pos) = track_response.interact_pointer_pos()
+        {
+            let click_fraction = (pos.x - scrollbar_track_left) / scrollbar_track_width;
+            state.scroll_x =
+                (click_fraction * total_col_width - view_width / 2.0).clamp(0.0, max_scroll);
         }
     }
 
@@ -1337,10 +1340,10 @@ fn draw_header_direct(
             }
 
             if header_response.drag_stopped() {
-                if let (Some(from), Some(to)) = (state.dragging_col, state.drag_drop_target) {
-                    if from != to {
-                        interaction.col_drag_move = Some((from, to));
-                    }
+                if let (Some(from), Some(to)) = (state.dragging_col, state.drag_drop_target)
+                    && from != to
+                {
+                    interaction.col_drag_move = Some((from, to));
                 }
                 state.dragging_col = None;
                 state.drag_drop_target = None;
@@ -1366,12 +1369,13 @@ fn draw_header_direct(
                 state.resizing_col = Some(col_idx);
             }
 
-            if let Some(resizing) = state.resizing_col {
-                if resizing == col_idx && resize_response.dragged() {
-                    let delta = resize_response.drag_delta().x;
-                    if let Some(width) = state.col_widths.get_mut(col_idx) {
-                        *width = (*width + delta).max(MIN_COL_WIDTH);
-                    }
+            if let Some(resizing) = state.resizing_col
+                && resizing == col_idx
+                && resize_response.dragged()
+            {
+                let delta = resize_response.drag_delta().x;
+                if let Some(width) = state.col_widths.get_mut(col_idx) {
+                    *width = (*width + delta).max(MIN_COL_WIDTH);
                 }
             }
 
@@ -1402,29 +1406,28 @@ fn draw_header_direct(
     }
 
     // Drop indicator line
-    if let (Some(from), Some(to)) = (state.dragging_col, state.drag_drop_target) {
-        if from != to {
-            let target_x = col_starts.get(to).copied().unwrap_or(x);
-            let indicator_x = if to > from {
-                target_x
-                    + state
-                        .col_widths
-                        .get(to)
-                        .copied()
-                        .unwrap_or(DEFAULT_COL_WIDTH)
-            } else {
-                target_x
-            };
-            let indicator_x =
-                indicator_x.clamp(left_x + state.row_number_width, panel_rect.right());
-            col_painter.line_segment(
-                [
-                    egui::pos2(indicator_x, top_y),
-                    egui::pos2(indicator_x, top_y + HEADER_HEIGHT),
-                ],
-                egui::Stroke::new(3.0, colors.accent),
-            );
-        }
+    if let (Some(from), Some(to)) = (state.dragging_col, state.drag_drop_target)
+        && from != to
+    {
+        let target_x = col_starts.get(to).copied().unwrap_or(x);
+        let indicator_x = if to > from {
+            target_x
+                + state
+                    .col_widths
+                    .get(to)
+                    .copied()
+                    .unwrap_or(DEFAULT_COL_WIDTH)
+        } else {
+            target_x
+        };
+        let indicator_x = indicator_x.clamp(left_x + state.row_number_width, panel_rect.right());
+        col_painter.line_segment(
+            [
+                egui::pos2(indicator_x, top_y),
+                egui::pos2(indicator_x, top_y + HEADER_HEIGHT),
+            ],
+            egui::Stroke::new(3.0, colors.accent),
+        );
     }
 
     // Row number header (pinned)
@@ -1569,9 +1572,9 @@ fn draw_data_row_direct(
                 }
                 if let Some(new_text) = commit_text {
                     if let Some(old_val) = table.get(actual_row, col_idx) {
-                        let new_val = if new_text.starts_with('=') {
+                        let new_val = if let Some(formula) = new_text.strip_prefix('=') {
                             // Formula: evaluate and store result
-                            match crate::data::evaluate_formula(&new_text[1..], table) {
+                            match crate::data::evaluate_formula(formula, table) {
                                 Some(result) => {
                                     // Keep result as Int if it's a whole number, otherwise Float
                                     if result.fract() == 0.0 && result.abs() < i64::MAX as f64 {

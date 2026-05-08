@@ -21,8 +21,8 @@ fn test_yaml_number_int() {
 
 #[test]
 fn test_yaml_number_float() {
-    let v: serde_yaml::Value = serde_yaml::from_str("3.14").unwrap();
-    assert_eq!(yaml_to_json(&v), json!(3.14));
+    let v: serde_yaml::Value = serde_yaml::from_str("2.5").unwrap();
+    assert_eq!(yaml_to_json(&v), json!(2.5));
 }
 
 #[test]

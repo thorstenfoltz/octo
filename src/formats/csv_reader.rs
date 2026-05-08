@@ -281,10 +281,10 @@ pub fn load_csv_rows_chunk(
     }
 
     // Flush remaining
-    if !batch_buf.is_empty() {
-        if let Ok(mut buf) = buffer.lock() {
-            buf.append(&mut batch_buf);
-        }
+    if !batch_buf.is_empty()
+        && let Ok(mut buf) = buffer.lock()
+    {
+        buf.append(&mut batch_buf);
     }
 
     if loaded < max_rows {
