@@ -182,3 +182,53 @@ fn formula_aa_column_ref() {
     // get(0, 26) -> None -> 0.0
     assert_eq!(result, Some(0.0));
 }
+
+// --- Diagnostics: non-numeric references produce no value + a bad-cell report ---
+
+#[test]
+fn diagnostics_string_reference_is_rejected() {
+    // C1 is "hello" — must not silently become 0.0.
+    let table = formula_table();
+    let outcome = evaluate_formula_with_diagnostics("A1+C1", &table);
+    assert!(
+        outcome.value.is_none(),
+        "non-numeric cell must abort the row"
+    );
+    let bad = outcome.bad_cell.expect("bad cell must be reported");
+    assert_eq!(bad.row, 0);
+    assert_eq!(bad.col, 2);
+    assert_eq!(bad.content, "hello");
+}
+
+#[test]
+fn diagnostics_numeric_only_path_is_clean() {
+    let table = formula_table();
+    let outcome = evaluate_formula_with_diagnostics("A1+B1", &table);
+    assert_eq!(outcome.value, Some(12.5));
+    assert!(outcome.bad_cell.is_none());
+}
+
+#[test]
+fn diagnostics_numeric_string_still_parses() {
+    // A string that *looks* like a number is fine — only un-parseable strings
+    // count as bad cells. This protects users who imported numbers as text.
+    let mut table = formula_table();
+    table.rows[0][2] = CellValue::String("4.5".into());
+    let outcome = evaluate_formula_with_diagnostics("A1+C1", &table);
+    assert_eq!(outcome.value, Some(14.5));
+    assert!(outcome.bad_cell.is_none());
+}
+
+#[test]
+fn diagnostics_first_bad_cell_wins() {
+    // Multiple bad references; the report should pin the first one we hit.
+    let mut table = formula_table();
+    table.rows[0][2] = CellValue::String("not a number".into());
+    // Pretend column B has been overwritten with non-numeric text too.
+    table.rows[0][1] = CellValue::String("also bad".into());
+    let outcome = evaluate_formula_with_diagnostics("B1+C1", &table);
+    assert!(outcome.value.is_none());
+    let bad = outcome.bad_cell.expect("expected bad cell");
+    assert_eq!(bad.col, 1, "left operand should be reported first");
+    assert_eq!(bad.content, "also bad");
+}

@@ -340,6 +340,8 @@ pub struct TableInteraction {
     pub set_mark: Option<(MarkKey, MarkColor)>,
     /// Clear a color mark
     pub clear_mark: Option<MarkKey>,
+    /// Open the "Parse in new tab" modal for the selected scope.
+    pub ctx_parse_in_new_tab: Option<super::toolbar::ParseScope>,
 }
 
 /// Draw the data table with true row virtualization.
@@ -1789,6 +1791,36 @@ fn draw_data_row_direct(
                         interaction.sort_rows_desc_by = Some(col_idx);
                         ui.close_menu();
                     }
+
+                    ui.separator();
+                    // Parse-in-new-tab submenu — mirrors the Edit menu
+                    // entry so the user can launch the modal from
+                    // wherever the cell they care about lives.
+                    ui.menu_button("Parse in new tab", |ui| {
+                        if ui.button("Cell").clicked() {
+                            interaction.ctx_parse_in_new_tab =
+                                Some(super::toolbar::ParseScope::Cell {
+                                    row: actual_row,
+                                    col: col_idx,
+                                });
+                            ui.close_menu();
+                        }
+                        if ui.button("Row").clicked() {
+                            interaction.ctx_parse_in_new_tab =
+                                Some(super::toolbar::ParseScope::Row { row: actual_row });
+                            ui.close_menu();
+                        }
+                        if ui.button("Column").clicked() {
+                            interaction.ctx_parse_in_new_tab =
+                                Some(super::toolbar::ParseScope::Column { col: col_idx });
+                            ui.close_menu();
+                        }
+                        if ui.button("Whole table").clicked() {
+                            interaction.ctx_parse_in_new_tab =
+                                Some(super::toolbar::ParseScope::Table);
+                            ui.close_menu();
+                        }
+                    });
                 });
             }
         }

@@ -381,6 +381,13 @@ pub struct AppSettings {
     /// pop-up. Default `true`.
     #[serde(default = "default_true")]
     pub show_readonly_notice: bool,
+    /// When `true`, Octa requests an undecorated viewport at startup and
+    /// renders its own slim title bar (logo + title + min/max/close
+    /// buttons). Useful on tiling WMs / minimal compositors that don't
+    /// provide window controls. Default `false` — system decorations are
+    /// preferred unless the user explicitly opts in.
+    #[serde(default)]
+    pub use_custom_title_bar: bool,
 }
 
 fn default_true() -> bool {
@@ -434,6 +441,7 @@ impl Default for AppSettings {
             window_size: WindowSize::default(),
             start_maximized: true,
             show_readonly_notice: true,
+            use_custom_title_bar: false,
         }
     }
 }
@@ -850,6 +858,16 @@ impl SettingsDialog {
                         if self.draft.icon_variant != old_icon {
                             self.icon_changed = true;
                         }
+                        ui.end_row();
+
+                        ui.label("Window controls in toolbar:").on_hover_text(
+                            "Disable the system window decorations and let Octa\n\
+                             draw close / minimize / maximize buttons at the\n\
+                             right edge of the main toolbar. Useful on tiling\n\
+                             WMs that don't provide controls. Takes effect\n\
+                             after restart.",
+                        );
+                        ui.checkbox(&mut self.draft.use_custom_title_bar, "");
                         ui.end_row();
                     });
             });

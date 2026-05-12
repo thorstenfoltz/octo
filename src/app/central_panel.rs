@@ -509,6 +509,16 @@ impl OctaApp {
             self.do_paste(interaction.paste_text);
         }
 
+        // --- Parse in new tab (from cell right-click context menu) ---
+        // Resolve scope into modal state *before* taking a `&mut tab`
+        // borrow for the mark dispatch below — `build_modal_state`
+        // reads the table immutably.
+        if let Some(scope) = interaction.ctx_parse_in_new_tab {
+            let tab_ref = &self.tabs[self.active_tab];
+            self.pending_parse_modal =
+                super::dialogs::parse_in_new_tab::build_modal_state(tab_ref, scope);
+        }
+
         // --- Color marks ---
         let tab = &mut self.tabs[self.active_tab];
         if let Some((key, color)) = interaction.set_mark {

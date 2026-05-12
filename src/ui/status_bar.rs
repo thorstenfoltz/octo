@@ -1,4 +1,4 @@
-use egui::{Align, Color32, Layout, RichText, Ui};
+use egui::{self, Align, Color32, Layout, RichText, Ui};
 
 use super::table_view::TableViewState;
 use super::theme::{ThemeColors, ThemeMode};
@@ -38,12 +38,26 @@ pub fn draw_status_bar(
     nav_focus_requested: bool,
     zoom_percent: u32,
     readonly: bool,
+    busy: bool,
+    busy_hint: Option<&str>,
 ) -> StatusBarAction {
     let mut action = StatusBarAction::default();
     let colors = ThemeColors::for_mode(theme_mode);
 
     ui.horizontal(|ui| {
         ui.add_space(8.0);
+
+        // Busy indicator: small spinner + optional one-word reason. Shown
+        // only while a long-running operation is in flight (background
+        // row load, update check, update install). Idle frames stay
+        // completely silent so startup feels fast.
+        if busy {
+            ui.add(egui::Spinner::new().size(12.0));
+            if let Some(hint) = busy_hint {
+                ui.label(RichText::new(hint).size(11.0).color(colors.text_secondary));
+            }
+            ui.separator();
+        }
 
         if readonly {
             // Plain text instead of a lock emoji — many bundled fonts lack

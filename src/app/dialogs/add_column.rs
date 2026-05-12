@@ -75,12 +75,36 @@ pub(crate) fn render_add_column_dialog(app: &mut OctaApp, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.label("Insert at position:");
                 let col_count = app.tabs[app.active_tab].table.col_count();
-                let mut pos_val = app.tabs[app.active_tab].insert_col_at.unwrap_or(col_count) + 1;
-                let drag = egui::DragValue::new(&mut pos_val)
-                    .range(1..=(col_count + 1))
-                    .speed(1.0);
-                if ui.add(drag).changed() {
-                    app.tabs[app.active_tab].insert_col_at = Some((pos_val - 1).min(col_count));
+                // Plain text input instead of DragValue — DragValue draws
+                // hover spinner arrows that look out of place in this dialog
+                // and the value range is small enough that typing it is
+                // easier than dragging. Empty buffer falls back to
+                // `col_count + 1` (append at end).
+                let target_pos = app.tabs[app.active_tab].insert_col_at.unwrap_or(col_count) + 1;
+                if app.tabs[app.active_tab].insert_col_at_text.is_empty() {
+                    app.tabs[app.active_tab].insert_col_at_text = target_pos.to_string();
+                }
+                let parsed = app.tabs[app.active_tab]
+                    .insert_col_at_text
+                    .trim()
+                    .parse::<usize>()
+                    .ok();
+                let valid = parsed.is_some_and(|v| (1..=col_count + 1).contains(&v));
+                let buf_is_empty = app.tabs[app.active_tab].insert_col_at_text.is_empty();
+                let buf = &mut app.tabs[app.active_tab].insert_col_at_text;
+                let mut text_edit = egui::TextEdit::singleline(buf).desired_width(48.0);
+                if !valid && !buf_is_empty {
+                    text_edit = text_edit.text_color(egui::Color32::from_rgb(220, 80, 80));
+                }
+                if ui.add(text_edit).changed()
+                    && let Some(v) = app.tabs[app.active_tab]
+                        .insert_col_at_text
+                        .trim()
+                        .parse::<usize>()
+                        .ok()
+                        .filter(|v| (1..=col_count + 1).contains(v))
+                {
+                    app.tabs[app.active_tab].insert_col_at = Some(v - 1);
                 }
                 ui.label(format!("/ {}", col_count + 1));
             });
@@ -121,18 +145,52 @@ pub(crate) fn render_add_column_dialog(app: &mut OctaApp, ctx: &egui::Context) {
             .insert_column(idx, col_name, col_type);
         if let Some(formula_body) = formula_text.strip_prefix('=') {
             let row_count = app.tabs[app.active_tab].table.row_count();
+            // Collect per-row diagnostics so we can pop a "skipped N rows;
+            // first non-numeric cell: X" banner if any reference resolves
+            // to a non-numeric value (previously silent-fall-back to 0).
+            let mut skipped: usize = 0;
+            let mut first_bad: Option<data::FormulaBadCell> = None;
             for row in 0..row_count {
                 let shifted = shift_formula_row(formula_body, row);
-                if let Some(result) =
-                    data::evaluate_formula(&shifted, &app.tabs[app.active_tab].table)
+                let outcome = data::evaluate_formula_with_diagnostics(
+                    &shifted,
+                    &app.tabs[app.active_tab].table,
+                );
+                if let Some(bad) = outcome.bad_cell
+                    && first_bad.is_none()
                 {
-                    let val = if result.fract() == 0.0 && result.abs() < i64::MAX as f64 {
-                        data::CellValue::Int(result as i64)
-                    } else {
-                        data::CellValue::Float(result)
-                    };
-                    app.tabs[app.active_tab].table.set(row, idx, val);
+                    first_bad = Some(bad);
                 }
+                match outcome.value {
+                    Some(result) => {
+                        let val = if result.fract() == 0.0 && result.abs() < i64::MAX as f64 {
+                            data::CellValue::Int(result as i64)
+                        } else {
+                            data::CellValue::Float(result)
+                        };
+                        app.tabs[app.active_tab].table.set(row, idx, val);
+                    }
+                    None => {
+                        skipped += 1;
+                    }
+                }
+            }
+            if let Some(bad) = first_bad {
+                let col_name = app.tabs[app.active_tab]
+                    .table
+                    .columns
+                    .get(bad.col)
+                    .map(|c| c.name.as_str())
+                    .unwrap_or("?");
+                app.tabs[app.active_tab].parse_error_banner = Some(format!(
+                    "Formula skipped {} of {} row(s); first non-numeric reference: \
+                     column \"{}\" row {} = {:?}",
+                    skipped,
+                    row_count,
+                    col_name,
+                    bad.row + 1,
+                    bad.content
+                ));
             }
         }
         if let Some((row, _)) = app.tabs[app.active_tab].table_state.selected_cell {
@@ -141,8 +199,10 @@ pub(crate) fn render_add_column_dialog(app: &mut OctaApp, ctx: &egui::Context) {
         app.tabs[app.active_tab].table_state.widths_initialized = false;
         app.tabs[app.active_tab].filter_dirty = true;
         app.tabs[app.active_tab].show_add_column_dialog = false;
+        app.tabs[app.active_tab].insert_col_at_text.clear();
     }
     if !open {
         app.tabs[app.active_tab].show_add_column_dialog = false;
+        app.tabs[app.active_tab].insert_col_at_text.clear();
     }
 }
