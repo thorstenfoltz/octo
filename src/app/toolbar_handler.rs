@@ -57,6 +57,7 @@ impl OctaApp {
                     !tab.table.redo_stack.is_empty(),
                     &self.settings.shortcuts,
                     &tab.table,
+                    self.settings.use_custom_title_bar,
                 );
                 self.search_focus_requested = false;
 
@@ -228,6 +229,12 @@ impl OctaApp {
         if action.check_for_updates {
             self.show_update_dialog = true;
             self.check_for_updates(ctx);
+        }
+
+        if let Some(scope) = action.parse_in_new_tab {
+            let tab = &self.tabs[self.active_tab];
+            self.pending_parse_modal =
+                super::dialogs::parse_in_new_tab::build_modal_state(tab, scope);
         }
 
         if action.add_row {

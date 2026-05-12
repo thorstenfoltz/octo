@@ -212,6 +212,10 @@ pub(crate) struct TabState {
     pub(crate) new_col_type: String,
     pub(crate) new_col_formula: String,
     pub(crate) insert_col_at: Option<usize>,
+    /// Live buffer for the "Insert at position" TextEdit in the Insert
+    /// Column dialog. Reset to empty on dialog close so the next open
+    /// re-derives the default position from `insert_col_at`.
+    pub(crate) insert_col_at_text: String,
     pub(crate) show_delete_columns_dialog: bool,
     pub(crate) delete_col_selection: Vec<bool>,
     pub(crate) sql_query: String,
@@ -328,6 +332,10 @@ pub(crate) struct OctaApp {
     /// Set by `run_date_inference_pass` whenever one or more columns are
     /// promoted with a non-ISO source layout. `None` once dismissed.
     pub(crate) pending_date_warning: Option<DateWarning>,
+    /// Pending "Parse in new tab" modal. Set when the user picks a scope
+    /// from the Edit menu or right-click; cleared when the modal is
+    /// dismissed (Cancel) or the parse succeeds (Open).
+    pub(crate) pending_parse_modal: Option<crate::app::dialogs::parse_in_new_tab::ParseModalState>,
     /// Currently opened directory tree sidebar (`None` = sidebar hidden).
     pub(crate) directory_tree: Option<ui::directory_tree::DirectoryTreeState>,
     /// How many key presses of the Konami sequence have been matched so far.

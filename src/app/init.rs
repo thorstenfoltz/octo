@@ -87,6 +87,7 @@ impl OctaApp {
             pending_date_pickers: std::collections::VecDeque::new(),
             pending_raw_perf_prompt: None,
             pending_date_warning: None,
+            pending_parse_modal: None,
             directory_tree: None,
             konami_index: 0,
             confetti_until: None,

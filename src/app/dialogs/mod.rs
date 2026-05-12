@@ -12,6 +12,7 @@ pub(crate) mod column_inspector;
 pub(crate) mod date_ambiguity;
 pub(crate) mod delete_columns;
 pub(crate) mod documentation;
+pub(crate) mod parse_in_new_tab;
 pub(crate) mod raw_perf_prompt;
 pub(crate) mod readonly_notice;
 pub(crate) mod reload_confirm;
@@ -40,5 +41,6 @@ impl OctaApp {
         reload_confirm::render_reload_confirm_dialog(self, ctx);
         about::render_about_dialog(self, ctx);
         update_dialog::render_update_dialog(self, ctx);
+        parse_in_new_tab::render_parse_in_new_tab_dialog(self, ctx);
     }
 }

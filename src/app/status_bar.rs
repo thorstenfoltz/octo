@@ -5,7 +5,7 @@ use eframe::egui;
 
 use octa::ui;
 
-use super::state::OctaApp;
+use super::state::{OctaApp, UpdateState};
 
 impl OctaApp {
     pub(crate) fn render_status_bar(
@@ -19,6 +19,29 @@ impl OctaApp {
             .fill(status_colors.bg_header)
             .inner_margin(egui::Margin::symmetric(4, 2))
             .stroke(egui::Stroke::new(1.0, status_colors.border_subtle));
+
+        // Busy indicator state: a long-running operation is either a
+        // background row-load draining into the active tab or an
+        // update-check / install in flight. We surface a small spinner +
+        // one-word reason so the user knows the app is intentionally
+        // doing work (and so the WM's startup cursor, which we disabled
+        // in octa.desktop, isn't replaced by a different mystery).
+        let bg_loading = !self.tabs[self.active_tab]
+            .bg_loading_done
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let update_busy = matches!(
+            *self.update_state.lock().unwrap(),
+            UpdateState::Checking | UpdateState::Updating
+        );
+        let busy = bg_loading || update_busy;
+        let busy_hint = if update_busy {
+            Some("Updating…")
+        } else if bg_loading {
+            Some("Loading rows…")
+        } else {
+            None
+        };
+
         let status_action = egui::TopBottomPanel::bottom("status_bar")
             .exact_height(28.0)
             .frame(status_frame)
@@ -34,6 +57,8 @@ impl OctaApp {
                     std::mem::take(&mut self.nav_focus_requested),
                     self.zoom_percent,
                     self.readonly_mode,
+                    busy,
+                    busy_hint,
                 )
             })
             .inner;

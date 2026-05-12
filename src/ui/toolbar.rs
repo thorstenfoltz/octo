@@ -6,6 +6,22 @@ use super::shortcuts::{ShortcutAction, Shortcuts};
 use super::theme::{ThemeColors, ThemeMode};
 use crate::data::{DataTable, MarkColor, MarkKey, SearchMode, ViewMode};
 
+/// Which slice of the active table to feed into the "Parse in new tab"
+/// modal. Set by the Edit menu submenu or the table's right-click context
+/// menu; the app shell turns it into a [`PendingParseModal`] for the
+/// dialog renderer to read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseScope {
+    /// Single cell at `(row, col)` (display-row coordinates).
+    Cell { row: usize, col: usize },
+    /// Whole row at display-row index `row`.
+    Row { row: usize },
+    /// Whole column at index `col`.
+    Column { col: usize },
+    /// The entire active table.
+    Table,
+}
+
 #[derive(Default)]
 pub struct ToolbarAction {
     pub new_file: bool,
@@ -63,6 +79,9 @@ pub struct ToolbarAction {
     pub logo_clicked: bool,
     /// Toggle session-only read-only mode (also bound to F8 by default).
     pub toggle_readonly: bool,
+    /// Open the "Parse in new tab" modal pre-seeded with this scope.
+    /// `None` means the menu wasn't clicked this frame.
+    pub parse_in_new_tab: Option<ParseScope>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -101,6 +120,10 @@ pub fn draw_toolbar(
     can_redo: bool,
     shortcuts: &Shortcuts,
     table: &DataTable,
+    // When true, render close / max / min buttons at the right edge of
+    // this toolbar. Paired with `AppSettings.use_custom_title_bar` (which
+    // also strips system decorations in `main.rs`).
+    show_window_controls: bool,
 ) -> ToolbarAction {
     let mut action = ToolbarAction::default();
     let colors = ThemeColors::for_mode(theme_mode);
@@ -293,6 +316,42 @@ pub fn draw_toolbar(
                 }
 
                 ui.separator();
+
+                // "Parse in new tab" submenu — opens a modal that
+                // parses the chosen scope (cell / row / column / whole
+                // table) as a user-picked format and opens the result
+                // in a new tab. Cell / Row / Column require a selected
+                // cell so we know which row+col to target; Whole table
+                // is always available.
+                ui.menu_button("Parse in new tab", |ui| {
+                    let cell_btn = ui.add_enabled(has_selected_cell, egui::Button::new("Cell"));
+                    if cell_btn.clicked()
+                        && let Some((row, col)) = selected_cell
+                    {
+                        action.parse_in_new_tab = Some(ParseScope::Cell { row, col });
+                        ui.close_menu();
+                    }
+                    let row_btn = ui.add_enabled(has_selected_cell, egui::Button::new("Row"));
+                    if row_btn.clicked()
+                        && let Some((row, _)) = selected_cell
+                    {
+                        action.parse_in_new_tab = Some(ParseScope::Row { row });
+                        ui.close_menu();
+                    }
+                    let col_btn = ui.add_enabled(has_selected_cell, egui::Button::new("Column"));
+                    if col_btn.clicked()
+                        && let Some((_, col)) = selected_cell
+                    {
+                        action.parse_in_new_tab = Some(ParseScope::Column { col });
+                        ui.close_menu();
+                    }
+                    if ui.button("Whole table").clicked() {
+                        action.parse_in_new_tab = Some(ParseScope::Table);
+                        ui.close_menu();
+                    }
+                });
+
+                ui.separator();
                 ui.label(
                     RichText::new("Sort Rows")
                         .strong()
@@ -445,9 +504,10 @@ pub fn draw_toolbar(
                 }
 
                 ui.separator();
-                let combo = shortcuts.combo(ShortcutAction::ToggleReadOnly);
-                let label = format!("Read-only mode  ({})", combo.label());
-                if ui.checkbox(&mut readonly_mode.clone(), label).clicked() {
+                if ui
+                    .checkbox(&mut readonly_mode.clone(), "Read-only mode")
+                    .clicked()
+                {
                     action.toggle_readonly = true;
                     ui.close_menu();
                 }
@@ -591,6 +651,52 @@ pub fn draw_toolbar(
                     action.replace_all = true;
                 }
             }
+        }
+
+        // Window controls — pinned to the far right of the same toolbar.
+        // Only rendered when the user opted into a custom title bar
+        // (Settings → File-Specific → "Custom title bar"); `main.rs`
+        // strips system decorations in that case so these buttons are
+        // the only way to close / minimize / maximize the window.
+        // `right_to_left` lays them out in visual order `[_] [□] [x]`
+        // matching the desktop convention.
+        if show_window_controls {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let btn_size = egui::vec2(28.0, 24.0);
+                let ctx = ui.ctx().clone();
+                if ui
+                    .add(
+                        egui::Button::new(egui::RichText::new("x").size(15.0).strong())
+                            .min_size(btn_size),
+                    )
+                    .on_hover_text("Close")
+                    .clicked()
+                {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+                let is_max = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+                if ui
+                    .add(
+                        egui::Button::new(egui::RichText::new("\u{25A1}").size(13.0))
+                            .selected(is_max)
+                            .min_size(btn_size),
+                    )
+                    .on_hover_text(if is_max { "Restore" } else { "Maximize" })
+                    .clicked()
+                {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_max));
+                }
+                if ui
+                    .add(
+                        egui::Button::new(egui::RichText::new("_").size(15.0).strong())
+                            .min_size(btn_size),
+                    )
+                    .on_hover_text("Minimize")
+                    .clicked()
+                {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                }
+            });
         }
     });
 

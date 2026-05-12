@@ -88,6 +88,13 @@ fn main() -> eframe::Result<()> {
     if settings.start_maximized {
         viewport = viewport.with_maximized(true);
     }
+    if settings.use_custom_title_bar {
+        // Drop system decorations so the custom title bar in
+        // `ui::title_bar` is the only one visible. `with_resizable(true)`
+        // keeps WM-level resize edges on most compositors even without a
+        // title bar.
+        viewport = viewport.with_decorations(false).with_resizable(true);
+    }
     let options = eframe::NativeOptions {
         viewport,
         ..Default::default()

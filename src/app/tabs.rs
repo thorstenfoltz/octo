@@ -63,6 +63,7 @@ impl TabState {
             new_col_type: "String".to_string(),
             new_col_formula: String::new(),
             insert_col_at: None,
+            insert_col_at_text: String::new(),
             show_delete_columns_dialog: false,
             delete_col_selection: Vec::new(),
             sql_query: String::new(),

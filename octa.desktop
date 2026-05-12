@@ -6,5 +6,6 @@ Icon=octa
 Terminal=false
 Type=Application
 StartupWMClass=octa
+StartupNotify=false
 Categories=Office;Utility;DataVisualization;
 MimeType=text/csv;application/json;application/x-parquet;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/xml;application/toml;application/x-yaml;application/avro;
