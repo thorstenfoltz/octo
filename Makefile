@@ -40,10 +40,8 @@ clean: ## Clean cache of uv and delete virtual environment
 	@$(UV) cache clean
 	@rm -rf .venv
 
-lint: ## Lints the code
-	@docker build --pull -q -t megalinter-rust-custom .github/megalinter-rust/
-	@docker run --rm -v /var/run/docker.sock:/var/run/docker.sock:rw -v $(CURDIR):/tmp/lint:rw megalinter-rust-custom
+lint: check-npx ## Lints the code (uses cached MegaLinter Rust flavor image)
+	@npx mega-linter-runner@v9 --flavor rust
 
-lint-fix: ## Lints the code and fixes issues
-	@docker build --pull -q -t megalinter-rust-custom .github/megalinter-rust/
-	@docker run --rm -v /var/run/docker.sock:/var/run/docker.sock:rw -v $(CURDIR):/tmp/lint:rw -e APPLY_FIXES=all megalinter-rust-custom
+lint-fix: check-npx ## Lints the code and applies fixes
+	@npx mega-linter-runner@v9 --flavor rust --fix
