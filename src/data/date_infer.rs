@@ -613,7 +613,10 @@ mod tests {
     #[test]
     fn iso_offset_compact_form_accepted() {
         // `+0200` (no colon) is the RFC 822 / ISO 8601 basic offset form.
-        let strings = vec![Some("2024-03-15T14:30:00+0200"), Some("2024-04-01T08:00:00-0500")];
+        let strings = vec![
+            Some("2024-03-15T14:30:00+0200"),
+            Some("2024-04-01T08:00:00-0500"),
+        ];
         match infer_column(&strings) {
             InferOutcome::PromotedDateTime(DateTimeLayout::YmdDashTTz) => {}
             other => panic!("expected YmdDashTTz, got {other:?}"),
