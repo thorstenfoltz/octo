@@ -26,6 +26,10 @@ operations.
 ## Selection
 
 - Click a **cell** to select just that cell.
+- **Ctrl+click a cell** to toggle it in a disjoint multi-cell
+  selection. The first toggle promotes whatever cell was already
+  selected into the set, so a single click + a few Ctrl+clicks
+  builds an arbitrary cell selection without dragging.
 - Click a **row number** (grey column on the left) to select the
   entire row. **Ctrl+click** adds rows to the selection;
   **Shift+click** picks a contiguous range.
@@ -34,6 +38,9 @@ operations.
 - **Ctrl+A** selects all rows (when no text editor is focused).
 - **Ctrl+Up / Down** (and **Ctrl+Left / Right**) extend the
   selection by one row/column from the current anchor.
+- **Ctrl+PgUp / Ctrl+PgDn** scroll the table by one viewport and
+  advance the selected cell by the same number of rows
+  (spreadsheet-style page navigation).
 
 The active selection drives clipboard operations:
 [**Ctrl+C**](../reference/shortcuts.md#clipboard) copies whatever

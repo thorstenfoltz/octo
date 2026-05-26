@@ -1,9 +1,12 @@
 use arrow::array::*;
-use arrow::datatypes::{DataType, TimeUnit};
+use arrow::datatypes::{DataType, Field, Schema, TimeUnit};
+use arrow::record_batch::RecordBatch;
 use octa::data::{CellValue, ColumnInfo, DataTable};
 use octa::formats::FormatReader;
 use octa::formats::parquet_reader::*;
+use parquet::arrow::ArrowWriter;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 // --- data_type_from_string ---
 
@@ -202,4 +205,78 @@ fn test_parquet_round_trip() {
     assert_eq!(table2.get(0, 0), Some(&CellValue::Int(1)));
     assert_eq!(table2.get(0, 1), Some(&CellValue::String("Alice".into())));
     assert_eq!(table2.get(1, 2), Some(&CellValue::Float(7.0)));
+}
+
+/// Write a parquet file shaped like a pandas-emitted DataFrame: a
+/// regular data column plus an `__index_level_0__` column carrying the
+/// row index, with the `pandas` JSON metadata listing the index column.
+/// The reader must drop the index column from both the schema and the
+/// per-row data so the user sees only the real data column(s).
+#[test]
+fn test_parquet_strips_pandas_index_column() {
+    let id = Field::new("id", DataType::Int64, false);
+    let val = Field::new("value", DataType::Utf8, false);
+    let idx = Field::new("__index_level_0__", DataType::Int64, false);
+
+    // Minimal pandas-style metadata: only `index_columns` matters here.
+    let pandas_meta = r#"{"index_columns": ["__index_level_0__"], "columns": []}"#;
+    let mut schema_meta = HashMap::new();
+    schema_meta.insert("pandas".to_string(), pandas_meta.to_string());
+
+    let schema = Arc::new(Schema::new_with_metadata(vec![id, val, idx], schema_meta));
+    let batch = RecordBatch::try_new(
+        schema.clone(),
+        vec![
+            Arc::new(Int64Array::from(vec![10, 20, 30])) as Arc<dyn Array>,
+            Arc::new(StringArray::from(vec!["a", "b", "c"])) as Arc<dyn Array>,
+            // Pandas writes a 0..N RangeIndex as a real Int64 column.
+            Arc::new(Int64Array::from(vec![0i64, 1, 2])) as Arc<dyn Array>,
+        ],
+    )
+    .unwrap();
+
+    let f = tempfile::NamedTempFile::with_suffix(".parquet").unwrap();
+    let file = std::fs::File::create(f.path()).unwrap();
+    let mut writer = ArrowWriter::try_new(file, schema, None).unwrap();
+    writer.write(&batch).unwrap();
+    writer.close().unwrap();
+
+    let read = ParquetReader.read_file(f.path()).unwrap();
+    assert_eq!(read.col_count(), 2, "index column should be stripped");
+    let names: Vec<&str> = read.columns.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, vec!["id", "value"]);
+    assert_eq!(read.row_count(), 3);
+    assert_eq!(read.get(0, 0), Some(&CellValue::Int(10)));
+    assert_eq!(read.get(2, 1), Some(&CellValue::String("c".into())));
+}
+
+/// A file with a bare `__index_level_0__` column but no `pandas`
+/// metadata block (older pandas releases dropped the metadata) must
+/// still have the column stripped — the default-name list catches it.
+#[test]
+fn test_parquet_strips_default_pandas_index_name_without_metadata() {
+    let id = Field::new("id", DataType::Int64, false);
+    let idx = Field::new("__index_level_0__", DataType::Int64, false);
+
+    let schema = Arc::new(Schema::new(vec![id, idx]));
+    let batch = RecordBatch::try_new(
+        schema.clone(),
+        vec![
+            Arc::new(Int64Array::from(vec![1, 2])) as Arc<dyn Array>,
+            Arc::new(Int64Array::from(vec![0i64, 1])) as Arc<dyn Array>,
+        ],
+    )
+    .unwrap();
+
+    let f = tempfile::NamedTempFile::with_suffix(".parquet").unwrap();
+    let file = std::fs::File::create(f.path()).unwrap();
+    let mut writer = ArrowWriter::try_new(file, schema, None).unwrap();
+    writer.write(&batch).unwrap();
+    writer.close().unwrap();
+
+    let read = ParquetReader.read_file(f.path()).unwrap();
+    assert_eq!(read.col_count(), 1);
+    assert_eq!(read.columns[0].name, "id");
+    assert_eq!(read.row_count(), 2);
+    assert_eq!(read.get(1, 0), Some(&CellValue::Int(2)));
 }

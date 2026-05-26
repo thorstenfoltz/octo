@@ -1,0 +1,595 @@
+//! Data-row rendering: cell paint, hover/selection highlight, inline-edit
+//! TextEdit, the per-row right-click context menu, and the formula display.
+//! Split out of [`super`] (the 2,300-line table_view.rs) for navigability;
+//! no behaviour change.
+
+use std::collections::HashSet;
+
+use egui::{Align2, Color32, CursorIcon, RichText, Sense, Ui, Vec2};
+
+use crate::data::{BinaryDisplayMode, CellValue, DataTable, MarkKey, is_numeric_data_type};
+use crate::ui::status_bar::format_number;
+use crate::ui::theme::ThemeColors;
+use crate::ui::toolbar;
+
+use super::{DEFAULT_COL_WIDTH, HEADER_HEIGHT, TableInteraction, TableViewState, mark_submenu};
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn draw_data_row_direct(
+    ui: &mut Ui,
+    painter: &egui::Painter,
+    table: &mut DataTable,
+    state: &mut TableViewState,
+    colors: &ThemeColors,
+    actual_row: usize,
+    display_idx: usize,
+    left_x: f32,
+    row_y: f32,
+    panel_rect: egui::Rect,
+    interaction: &mut TableInteraction,
+    show_row_numbers: bool,
+    alternating_row_colors: bool,
+    negative_numbers_red: bool,
+    highlight_edits: bool,
+    font_size: f32,
+    cell_line_breaks: bool,
+    binary_display_mode: BinaryDisplayMode,
+    row_height: f32,
+    readonly: bool,
+    hidden_columns: &HashSet<usize>,
+    is_rainbow_theme: bool,
+) {
+    let is_multi_selected_row = state.selected_rows.contains(&actual_row);
+
+    let row_bg = if is_multi_selected_row {
+        colors.bg_selected
+    } else if alternating_row_colors && display_idx.is_multiple_of(2) {
+        colors.row_even
+    } else {
+        colors.row_odd
+    };
+
+    let rn_rect = egui::Rect::from_min_size(
+        egui::pos2(left_x, row_y),
+        Vec2::new(state.row_number_width, row_height),
+    );
+
+    let data_area_left = left_x + state.row_number_width;
+    let col_clip = egui::Rect::from_min_max(
+        egui::pos2(data_area_left, panel_rect.top() + HEADER_HEIGHT + 1.0),
+        panel_rect.max,
+    );
+    let col_painter = painter.with_clip_rect(col_clip);
+
+    let mut x = data_area_left - state.scroll_x;
+    let row_count = table.row_count();
+    let col_count = table.col_count();
+
+    for col_idx in 0..col_count {
+        if hidden_columns.contains(&col_idx) {
+            // Hidden column: zero width, no paint, no x advance.
+            continue;
+        }
+        let w = state
+            .col_widths
+            .get(col_idx)
+            .copied()
+            .unwrap_or(DEFAULT_COL_WIDTH);
+
+        let rect = egui::Rect::from_min_size(egui::pos2(x, row_y), Vec2::new(w, row_height));
+
+        if rect.right() >= data_area_left && rect.left() <= panel_rect.right() {
+            let is_editing = state
+                .editing_cell
+                .as_ref()
+                .map(|(r, c, _)| *r == actual_row && *c == col_idx)
+                .unwrap_or(false);
+            let is_selected = state
+                .selected_cell
+                .map(|(r, c)| r == actual_row && c == col_idx)
+                .unwrap_or(false);
+            let is_edited = table.is_edited(actual_row, col_idx);
+            let is_col_selected = state.selected_cols.contains(&col_idx);
+            let is_multi_cell = state.selected_cells.contains(&(actual_row, col_idx));
+
+            let mark_color = table.get_mark_color(actual_row, col_idx);
+            let is_any_selected =
+                is_selected || is_multi_selected_row || is_col_selected || is_multi_cell;
+            let cell_bg = if is_editing {
+                colors.bg_primary
+            } else if is_any_selected {
+                colors.bg_selected
+            } else if let Some(mc) = mark_color {
+                colors.mark_color(mc)
+            } else if highlight_edits && is_edited {
+                colors.bg_edited
+            } else {
+                row_bg
+            };
+            col_painter.rect_filled(rect, 0.0, cell_bg);
+
+            col_painter.line_segment(
+                [rect.right_top(), rect.right_bottom()],
+                egui::Stroke::new(0.5, colors.border_subtle),
+            );
+
+            if is_editing {
+                let mut commit_text: Option<String> = None;
+                if let Some((_, _, ref mut buf)) = state.editing_cell {
+                    let text_rect = rect.shrink2(Vec2::new(4.0, 2.0));
+                    if text_rect.intersects(panel_rect) {
+                        let edit_id = ui.id().with(("cell_edit", actual_row, col_idx));
+                        let edit = egui::TextEdit::singleline(buf)
+                            .id(edit_id)
+                            .font(egui::FontId::new(font_size, egui::FontFamily::Monospace))
+                            .frame(egui::Frame::NONE)
+                            .desired_width(text_rect.width());
+                        let edit_response = ui.put(text_rect.intersect(panel_rect), edit);
+
+                        if state.edit_needs_focus {
+                            edit_response.request_focus();
+                            // Select all text so user can immediately type to replace
+                            if let Some(mut te_state) =
+                                egui::TextEdit::load_state(ui.ctx(), edit_id)
+                            {
+                                let ccursor_range = egui::text::CCursorRange::two(
+                                    egui::text::CCursor::new(0),
+                                    egui::text::CCursor::new(buf.len()),
+                                );
+                                te_state.cursor.set_char_range(Some(ccursor_range));
+                                te_state.store(ui.ctx(), edit_id);
+                            }
+                            state.edit_needs_focus = false;
+                        }
+
+                        if edit_response.lost_focus() {
+                            commit_text = Some(buf.clone());
+                        }
+                    }
+                }
+                if let Some(new_text) = commit_text {
+                    if let Some(old_val) = table.get(actual_row, col_idx) {
+                        let new_val = if let Some(formula) = new_text.strip_prefix('=') {
+                            // Formula: evaluate and store result
+                            match crate::data::evaluate_formula(formula, table) {
+                                Some(result) => {
+                                    // Keep result as Int if it's a whole number, otherwise Float
+                                    if result.fract() == 0.0 && result.abs() < i64::MAX as f64 {
+                                        crate::data::CellValue::Int(result as i64)
+                                    } else {
+                                        crate::data::CellValue::Float(result)
+                                    }
+                                }
+                                None => {
+                                    // Invalid formula — store as string
+                                    crate::data::CellValue::String(new_text)
+                                }
+                            }
+                        } else if matches!(old_val, CellValue::Binary(_)) {
+                            CellValue::parse_binary(&new_text, binary_display_mode)
+                        } else {
+                            CellValue::parse_like(old_val, &new_text)
+                        };
+                        if new_val != *old_val {
+                            table.set(actual_row, col_idx, new_val);
+                            state.invalidate_row_heights();
+                        }
+                    }
+                    state.editing_cell = None;
+                }
+            } else {
+                if let Some(value) = table.get(actual_row, col_idx) {
+                    let display_text = value.display_with_binary_mode(binary_display_mode);
+                    let is_negative = match value {
+                        crate::data::CellValue::Int(n) => *n < 0,
+                        crate::data::CellValue::Float(f) => *f < 0.0,
+                        _ => false,
+                    };
+                    // Color picks both the cell variant *and* the column type: a
+                    // numeric value sitting in a string column is conceptually
+                    // text — render it the same way as a real string so the
+                    // column reads uniformly. The variant alone isn't enough.
+                    let col_numeric_for_color = table
+                        .columns
+                        .get(col_idx)
+                        .is_some_and(|c| is_numeric_data_type(&c.data_type));
+                    let text_color = if is_any_selected || mark_color.is_some() {
+                        // Selection backgrounds in most themes are a translucent
+                        // tint of the same hue family as `accent`, so a numeric
+                        // cell painted with the accent color disappears the
+                        // moment it gets selected. Mark backgrounds are saturated
+                        // tints that swallow accent-colored numeric text the
+                        // same way. Fall back to a high-contrast text color
+                        // whenever the cell has any colored background.
+                        //
+                        // Rainbow easter-egg theme: `colors.text_primary`
+                        // cycles through HSV hues every frame and can collide
+                        // with the mark fill at unpredictable moments. Pin
+                        // the text colour to white (black on pale-yellow
+                        // marks) so the cell stays readable.
+                        if is_rainbow_theme {
+                            if mark_color.map(|c| c.needs_dark_text()).unwrap_or(false) {
+                                Color32::BLACK
+                            } else {
+                                Color32::WHITE
+                            }
+                        } else {
+                            colors.text_primary
+                        }
+                    } else {
+                        match value {
+                            crate::data::CellValue::Null => colors.text_muted,
+                            crate::data::CellValue::Int(_) | crate::data::CellValue::Float(_)
+                                if col_numeric_for_color =>
+                            {
+                                if negative_numbers_red && is_negative {
+                                    Color32::from_rgb(0xef, 0x44, 0x44)
+                                } else {
+                                    colors.accent
+                                }
+                            }
+                            crate::data::CellValue::Bool(_) => colors.warning,
+                            crate::data::CellValue::Nested(_) => colors.text_secondary,
+                            _ => colors.text_primary,
+                        }
+                    };
+
+                    let text_rect = rect.shrink2(Vec2::new(6.0, 0.0));
+                    let cell_clip = egui::Rect::from_min_max(
+                        egui::pos2(rect.left() + 2.0, rect.top()),
+                        egui::pos2(rect.right() - 2.0, rect.bottom()),
+                    )
+                    .intersect(col_clip);
+
+                    let galley = if cell_line_breaks {
+                        painter.layout(
+                            display_text,
+                            egui::FontId::new(font_size, egui::FontFamily::Monospace),
+                            text_color,
+                            text_rect.width(),
+                        )
+                    } else {
+                        painter.layout_no_wrap(
+                            display_text,
+                            egui::FontId::new(font_size, egui::FontFamily::Monospace),
+                            text_color,
+                        )
+                    };
+                    let col_is_numeric = table
+                        .columns
+                        .get(col_idx)
+                        .is_some_and(|c| is_numeric_data_type(&c.data_type));
+                    let x = if col_is_numeric {
+                        text_rect.right() - galley.size().x
+                    } else {
+                        text_rect.left()
+                    };
+                    painter.with_clip_rect(cell_clip).galley(
+                        egui::pos2(x, text_rect.center().y - galley.size().y / 2.0),
+                        galley,
+                        Color32::TRANSPARENT,
+                    );
+                }
+            }
+
+            // Cell interactions (left click + right click)
+            if rect.intersects(panel_rect) {
+                let interact_rect = rect.intersect(col_clip);
+                let response = ui.interact(
+                    interact_rect,
+                    ui.id().with(("cell", actual_row, col_idx)),
+                    Sense::click(),
+                );
+
+                if response.clicked() {
+                    let modifiers = ui.input(|i| i.modifiers);
+                    state.editing_cell = None;
+                    if modifiers.command {
+                        // Ctrl/Cmd+click toggles the clicked cell in the
+                        // disjoint multi-cell selection. Promote the prior
+                        // single `selected_cell` into the set on the first
+                        // toggle so the original anchor isn't lost.
+                        if let Some(prev) = state.selected_cell
+                            && state.selected_cells.is_empty()
+                        {
+                            state.selected_cells.insert(prev);
+                        }
+                        let target = (actual_row, col_idx);
+                        if state.selected_cells.contains(&target) {
+                            state.selected_cells.remove(&target);
+                        } else {
+                            state.selected_cells.insert(target);
+                        }
+                        // Keyboard navigation should continue from the most
+                        // recent click even when we just removed it.
+                        state.selected_cell = Some(target);
+                        // Disjoint cell selection lives separately from row /
+                        // column selection — drop those so the precedence is
+                        // unambiguous.
+                        state.selected_rows.clear();
+                        state.selected_cols.clear();
+                        state.selection_anchor_display = None;
+                    } else {
+                        state.selected_cell = Some((actual_row, col_idx));
+                        // Plain click resets to a single-cell selection.
+                        state.selected_rows.clear();
+                        state.selected_cols.clear();
+                        state.selected_cells.clear();
+                        state.selection_anchor_display = None;
+                    }
+                }
+                if response.double_clicked() && !readonly {
+                    state.selected_cell = Some((actual_row, col_idx));
+                    let current_text = table
+                        .get(actual_row, col_idx)
+                        .map(|v| v.display_with_binary_mode(binary_display_mode))
+                        .unwrap_or_default();
+                    state.editing_cell = Some((actual_row, col_idx, current_text));
+                    state.edit_needs_focus = true;
+                }
+
+                // Right-click context menu on cell
+                response.context_menu(|ui| {
+                    state.selected_cell = Some((actual_row, col_idx));
+
+                    // --- Copy / Cut / Paste ---
+                    ui.label(RichText::new("Clipboard").strong().size(11.0));
+                    if ui.button("Copy").clicked() {
+                        interaction.ctx_copy = true;
+                        ui.close();
+                    }
+                    if ui.button("Cut").clicked() {
+                        interaction.ctx_cut = true;
+                        ui.close();
+                    }
+                    if (state.clipboard.is_some() || state.os_clipboard_has_text)
+                        && ui.button("Paste").clicked()
+                    {
+                        interaction.ctx_paste = true;
+                        ui.close();
+                    }
+                    ui.separator();
+
+                    // --- Mark ---
+                    // Honour the current multi-selection: if the right-clicked
+                    // cell is part of the active selection, colour the whole
+                    // selection (rows > columns > free cells > single cell —
+                    // same precedence Ctrl+M uses). Outside the selection,
+                    // mark only the clicked cell.
+                    let cell_anchor = MarkKey::Cell(actual_row, col_idx);
+                    let inside_cells = state.selected_cells.contains(&(actual_row, col_idx));
+                    let inside_rows = state.selected_rows.contains(&actual_row);
+                    let inside_cols = state.selected_cols.contains(&col_idx);
+                    let mark_keys: Vec<MarkKey> = if inside_rows && !state.selected_rows.is_empty()
+                    {
+                        let mut rs: Vec<usize> = state.selected_rows.iter().copied().collect();
+                        rs.sort_unstable();
+                        rs.into_iter().map(MarkKey::Row).collect()
+                    } else if inside_cols && !state.selected_cols.is_empty() {
+                        let mut cs: Vec<usize> = state.selected_cols.iter().copied().collect();
+                        cs.sort_unstable();
+                        cs.into_iter().map(MarkKey::Column).collect()
+                    } else if inside_cells && !state.selected_cells.is_empty() {
+                        let mut cs: Vec<(usize, usize)> =
+                            state.selected_cells.iter().copied().collect();
+                        cs.sort_unstable();
+                        cs.into_iter().map(|(r, c)| MarkKey::Cell(r, c)).collect()
+                    } else {
+                        vec![cell_anchor.clone()]
+                    };
+                    mark_submenu(ui, mark_keys, &cell_anchor, table, interaction);
+                    ui.separator();
+
+                    ui.label(RichText::new("Row").strong().size(11.0));
+                    if ui.button("Insert Row").clicked() {
+                        interaction.ctx_insert_row = true;
+                        ui.close();
+                    }
+                    if ui.button("Delete Row").clicked() {
+                        interaction.ctx_delete_row = true;
+                        ui.close();
+                    }
+                    if actual_row > 0 && ui.button("Move Row Up").clicked() {
+                        interaction.ctx_move_row_up = true;
+                        ui.close();
+                    }
+                    if actual_row + 1 < row_count && ui.button("Move Row Down").clicked() {
+                        interaction.ctx_move_row_down = true;
+                        ui.close();
+                    }
+
+                    ui.separator();
+                    ui.label(RichText::new("Column").strong().size(11.0));
+                    if ui.button("Rename Column").clicked() {
+                        state.editing_col_name =
+                            Some((col_idx, table.columns[col_idx].name.clone()));
+                        state.edit_col_needs_focus = true;
+                        ui.close();
+                    }
+                    if ui.button("Insert Column...").clicked() {
+                        interaction.header_col_clicked = Some(col_idx);
+                        interaction.ctx_insert_column = true;
+                        ui.close();
+                    }
+                    if ui.button("Delete Columns...").clicked() {
+                        interaction.ctx_delete_column = true;
+                        ui.close();
+                    }
+                    if col_idx > 0 && ui.button("Move Column Left").clicked() {
+                        interaction.ctx_move_col_left = true;
+                        ui.close();
+                    }
+                    if col_idx + 1 < col_count && ui.button("Move Column Right").clicked() {
+                        interaction.ctx_move_col_right = true;
+                        ui.close();
+                    }
+
+                    ui.separator();
+                    ui.label(RichText::new("Sort").strong().size(11.0));
+                    if ui.button("Sort A-Z").clicked() {
+                        interaction.sort_rows_asc_by = Some(col_idx);
+                        ui.close();
+                    }
+                    if ui.button("Sort Z-A").clicked() {
+                        interaction.sort_rows_desc_by = Some(col_idx);
+                        ui.close();
+                    }
+
+                    ui.separator();
+                    // Parse-in-new-tab submenu — mirrors the Edit menu
+                    // entry so the user can launch the modal from
+                    // wherever the cell they care about lives.
+                    ui.menu_button("Parse in new tab", |ui| {
+                        if ui.button("Cell").clicked() {
+                            interaction.ctx_parse_in_new_tab = Some(toolbar::ParseScope::Cell {
+                                row: actual_row,
+                                col: col_idx,
+                            });
+                            ui.close();
+                        }
+                        if ui.button("Row").clicked() {
+                            interaction.ctx_parse_in_new_tab =
+                                Some(toolbar::ParseScope::Row { row: actual_row });
+                            ui.close();
+                        }
+                        if ui.button("Column").clicked() {
+                            interaction.ctx_parse_in_new_tab =
+                                Some(toolbar::ParseScope::Column { col: col_idx });
+                            ui.close();
+                        }
+                        if ui.button("Whole table").clicked() {
+                            interaction.ctx_parse_in_new_tab = Some(toolbar::ParseScope::Table);
+                            ui.close();
+                        }
+                    });
+                });
+            }
+        }
+
+        x += w;
+    }
+
+    // Row number (pinned) - clickable for row selection
+    if !show_row_numbers {
+        return;
+    }
+    let rn_bg = if is_multi_selected_row {
+        colors.bg_selected
+    } else {
+        colors.row_number_bg
+    };
+    painter.rect_filled(rn_rect, 0.0, rn_bg);
+    painter.text(
+        rn_rect.center(),
+        Align2::CENTER_CENTER,
+        format_number(actual_row + 1 + table.row_offset),
+        egui::FontId::new((font_size * 0.85).round(), egui::FontFamily::Monospace),
+        colors.row_number_text,
+    );
+
+    // Row number click interaction
+    if rn_rect.intersects(panel_rect) {
+        let rn_interact_rect = rn_rect.intersect(panel_rect);
+        let rn_response = ui.interact(
+            rn_interact_rect,
+            ui.id().with(("row_num", actual_row)),
+            Sense::click(),
+        );
+
+        if rn_response.hovered() {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        }
+
+        if rn_response.clicked() {
+            let modifiers = ui.input(|i| i.modifiers);
+            if modifiers.command {
+                // Toggle this row in the multi-selection
+                if state.selected_rows.contains(&actual_row) {
+                    state.selected_rows.remove(&actual_row);
+                } else {
+                    state.selected_rows.insert(actual_row);
+                }
+            } else if modifiers.shift && !state.selected_rows.is_empty() {
+                // Range select
+                let min_row = *state.selected_rows.iter().min().unwrap();
+                let max_row = *state.selected_rows.iter().max().unwrap();
+                let range_start = min_row.min(actual_row);
+                let range_end = max_row.max(actual_row);
+                state.selected_rows.clear();
+                for r in range_start..=range_end {
+                    state.selected_rows.insert(r);
+                }
+            } else {
+                // Exclusive row selection
+                state.selected_rows.clear();
+                state.selected_rows.insert(actual_row);
+                state.selected_cols.clear();
+                state.selected_cells.clear();
+            }
+            state.selected_cell =
+                Some((actual_row, state.selected_cell.map(|(_, c)| c).unwrap_or(0)));
+            state.editing_cell = None;
+        }
+
+        // Right-click context menu on row number
+        rn_response.context_menu(|ui| {
+            state.selected_cell =
+                Some((actual_row, state.selected_cell.map(|(_, c)| c).unwrap_or(0)));
+            if !state.selected_rows.contains(&actual_row) {
+                state.selected_rows.clear();
+                state.selected_rows.insert(actual_row);
+            }
+
+            ui.label(RichText::new("Clipboard").strong().size(11.0));
+            if ui.button("Copy").clicked() {
+                interaction.ctx_copy = true;
+                ui.close();
+            }
+            if ui.button("Cut").clicked() {
+                interaction.ctx_cut = true;
+                ui.close();
+            }
+            if (state.clipboard.is_some() || state.os_clipboard_has_text)
+                && ui.button("Paste").clicked()
+            {
+                interaction.ctx_paste = true;
+                ui.close();
+            }
+            ui.separator();
+
+            // Right-click on a row number: if the row is part of a multi-row
+            // selection, colour every selected row. Otherwise just this one.
+            // The selected_rows preservation logic above already keeps
+            // multi-row selection intact when the click lands inside it.
+            let row_anchor = MarkKey::Row(actual_row);
+            let row_keys: Vec<MarkKey> =
+                if state.selected_rows.contains(&actual_row) && state.selected_rows.len() > 1 {
+                    let mut rs: Vec<usize> = state.selected_rows.iter().copied().collect();
+                    rs.sort_unstable();
+                    rs.into_iter().map(MarkKey::Row).collect()
+                } else {
+                    vec![row_anchor.clone()]
+                };
+            mark_submenu(ui, row_keys, &row_anchor, table, interaction);
+            ui.separator();
+
+            ui.label(RichText::new("Row").strong().size(11.0));
+            if ui.button("Insert Row").clicked() {
+                interaction.ctx_insert_row = true;
+                ui.close();
+            }
+            if ui.button("Delete Row").clicked() {
+                interaction.ctx_delete_row = true;
+                ui.close();
+            }
+            if actual_row > 0 && ui.button("Move Row Up").clicked() {
+                interaction.ctx_move_row_up = true;
+                ui.close();
+            }
+            if actual_row + 1 < row_count && ui.button("Move Row Down").clicked() {
+                interaction.ctx_move_row_down = true;
+                ui.close();
+            }
+        });
+    }
+}

@@ -10,6 +10,7 @@ use eframe::egui;
 use octa::formats::archive_reader::extract_entry_bytes;
 
 use super::state::OctaApp;
+use crate::view_modes::raw_text::render_parse_error_banner;
 
 impl OctaApp {
     /// Whether the active tab was opened as an archive (zip / tar /
@@ -30,6 +31,18 @@ impl OctaApp {
     pub(crate) fn render_archive_action_bar(&mut self, ui: &mut egui::Ui) {
         if !self.active_tab_is_archive() {
             return;
+        }
+
+        // Dismissible orange banner for the most recent extract / load
+        // failure on this archive tab. Reuses the parse-error banner
+        // pattern so the user has a clear × to clear it — without that
+        // the message would either fade silently (old behaviour) or
+        // appear sticky next to entries that opened fine on retry.
+        let banner_text = self.tabs[self.active_tab].parse_error_banner.clone();
+        if let Some(text) = banner_text
+            && render_parse_error_banner(ui, &text, self.theme_mode)
+        {
+            self.tabs[self.active_tab].parse_error_banner = None;
         }
 
         // Capture the bits we need from the active tab up front so the
@@ -93,13 +106,19 @@ impl OctaApp {
     }
 
     fn open_archive_entry(&mut self, archive_path: &str, entry_path: &str) {
+        // Capture the archive tab idx before `load_file` switches the
+        // active tab to the newly-opened entry — we need to clear /
+        // set the banner on the archive listing tab the user is still
+        // looking at when an extraction fails.
+        let archive_tab_idx = self.active_tab;
+
         let bytes = match extract_entry_bytes(std::path::Path::new(archive_path), entry_path) {
             Ok(b) => b,
             Err(e) => {
-                self.status_message = Some((
-                    format!("Archive: extract failed: {}", e),
-                    std::time::Instant::now(),
-                ));
+                if let Some(tab) = self.tabs.get_mut(archive_tab_idx) {
+                    tab.parse_error_banner =
+                        Some(format!("Failed to open '{}': {}", entry_path, e));
+                }
                 return;
             }
         };
@@ -126,19 +145,17 @@ impl OctaApp {
         {
             Ok(t) => t,
             Err(e) => {
-                self.status_message = Some((
-                    format!("Archive: tempfile create: {}", e),
-                    std::time::Instant::now(),
-                ));
+                if let Some(tab) = self.tabs.get_mut(archive_tab_idx) {
+                    tab.parse_error_banner = Some(format!("Tempfile create failed: {}", e));
+                }
                 return;
             }
         };
         let path = tmp.path().to_path_buf();
         if let Err(e) = tmp.as_file().write_all(&bytes) {
-            self.status_message = Some((
-                format!("Archive: tempfile write: {}", e),
-                std::time::Instant::now(),
-            ));
+            if let Some(tab) = self.tabs.get_mut(archive_tab_idx) {
+                tab.parse_error_banner = Some(format!("Tempfile write failed: {}", e));
+            }
             return;
         }
         // Leak the handle so the file survives past the load — readers
@@ -146,7 +163,12 @@ impl OctaApp {
         // Parse-in-new-tab uses.
         let _ = tmp.keep();
 
-        self.load_file(path);
+        // Always open the extracted entry in a *new* tab — never replace
+        // the archive listing the user is still looking at. `load_file`
+        // alone can reuse the current tab when `apply_loaded_table`'s
+        // empty-tab heuristic fires; the new-tab variant pushes a
+        // placeholder first to make that impossible.
+        self.load_file_in_new_tab(path);
 
         // Stamp a friendly label so the new tab's status row hints at
         // the origin, then clear the source path so Save prompts
@@ -163,6 +185,11 @@ impl OctaApp {
                 entry_path
             );
             tab.table.format_name = Some(label);
+        }
+        // Successful open clears any stale banner on the archive tab so
+        // the next failed entry can light it up again.
+        if let Some(tab) = self.tabs.get_mut(archive_tab_idx) {
+            tab.parse_error_banner = None;
         }
         self.status_message = Some((
             format!("Archive: opened \"{}\"", entry_path),

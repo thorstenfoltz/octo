@@ -5,11 +5,52 @@ use arrow::array::*;
 use arrow::datatypes::{DataType, Field, Schema, TimeUnit};
 use parquet::arrow::ArrowWriter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::path::Path;
 use std::sync::Arc;
 
 pub struct ParquetReader;
+
+/// Names that pandas writes for its on-disk row index when no explicit
+/// index column was provided to `to_parquet`. Always stripped, even on
+/// files with no `pandas` schema metadata, so files round-tripped through
+/// older pandas releases (which didn't always write the metadata block)
+/// also come through cleanly.
+const PANDAS_DEFAULT_INDEX_NAMES: &[&str] = &["__index_level_0__"];
+
+/// Inspect Arrow schema metadata for pandas' `index_columns` list and
+/// return the column names that should be hidden from the user. pandas
+/// writes a JSON blob under the key `pandas`; `index_columns` is the
+/// relevant array — entries are either strings (column names) or
+/// `{kind: "range"}` objects (auto-generated index, lives only in the
+/// metadata, no Arrow column). The defaults at
+/// [`PANDAS_DEFAULT_INDEX_NAMES`] are always included so missing /
+/// malformed metadata doesn't leak `__index_level_0__`.
+fn pandas_index_columns(metadata: &HashMap<String, String>) -> HashSet<String> {
+    let mut out: HashSet<String> = PANDAS_DEFAULT_INDEX_NAMES
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
+    let Some(blob) = metadata.get("pandas") else {
+        return out;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(blob) else {
+        return out;
+    };
+    let Some(items) = value.get("index_columns").and_then(|v| v.as_array()) else {
+        return out;
+    };
+    for item in items {
+        if let Some(name) = item.as_str() {
+            out.insert(name.to_string());
+        }
+        // Object form (`{"kind": "range", ...}`) has no matching Arrow
+        // column on disk, so nothing to filter — pandas drops the data
+        // for the range index entirely.
+    }
+    out
+}
 
 impl FormatReader for ParquetReader {
     fn name(&self) -> &str {
@@ -76,13 +117,28 @@ fn read_via_arrow(path: &Path) -> Result<DataTable> {
 
     let reader = builder.with_batch_size(8192).build()?;
 
-    // Build column info from Arrow schema
-    let columns: Vec<ColumnInfo> = schema
+    // Pandas writes its row-index as a regular column (`__index_level_0__`
+    // by default, or a named column listed under the schema's `pandas`
+    // metadata key). Strip those columns from both the visible schema
+    // and the per-row data — they're an artefact of the writer, not user
+    // data, and surfacing them would force the user to manually drop the
+    // column before doing anything useful with the file.
+    let drop_names = pandas_index_columns(schema.metadata());
+    let keep_indices: Vec<usize> = schema
         .fields()
         .iter()
-        .map(|f| ColumnInfo {
-            name: f.name().clone(),
-            data_type: format!("{}", f.data_type()),
+        .enumerate()
+        .filter_map(|(i, f)| (!drop_names.contains(f.name())).then_some(i))
+        .collect();
+
+    let columns: Vec<ColumnInfo> = keep_indices
+        .iter()
+        .map(|&i| {
+            let f = schema.field(i);
+            ColumnInfo {
+                name: f.name().clone(),
+                data_type: format!("{}", f.data_type()),
+            }
         })
         .collect();
 
@@ -92,14 +148,13 @@ fn read_via_arrow(path: &Path) -> Result<DataTable> {
     'outer: for batch_result in reader {
         let batch = batch_result?;
         let num_rows = batch.num_rows();
-        let num_cols = batch.num_columns();
 
         for row_idx in 0..num_rows {
             if loaded >= max_rows {
                 break 'outer;
             }
-            let mut row = Vec::with_capacity(num_cols);
-            for col_idx in 0..num_cols {
+            let mut row = Vec::with_capacity(keep_indices.len());
+            for &col_idx in &keep_indices {
                 let array = batch.column(col_idx);
                 let value = arrow_value_to_cell(array, row_idx);
                 row.push(value);
@@ -149,43 +204,71 @@ fn read_via_duckdb(path: &Path) -> Result<DataTable> {
     let batches: Vec<arrow::record_batch::RecordBatch> =
         stmt.query_arrow([path_str.as_str()])?.collect();
 
-    // Get the Arrow schema from the first batch (DuckDB hands us a real
-    // Arrow schema so column types round-trip cleanly).
-    let columns: Vec<ColumnInfo> = if let Some(first) = batches.first() {
-        first
-            .schema()
-            .fields()
-            .iter()
-            .map(|f| ColumnInfo {
-                name: f.name().clone(),
-                data_type: format!("{}", f.data_type()),
-            })
-            .collect()
-    } else {
-        // Empty result — fall back to a DESCRIBE for the column list.
-        let mut describe = conn.prepare(&format!(
-            "DESCRIBE SELECT * FROM read_parquet({})",
-            quote_sql_literal(&path_str)
-        ))?;
-        let cols: Vec<(String, String)> = describe
-            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
-            .filter_map(|r| r.ok())
-            .collect();
-        cols.into_iter()
-            .map(|(name, ty)| ColumnInfo {
-                name,
-                data_type: duckdb_type_to_arrow_name(&ty),
-            })
-            .collect()
-    };
+    // Mirror the native path: drop pandas index columns from both the
+    // schema and the per-row data. DuckDB's `read_parquet` surfaces
+    // `__index_level_0__` as a regular column on files written by
+    // pandas, so without this filter it leaks into the table view.
+    let (columns, keep_indices): (Vec<ColumnInfo>, Vec<usize>) =
+        if let Some(first) = batches.first() {
+            let schema = first.schema();
+            let drop_names = pandas_index_columns(schema.metadata());
+            let keep: Vec<usize> = schema
+                .fields()
+                .iter()
+                .enumerate()
+                .filter_map(|(i, f)| (!drop_names.contains(f.name())).then_some(i))
+                .collect();
+            let cols: Vec<ColumnInfo> = keep
+                .iter()
+                .map(|&i| {
+                    let f = schema.field(i);
+                    ColumnInfo {
+                        name: f.name().clone(),
+                        data_type: format!("{}", f.data_type()),
+                    }
+                })
+                .collect();
+            (cols, keep)
+        } else {
+            // Empty result — fall back to a DESCRIBE for the column list.
+            // No Arrow schema metadata available here, so the pandas filter
+            // shrinks to the default-name list.
+            let mut describe = conn.prepare(&format!(
+                "DESCRIBE SELECT * FROM read_parquet({})",
+                quote_sql_literal(&path_str)
+            ))?;
+            let raw_cols: Vec<(String, String)> = describe
+                .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
+                .filter_map(|r| r.ok())
+                .collect();
+            let drop_names: HashSet<String> = PANDAS_DEFAULT_INDEX_NAMES
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect();
+            let keep: Vec<usize> = raw_cols
+                .iter()
+                .enumerate()
+                .filter_map(|(i, (name, _))| (!drop_names.contains(name)).then_some(i))
+                .collect();
+            let cols: Vec<ColumnInfo> = keep
+                .iter()
+                .map(|&i| {
+                    let (name, ty) = &raw_cols[i];
+                    ColumnInfo {
+                        name: name.clone(),
+                        data_type: duckdb_type_to_arrow_name(ty),
+                    }
+                })
+                .collect();
+            (cols, keep)
+        };
 
     let mut rows: Vec<Vec<CellValue>> = Vec::new();
     for batch in &batches {
         let num_rows = batch.num_rows();
-        let num_cols = batch.num_columns();
         for row_idx in 0..num_rows {
-            let mut row = Vec::with_capacity(num_cols);
-            for col_idx in 0..num_cols {
+            let mut row = Vec::with_capacity(keep_indices.len());
+            for &col_idx in &keep_indices {
                 let array = batch.column(col_idx);
                 row.push(arrow_value_to_cell(array, row_idx));
             }

@@ -39,6 +39,14 @@ path is cleared so a Save prompts for a real location.
 
 Directory rows are skipped; the button is greyed for them.
 
+If an entry can't be extracted or its format reader rejects the
+payload, an **orange warning banner** appears above the archive
+action bar describing the failure (`Failed to open '<entry>': …`).
+Click the **×** on the banner to dismiss it, or just pick a
+different entry — the banner clears automatically on the next
+successful open. The archive table itself stays interactive
+throughout, so no reload is needed.
+
 ## Supported formats
 
 | Extension | Notes                                                               |

@@ -683,7 +683,15 @@ fn split_delimited_line(
 
 /// Render a dismissible orange warning banner. Returns `true` when the user
 /// clicked the close button so the caller can clear the banner state.
-fn render_parse_error_banner(ui: &mut egui::Ui, message: &str, theme_mode: ThemeMode) -> bool {
+///
+/// Shared with the archive action bar (`OctaApp::render_archive_action_bar`)
+/// so archive-entry failures use the same orange-banner-with-× pattern as
+/// the parse-error fallback above the raw editor.
+pub(crate) fn render_parse_error_banner(
+    ui: &mut egui::Ui,
+    message: &str,
+    theme_mode: ThemeMode,
+) -> bool {
     let (bg, fg) = if theme_mode.is_dark() {
         (
             egui::Color32::from_rgb(0x4a, 0x2a, 0x14),

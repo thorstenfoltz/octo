@@ -73,12 +73,22 @@ impl OctaApp {
     /// Lazily build the two logo textures the first frame they're needed (or
     /// after the icon variant changes). The toolbar needs the small one; the
     /// welcome screen needs the high-resolution one.
+    ///
+    /// When the hidden Rainbow easter-egg theme is active we render the
+    /// dedicated rainbow rosette (`assets/octa-random.svg`) instead of the
+    /// user's normal `resolved_icon` SVG, so the logo visually matches the
+    /// cycling rainbow palette. Leaving Rainbow invalidates these textures
+    /// elsewhere so the user's icon comes back on the next rebuild.
     fn ensure_logo_textures(&mut self, ctx: &egui::Context) {
         if self.logo_texture.is_some() && self.welcome_logo_texture.is_some() {
             return;
         }
         let opt = resvg::usvg::Options::default();
-        let svg_src = self.resolved_icon.svg_source();
+        let svg_src = if self.theme_mode.is_rainbow() {
+            include_str!("../../assets/octa-random.svg")
+        } else {
+            self.resolved_icon.svg_source()
+        };
         let Ok(tree) = resvg::usvg::Tree::from_str(svg_src, &opt) else {
             return;
         };
@@ -175,7 +185,13 @@ impl OctaApp {
             }
         }
         if action.toggle_theme {
+            let was_rainbow = self.theme_mode.is_rainbow();
             self.theme_mode = self.theme_mode.toggle();
+            if was_rainbow && !self.theme_mode.is_rainbow() {
+                self.rainbow_active = false;
+                self.logo_texture = None;
+                self.welcome_logo_texture = None;
+            }
             self.apply_zoom(ctx);
         }
         if action.zoom_in {

@@ -148,6 +148,39 @@ pub fn render_chart_view(
                     XAxisKind::Numeric => {}
                 }
             }
+            // X-axis bounds: same half-set semantics as the Y axis. For
+            // categorical Bar / Box charts the user-facing values are
+            // category indices (0, 1, 2, …), so the bound numbers there
+            // are just visible-range slices — still useful when you want
+            // to zoom into a slice of bars.
+            if let (Some(x_min), Some(x_max)) = (cfg.x_min, cfg.x_max)
+                && x_min < x_max
+                && x_min.is_finite()
+                && x_max.is_finite()
+            {
+                plot = plot.default_x_bounds(x_min, x_max);
+            }
+            // X grid spacer: emit ticks every `step` units in the visible
+            // range. Honoured by all chart kinds.
+            if let Some(step) = cfg.x_step
+                && step > 0.0
+            {
+                plot = plot.x_grid_spacer(move |input| {
+                    let mut marks = Vec::new();
+                    let mut v = (input.bounds.0 / step).ceil() * step;
+                    let mut emitted = 0i64;
+                    const MARK_LIMIT: i64 = 10_000;
+                    while v <= input.bounds.1 && emitted < MARK_LIMIT {
+                        marks.push(egui_plot::GridMark {
+                            value: v,
+                            step_size: step,
+                        });
+                        v += step;
+                        emitted += 1;
+                    }
+                    marks
+                });
+            }
             // Y-axis bounds: when both min and max are set we force them as
             // the default bounds. Half-set is ignored — partial bounds make
             // the bounding box meaningless. Log-scale projects the user
@@ -465,7 +498,48 @@ fn draw_controls(ui: &mut egui::Ui, tab: &mut TabState, colors: &ThemeColors) {
                 ui.checkbox(&mut tab.chart_config.show_grid, "Show grid");
             });
 
-            // Group B — Y axis. One row.
+            // Group B — X axis. One row, mirrors the Y axis controls below
+            // so users can clamp either dimension. For categorical Bar / Box
+            // charts the bounds are interpreted as category indices.
+            ui.add_space(2.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.label(egui::RichText::new("X axis:").strong());
+                ui.label("Min:").on_hover_text(
+                    "Lower bound on the X axis (original-data units). \
+                     Both Min and Max must be set for the bounds to take \
+                     effect — half-set is ignored. Leave blank for auto. \
+                     For Date / DateTime X axes the bound is in days / \
+                     seconds since the Unix epoch.",
+                );
+                optional_f64_input(
+                    ui,
+                    "chart_x_min",
+                    &mut tab.chart_buffers.x_min,
+                    &mut tab.chart_config.x_min,
+                    false,
+                );
+                ui.label("Max:");
+                optional_f64_input(
+                    ui,
+                    "chart_x_max",
+                    &mut tab.chart_buffers.x_max,
+                    &mut tab.chart_config.x_max,
+                    false,
+                );
+                ui.label("Step:").on_hover_text(
+                    "Custom X-axis grid step (original-data units). \
+                     Leave blank to let egui_plot pick.",
+                );
+                optional_f64_input(
+                    ui,
+                    "chart_x_step",
+                    &mut tab.chart_buffers.x_step,
+                    &mut tab.chart_config.x_step,
+                    true,
+                );
+            });
+
+            // Group C — Y axis. One row.
             ui.add_space(2.0);
             ui.horizontal_wrapped(|ui| {
                 ui.label(egui::RichText::new("Y axis:").strong());
@@ -513,7 +587,7 @@ fn draw_controls(ui: &mut egui::Ui, tab: &mut TabState, colors: &ThemeColors) {
                          The Y axis label gets a '(log10)' suffix.",
                     );
             });
-            // Group C — Series. Each Y-column gets a single horizontal
+            // Group D — Series. Each Y-column gets a single horizontal
             // row (column name → label override → color picker). Wrapped
             // so multi-Y charts still fit a narrow window.
             if tab.chart_config.kind.needs_y() && !tab.chart_config.y_cols.is_empty() {

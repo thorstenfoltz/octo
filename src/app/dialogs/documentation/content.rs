@@ -1,136 +1,9 @@
-//! In-app documentation. Categorized into sections so the dialog can offer a
-//! sidebar nav (left) + content pane (right), mirroring the structure of the
-//! Settings dialog. The shortcut table is generated from the user's current
-//! bindings each time the dialog opens, so it never drifts from behavior.
+//! Static Markdown bodies for the in-app documentation dialog. One `const &str`
+//! per section; the parent module's `sections()` joins them with the live
+//! shortcut table at render time. Split out of `documentation/mod.rs` purely
+//! to keep the dialog code itself readable — no behavioural change.
 
-use eframe::egui;
-
-use octa::ui;
-use octa::ui::settings::{DialogSize, draw_window_controls};
-
-use super::super::state::OctaApp;
-use crate::view_modes::markdown::render_pulldown;
-
-const SIDEBAR_WIDTH: f32 = 180.0;
-
-/// Build the Markdown shortcut table rendered in the Shortcuts section.
-fn build_shortcut_doc_table(shortcuts: &ui::shortcuts::Shortcuts) -> String {
-    use strum::IntoEnumIterator;
-    let mut s = String::from("| Shortcut | Action |\n|----------|--------|\n");
-    for action in ui::shortcuts::ShortcutAction::iter() {
-        let combo = shortcuts.combo(action);
-        s.push_str(&format!("| {} | {} |\n", combo.label(), action.label()));
-    }
-    s
-}
-
-/// Returns the ordered list of documentation sections. The Shortcuts section
-/// embeds the live key-binding table; all other sections are static.
-fn sections(shortcuts: &ui::shortcuts::Shortcuts) -> Vec<(&'static str, String)> {
-    let shortcut_table = build_shortcut_doc_table(shortcuts);
-    vec![
-        ("Getting Started", GETTING_STARTED.to_string()),
-        ("Navigation & Selection", NAVIGATION.to_string()),
-        ("Editing & Undo/Redo", EDITING.to_string()),
-        ("Formulas", FORMULAS.to_string()),
-        ("Search & Replace", SEARCH.to_string()),
-        ("Multi-search", MULTI_SEARCH.to_string()),
-        ("Column Filter", COLUMN_FILTER.to_string()),
-        ("Column Tools", COLUMN_TOOLS.to_string()),
-        ("Value Frequency", VALUE_FREQUENCY.to_string()),
-        ("Find Duplicates", FIND_DUPLICATES.to_string()),
-        ("Schema Export", SCHEMA_EXPORT.to_string()),
-        ("Archive Viewer", ARCHIVE_VIEWER.to_string()),
-        ("Selection Stats", SELECTION_STATS.to_string()),
-        ("Pinned Tabs", PINNED_TABS.to_string()),
-        ("Color Marking", MARKING.to_string()),
-        ("View Modes", VIEW_MODES.to_string()),
-        ("Compare View", COMPARE_VIEW.to_string()),
-        ("EPUB Reader", EPUB_VIEW.to_string()),
-        ("Map View", MAP_VIEW.to_string()),
-        ("Chart", CHART_VIEW.to_string()),
-        ("Tabs & Folder Sidebar", TABS.to_string()),
-        ("SQL View", SQL_VIEW.to_string()),
-        ("Command-line & MCP", CLI_AND_MCP.to_string()),
-        ("Saving", SAVING.to_string()),
-        ("Settings Reference", SETTINGS_REFERENCE.to_string()),
-        (
-            "Shortcuts",
-            format!("{}\n\n{}", SHORTCUTS_INTRO, shortcut_table),
-        ),
-    ]
-}
-
-pub(crate) fn render_documentation_dialog(app: &mut OctaApp, ctx: &egui::Context) {
-    if !app.show_documentation_dialog {
-        return;
-    }
-    let mut window = egui::Window::new("Documentation")
-        .title_bar(false)
-        .collapsible(false);
-    window = match app.documentation_size {
-        DialogSize::Maximized => window.fixed_rect(ctx.content_rect().shrink(8.0)),
-        DialogSize::Minimized => window.resizable(false),
-        DialogSize::Normal => window.resizable(true).default_size([900.0, 600.0]),
-    };
-    let minimized = app.documentation_size == DialogSize::Minimized;
-    window.show(ctx, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("Documentation").strong().size(16.0));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if draw_window_controls(ui, &mut app.documentation_size) {
-                    app.show_documentation_dialog = false;
-                }
-            });
-        });
-        ui.separator();
-
-        if minimized {
-            return;
-        }
-
-        let entries = sections(&app.settings.shortcuts);
-        if app.docs_active_section >= entries.len() {
-            app.docs_active_section = 0;
-        }
-
-        ui.horizontal_top(|ui| {
-            // --- Sidebar nav ---
-            ui.allocate_ui_with_layout(
-                egui::vec2(SIDEBAR_WIDTH, ui.available_height()),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    ui.set_width(SIDEBAR_WIDTH);
-                    egui::ScrollArea::vertical()
-                        .id_salt("docs_sidebar_scroll")
-                        .show(ui, |ui| {
-                            for (idx, (title, _)) in entries.iter().enumerate() {
-                                let is_active = idx == app.docs_active_section;
-                                let resp = ui.selectable_label(is_active, *title);
-                                if resp.clicked() {
-                                    app.docs_active_section = idx;
-                                }
-                            }
-                        });
-                },
-            );
-            ui.separator();
-            // --- Content pane ---
-            ui.vertical(|ui| {
-                egui::ScrollArea::vertical()
-                    .id_salt("docs_content_scroll")
-                    .show(ui, |ui| {
-                        let body = &entries[app.docs_active_section].1;
-                        let cap = ui.available_width().clamp(200.0, 900.0);
-                        ui.set_max_width(cap);
-                        render_pulldown(ui, body);
-                    });
-            });
-        });
-    });
-}
-
-const GETTING_STARTED: &str = r#"# Getting Started
+pub(super) const GETTING_STARTED: &str = r#"# Getting Started
 
 Open a file from **File > Open** (or **Ctrl+O**), pick one or more from the
 **File > Recent Files** submenu, or pass paths on the command line:
@@ -171,7 +44,7 @@ preserved. Database writes only update changed rows and reject schema
 changes; rename or add columns in another tool first.
 "#;
 
-const NAVIGATION: &str = r#"# Navigation & Selection
+pub(super) const NAVIGATION: &str = r#"# Navigation & Selection
 
 - **Arrow keys** move the selected cell.
 - **Scroll wheel** scrolls vertically; **Shift + Scroll wheel** scrolls
@@ -190,7 +63,7 @@ Use the navigation field in the bottom status bar (**Ctrl+G**) to jump to a
 cell by `R5:C3`, `R5`, `C3`, a row number, or a column name.
 "#;
 
-const EDITING: &str = r#"# Editing & Undo/Redo
+pub(super) const EDITING: &str = r#"# Editing & Undo/Redo
 
 - **Double-click** a cell to start editing; the current text is selected so
   you can type to replace it, or click to position the cursor.
@@ -214,7 +87,7 @@ Structural edits:
 Saving an edited file is described under **Saving**.
 "#;
 
-const FORMULAS: &str = r#"# Formulas
+pub(super) const FORMULAS: &str = r#"# Formulas
 
 Cells support simple Excel-like formulas starting with **=**.
 
@@ -231,7 +104,7 @@ applied to every row (e.g. `=A1+B1` becomes `=A3+B3` on row 3).
 Division by zero leaves the cell empty.
 "#;
 
-const SEARCH: &str = r#"# Search & Replace
+pub(super) const SEARCH: &str = r#"# Search & Replace
 
 The toolbar search box filters rows in real time. Only rows containing a
 match are shown. Three modes (selectable in the dropdown next to the box):
@@ -249,7 +122,7 @@ match are shown. Three modes (selectable in the dropdown next to the box):
 **Escape** closes the replace bar.
 "#;
 
-const MULTI_SEARCH: &str = r#"# Multi-search
+pub(super) const MULTI_SEARCH: &str = r#"# Multi-search
 
 The toolbar **Search** field filters the active tab. **Multi-search**
 covers the other half of the problem: find the same string across
@@ -307,7 +180,7 @@ Press **Cancel** to stop a running directory scan at the next file
 boundary. Whatever hits were already collected stay in the panel.
 "#;
 
-const COLUMN_FILTER: &str = r#"# Column Filter
+pub(super) const COLUMN_FILTER: &str = r#"# Column Filter
 
 Excel-style per-column value-set filter. Pick a column, see its unique
 values as checkboxes, uncheck the ones to hide.
@@ -363,7 +236,7 @@ keeps the source file safe from accidental data loss while filters are
 active.
 "#;
 
-const COLUMN_TOOLS: &str = r#"# Column Tools
+pub(super) const COLUMN_TOOLS: &str = r#"# Column Tools
 
 ## Hide and show columns
 
@@ -383,7 +256,7 @@ selected names are joined with newlines. Useful for building SQL
 SELECT lists or scripts from Octa's view of the file.
 "#;
 
-const VALUE_FREQUENCY: &str = r#"# Value Frequency
+pub(super) const VALUE_FREQUENCY: &str = r#"# Value Frequency
 
 Open via the column-header right-click **Value frequency...** entry, or
 **Ctrl+Shift+I** (remappable). The dialog lists the most common values
@@ -426,7 +299,7 @@ The bottom **Copy as TSV** button copies the whole visible table as
 `<column>\tcount\tpercent` lines.
 "#;
 
-const FIND_DUPLICATES: &str = r#"# Find Duplicates
+pub(super) const FIND_DUPLICATES: &str = r#"# Find Duplicates
 
 Open via **Search > Find duplicates...** or **Ctrl+Shift+D** (remappable).
 A modal lists every column with a checkbox — tick the ones you want
@@ -458,7 +331,7 @@ so Ctrl+Shift+D → Apply is the fastest path for a one-column dedupe
 check.
 "#;
 
-const SCHEMA_EXPORT: &str = r#"# Schema Export
+pub(super) const SCHEMA_EXPORT: &str = r#"# Schema Export
 
 Open via **File > Export schema...** or **F7** (remappable).
 The dialog opens on the first target (Postgres DDL); switch between
@@ -500,7 +373,7 @@ The active row filter does *not* affect schema export -- only the
 column list does.
 "#;
 
-const ARCHIVE_VIEWER: &str = r#"# Archive Viewer
+pub(super) const ARCHIVE_VIEWER: &str = r#"# Archive Viewer
 
 Open `.zip`, `.tar`, or `.tgz` files to see their contents listed as
 a regular table.
@@ -530,7 +403,7 @@ supported.
 The reader is read-only -- there is no "save to archive" gesture.
 "#;
 
-const SELECTION_STATS: &str = r#"# Selection Stats
+pub(super) const SELECTION_STATS: &str = r#"# Selection Stats
 
 Selecting more than one cell adds a pill to the status bar that
 summarises the selection:
@@ -544,7 +417,7 @@ selections, then column selections. Single-cell selections fall
 back to the existing Cell / Type info pill instead.
 "#;
 
-const PINNED_TABS: &str = r#"# Pinned Tabs
+pub(super) const PINNED_TABS: &str = r#"# Pinned Tabs
 
 Right-click any file-backed tab and pick **Pin tab** to lock it
 against accidental closes. Pinned tabs:
@@ -572,7 +445,7 @@ the previous session are gone if you didn't save them. Save with
 Ctrl+S (or Save As) before quitting.
 "#;
 
-const MARKING: &str = r#"# Color Marking
+pub(super) const MARKING: &str = r#"# Color Marking
 
 Right-click a **cell**, **row number**, or **column header** to open the
 context menu, then use the **Mark** submenu. Available colors: Red, Orange,
@@ -588,7 +461,7 @@ Mark precedence: cell > row > column. To clear a mark, right-click and choose
 **Clear Mark**.
 "#;
 
-const VIEW_MODES: &str = r#"# View Modes
+pub(super) const VIEW_MODES: &str = r#"# View Modes
 
 Switch via the **View** menu. Only modes applicable to the current file are
 enabled.
@@ -621,7 +494,7 @@ read-only mode that disables every editing path while still allowing copy
 and Save-As.
 "#;
 
-const COMPARE_VIEW: &str = r#"# Compare View
+pub(super) const COMPARE_VIEW: &str = r#"# Compare View
 
 Compare two files side-by-side. Triggered in three ways:
 
@@ -646,7 +519,7 @@ Cross-format comparison works because hashing sees only the textual
 representation of each cell.
 "#;
 
-const EPUB_VIEW: &str = r#"# EPUB Reader
+pub(super) const EPUB_VIEW: &str = r#"# EPUB Reader
 
 When you open a `.epub` file, the EPUB Reader is the default view. The
 top toolbar shows:
@@ -666,7 +539,7 @@ The flat **Table** view is still available (one row per paragraph with
 like any other tabular file.
 "#;
 
-const MAP_VIEW: &str = r#"# Map View
+pub(super) const MAP_VIEW: &str = r#"# Map View
 
 For `.geojson` files. The Map view is the default; the Table view is
 still available with one row per feature, a `__geometry` column holding
@@ -693,7 +566,7 @@ deployments please honour the
 or point at a self-hosted or commercial tile provider.
 "#;
 
-const CHART_VIEW: &str = r#"# Chart
+pub(super) const CHART_VIEW: &str = r#"# Chart
 
 Plot the active table as a histogram, bar, line, scatter, or box chart.
 The chart opens as its own **tab** -- not a mode of the source tab --
@@ -782,7 +655,7 @@ always work off the full input.
 - **Hover** a point or bar to see its coordinates in a tooltip.
 "#;
 
-const TABS: &str = r#"# Tabs & Folder Sidebar
+pub(super) const TABS: &str = r#"# Tabs & Folder Sidebar
 
 Every opened file has a tab, even when only one is open. Hovering a tab
 reveals the full file path, useful when several tabs share a file name.
@@ -796,7 +669,7 @@ For multi-table databases (SQLite, DuckDB), a picker dialog lists tables and
 their row counts before any data loads.
 "#;
 
-const SQL_VIEW: &str = r#"# SQL View
+pub(super) const SQL_VIEW: &str = r#"# SQL View
 
 The **SQL Query** view exposes the active table to an in-memory DuckDB
 connection as a temp table named `data`. Press **Ctrl+Enter** to run the
@@ -815,7 +688,7 @@ Each query opens a fresh connection; there is no persistent SQL state
 between runs.
 "#;
 
-const CLI_AND_MCP: &str = r#"# Command-line & MCP
+pub(super) const CLI_AND_MCP: &str = r#"# Command-line & MCP
 
 Octa is also a small command-line tool. Run with no flags to launch
 the GUI (optionally with file paths to open in tabs); run with one of
@@ -856,7 +729,7 @@ Claude Code, MCP Inspector) pointing the `command` at the `octa`
 binary with `--mcp` as the argument.
 "#;
 
-const SAVING: &str = r#"# Saving
+pub(super) const SAVING: &str = r#"# Saving
 
 - **File > Save** writes back to the original file (preserves format and
   settings).
@@ -869,7 +742,7 @@ const SAVING: &str = r#"# Saving
   (rename / add / drop column) are rejected; do those in another tool.
 "#;
 
-const SETTINGS_REFERENCE: &str = r#"# Settings Reference
+pub(super) const SETTINGS_REFERENCE: &str = r#"# Settings Reference
 
 Open **Help > Settings** (default **F3**). Categories are collapsible:
 
@@ -905,7 +778,7 @@ Settings persist to:
 - Windows: `%APPDATA%\Octa\settings.toml`
 "#;
 
-const SHORTCUTS_INTRO: &str = r#"# Shortcuts
+pub(super) const SHORTCUTS_INTRO: &str = r#"# Shortcuts
 
 Every action below can be rebound under **Help > Settings > Shortcuts**.
 Unbound actions show `(none)`. The bindings shown are the current ones:

@@ -104,6 +104,13 @@ loads:
 - Click **Open** to load it in a new tab.
 - Click **Cancel** to back out of the file open.
 
+The dialog opens at a fit-to-content height: with a handful of tables
+it stays compact, with many it caps at a configurable number of visible
+rows and the list scrolls. Drag the bottom-right corner to grow it
+whenever you want to see more tables at once. The cap lives in
+**[Settings → Performance → Tables visible in picker](../reference/settings.md#performance)**
+(default 10).
+
 Single-table databases auto-load without the picker. Empty databases
 fall through to the standard reader (which returns a clear
 "empty file" error).

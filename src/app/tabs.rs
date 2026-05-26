@@ -465,8 +465,18 @@ impl OctaApp {
                                         ui.close();
                                     }
                                     let pin_label = if pinned { "Unpin tab" } else { "Pin tab" };
-                                    let pin_btn =
-                                        ui.add_enabled(has_source, egui::Button::new(pin_label));
+                                    // Size the button to the wider of the two
+                                    // labels (plus padding) so the context-menu
+                                    // entry stays the same width whether the
+                                    // tab is pinned or not. Without this the
+                                    // button shrink-wraps "Pin tab" and looks
+                                    // cramped when the user right-clicks a
+                                    // pinned tab.
+                                    let pin_btn = ui.add_enabled(
+                                        has_source,
+                                        egui::Button::new(pin_label)
+                                            .min_size(egui::vec2(140.0, 0.0)),
+                                    );
                                     let pin_btn = if !has_source {
                                         pin_btn.on_disabled_hover_text(
                                             "Pinning is for file-backed tabs; save the tab first.",
