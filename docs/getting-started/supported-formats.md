@@ -68,6 +68,15 @@ pipelines) used to fail the native arrow-parquet reader with
 those reads through a DuckDB-backed reader automatically — same
 schema and types, no user action required.
 
+Files produced by **pandas** (`DataFrame.to_parquet`) embed the row
+index as an extra column on disk (`__index_level_0__` by default,
+or whatever you passed to `set_index`). Octa strips those columns
+on read so the table view shows only the real data columns — both
+the Arrow schema metadata's `index_columns` entries and the
+default `__index_level_0__` name are honoured, including on files
+written by older pandas releases that didn't emit the metadata
+block.
+
 ### R datasets
 
 Octa only handles the **single `data.frame` / `tibble`** case for

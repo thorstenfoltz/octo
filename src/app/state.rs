@@ -442,6 +442,9 @@ pub(crate) struct TabState {
 #[derive(Default, Debug, Clone)]
 pub(crate) struct ChartInputBuffers {
     pub hist_bins: String,
+    pub x_min: String,
+    pub x_max: String,
+    pub x_step: String,
     pub y_min: String,
     pub y_max: String,
     pub y_step: String,

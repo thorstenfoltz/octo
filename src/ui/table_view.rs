@@ -368,10 +368,13 @@ pub struct TableInteraction {
     pub ctx_copy_cell: bool,
     /// Signal that more rows should be loaded (scroll near bottom with truncated data).
     pub needs_more_rows: bool,
-    /// Set a color mark
-    pub set_mark: Option<(MarkKey, MarkColor)>,
-    /// Clear a color mark
-    pub clear_mark: Option<MarkKey>,
+    /// Set a color mark on one or more keys. The list lets the right-click
+    /// "Mark" submenu honour the current multi-selection (cells / rows /
+    /// columns) instead of always colouring just the clicked target — the
+    /// same precedence Ctrl+M follows via `mark_selection_default`.
+    pub set_mark: Option<(Vec<MarkKey>, MarkColor)>,
+    /// Clear a color mark from one or more keys.
+    pub clear_mark: Option<Vec<MarkKey>>,
     /// Open the "Parse in new tab" modal for the selected scope.
     pub ctx_parse_in_new_tab: Option<super::toolbar::ParseScope>,
     /// Open the Column Filter dialog pre-selected on this column index.
@@ -444,6 +447,27 @@ pub fn draw_table(
     let mut interaction = TableInteraction::default();
 
     if table.col_count() == 0 {
+        // Rainbow easter-egg: paint a large, faded copy of the (now-random)
+        // welcome icon as a background watermark behind the normal centred
+        // icon. Only on the welcome screen — data views stay clean per the
+        // user choice. The watermark uses the same texture as the centre
+        // logo so it follows the random variant rolled at activation time.
+        if theme_mode.is_rainbow()
+            && let Some(tex) = welcome_logo_texture
+        {
+            let panel = ui.available_rect_before_wrap();
+            let side = (panel.width().min(panel.height()) * 0.95).clamp(160.0, 1024.0);
+            let bg_rect = egui::Rect::from_center_size(panel.center(), Vec2::new(side, side));
+            // Low-alpha white tint so the watermark sits softly behind the
+            // crisp centred logo. Same image, just enlarged + dimmed.
+            let tint = Color32::from_white_alpha(36);
+            ui.painter().image(
+                tex.id(),
+                bg_rect,
+                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                tint,
+            );
+        }
         ui.vertical_centered(|ui| {
             let avail = ui.available_size();
             let logo_size = (avail.x.min(avail.y) * 0.55).clamp(128.0, 512.0);
@@ -551,6 +575,50 @@ pub fn draw_table(
         let ext_down = triggered(ShortcutAction::ExtendSelectionDown);
         let ext_left = triggered(ShortcutAction::ExtendSelectionLeft);
         let ext_right = triggered(ShortcutAction::ExtendSelectionRight);
+        let page_up = triggered(ShortcutAction::ScrollPageUp);
+        let page_down = triggered(ShortcutAction::ScrollPageDown);
+
+        // Page scrolling: advance the selection by the number of rows
+        // currently visible and let `scroll_row_into_view` follow the
+        // selection so the new top (PageDown) / bottom (PageUp) row of
+        // the viewport is the now-selected one. Run before the per-cell
+        // nav block so the plain-arrow handler doesn't also fire.
+        if (page_up || page_down) && !filtered_rows.is_empty() {
+            let row_count = filtered_rows.len();
+            let (cur_row, cur_col) = state.selected_cell.unwrap_or((0, 0));
+            let cur_display = filtered_rows
+                .iter()
+                .position(|&r| r == cur_row)
+                .unwrap_or(0);
+            // Estimate rows per visible page from the average row height.
+            // `row_height` is the default-cell height; when cell line
+            // breaks are on, individual rows are taller than this, but
+            // approximating still gives a useful page step.
+            let rows_per_page = if row_height > 0.0 {
+                ((data_area_height / row_height).floor() as usize).max(1)
+            } else {
+                1
+            };
+            let new_display = if page_down {
+                (cur_display + rows_per_page).min(row_count.saturating_sub(1))
+            } else {
+                cur_display.saturating_sub(rows_per_page)
+            };
+            if let Some(&new_row) = filtered_rows.get(new_display) {
+                state.selected_cell = Some((new_row, cur_col));
+                state.selected_cells.clear();
+                state.selected_rows.clear();
+                state.selected_cols.clear();
+                state.selection_anchor_display = None;
+                scroll_row_into_view(
+                    state,
+                    new_display,
+                    row_height,
+                    data_area_height,
+                    max_scroll_y,
+                );
+            }
+        }
 
         // Handle "extend row/column selection by one" first: applies when
         // a whole row/column block is selected, or when only a single cell
@@ -866,6 +934,7 @@ pub fn draw_table(
                 actual_row_height,
                 readonly,
                 hidden_columns,
+                theme_mode.is_rainbow(),
             );
         }
 
@@ -1347,7 +1416,19 @@ fn draw_header_direct(
                     ui.close();
                 }
                 ui.separator();
-                mark_submenu(ui, MarkKey::Column(col_idx), table, interaction);
+                // Multi-column when the right-clicked column is part of the
+                // existing column selection — mirrors the Copy / Cut handling
+                // above so the user can mark every selected column in one go.
+                let col_anchor = MarkKey::Column(col_idx);
+                let col_keys: Vec<MarkKey> =
+                    if state.selected_cols.contains(&col_idx) && state.selected_cols.len() > 1 {
+                        let mut cs: Vec<usize> = state.selected_cols.iter().copied().collect();
+                        cs.sort_unstable();
+                        cs.into_iter().map(MarkKey::Column).collect()
+                    } else {
+                        vec![col_anchor.clone()]
+                    };
+                mark_submenu(ui, col_keys, &col_anchor, table, interaction);
                 ui.separator();
                 if ui.button("Sort A-Z").clicked() {
                     interaction.sort_rows_asc_by = Some(col_idx);
@@ -1601,6 +1682,7 @@ fn draw_data_row_direct(
     row_height: f32,
     readonly: bool,
     hidden_columns: &HashSet<usize>,
+    is_rainbow_theme: bool,
 ) {
     let is_multi_selected_row = state.selected_rows.contains(&actual_row);
 
@@ -1764,7 +1846,21 @@ fn draw_data_row_direct(
                         // tints that swallow accent-colored numeric text the
                         // same way. Fall back to a high-contrast text color
                         // whenever the cell has any colored background.
-                        colors.text_primary
+                        //
+                        // Rainbow easter-egg theme: `colors.text_primary`
+                        // cycles through HSV hues every frame and can collide
+                        // with the mark fill at unpredictable moments. Pin
+                        // the text colour to white (black on pale-yellow
+                        // marks) so the cell stays readable.
+                        if is_rainbow_theme {
+                            if mark_color.map(|c| c.needs_dark_text()).unwrap_or(false) {
+                                Color32::BLACK
+                            } else {
+                                Color32::WHITE
+                            }
+                        } else {
+                            colors.text_primary
+                        }
                     } else {
                         match value {
                             crate::data::CellValue::Null => colors.text_muted,
@@ -1831,13 +1927,41 @@ fn draw_data_row_direct(
                 );
 
                 if response.clicked() {
-                    state.selected_cell = Some((actual_row, col_idx));
+                    let modifiers = ui.input(|i| i.modifiers);
                     state.editing_cell = None;
-                    // Single click selects just the cell; clear all multi-selection
-                    state.selected_rows.clear();
-                    state.selected_cols.clear();
-                    state.selected_cells.clear();
-                    state.selection_anchor_display = None;
+                    if modifiers.command {
+                        // Ctrl/Cmd+click toggles the clicked cell in the
+                        // disjoint multi-cell selection. Promote the prior
+                        // single `selected_cell` into the set on the first
+                        // toggle so the original anchor isn't lost.
+                        if let Some(prev) = state.selected_cell
+                            && state.selected_cells.is_empty()
+                        {
+                            state.selected_cells.insert(prev);
+                        }
+                        let target = (actual_row, col_idx);
+                        if state.selected_cells.contains(&target) {
+                            state.selected_cells.remove(&target);
+                        } else {
+                            state.selected_cells.insert(target);
+                        }
+                        // Keyboard navigation should continue from the most
+                        // recent click even when we just removed it.
+                        state.selected_cell = Some(target);
+                        // Disjoint cell selection lives separately from row /
+                        // column selection — drop those so the precedence is
+                        // unambiguous.
+                        state.selected_rows.clear();
+                        state.selected_cols.clear();
+                        state.selection_anchor_display = None;
+                    } else {
+                        state.selected_cell = Some((actual_row, col_idx));
+                        // Plain click resets to a single-cell selection.
+                        state.selected_rows.clear();
+                        state.selected_cols.clear();
+                        state.selected_cells.clear();
+                        state.selection_anchor_display = None;
+                    }
                 }
                 if response.double_clicked() && !readonly {
                     state.selected_cell = Some((actual_row, col_idx));
@@ -1872,7 +1996,33 @@ fn draw_data_row_direct(
                     ui.separator();
 
                     // --- Mark ---
-                    mark_submenu(ui, MarkKey::Cell(actual_row, col_idx), table, interaction);
+                    // Honour the current multi-selection: if the right-clicked
+                    // cell is part of the active selection, colour the whole
+                    // selection (rows > columns > free cells > single cell —
+                    // same precedence Ctrl+M uses). Outside the selection,
+                    // mark only the clicked cell.
+                    let cell_anchor = MarkKey::Cell(actual_row, col_idx);
+                    let inside_cells = state.selected_cells.contains(&(actual_row, col_idx));
+                    let inside_rows = state.selected_rows.contains(&actual_row);
+                    let inside_cols = state.selected_cols.contains(&col_idx);
+                    let mark_keys: Vec<MarkKey> = if inside_rows && !state.selected_rows.is_empty()
+                    {
+                        let mut rs: Vec<usize> = state.selected_rows.iter().copied().collect();
+                        rs.sort_unstable();
+                        rs.into_iter().map(MarkKey::Row).collect()
+                    } else if inside_cols && !state.selected_cols.is_empty() {
+                        let mut cs: Vec<usize> = state.selected_cols.iter().copied().collect();
+                        cs.sort_unstable();
+                        cs.into_iter().map(MarkKey::Column).collect()
+                    } else if inside_cells && !state.selected_cells.is_empty() {
+                        let mut cs: Vec<(usize, usize)> =
+                            state.selected_cells.iter().copied().collect();
+                        cs.sort_unstable();
+                        cs.into_iter().map(|(r, c)| MarkKey::Cell(r, c)).collect()
+                    } else {
+                        vec![cell_anchor.clone()]
+                    };
+                    mark_submenu(ui, mark_keys, &cell_anchor, table, interaction);
                     ui.separator();
 
                     ui.label(RichText::new("Row").strong().size(11.0));
@@ -2054,7 +2204,20 @@ fn draw_data_row_direct(
             }
             ui.separator();
 
-            mark_submenu(ui, MarkKey::Row(actual_row), table, interaction);
+            // Right-click on a row number: if the row is part of a multi-row
+            // selection, colour every selected row. Otherwise just this one.
+            // The selected_rows preservation logic above already keeps
+            // multi-row selection intact when the click lands inside it.
+            let row_anchor = MarkKey::Row(actual_row);
+            let row_keys: Vec<MarkKey> =
+                if state.selected_rows.contains(&actual_row) && state.selected_rows.len() > 1 {
+                    let mut rs: Vec<usize> = state.selected_rows.iter().copied().collect();
+                    rs.sort_unstable();
+                    rs.into_iter().map(MarkKey::Row).collect()
+                } else {
+                    vec![row_anchor.clone()]
+                };
+            mark_submenu(ui, row_keys, &row_anchor, table, interaction);
             ui.separator();
 
             ui.label(RichText::new("Row").strong().size(11.0));
@@ -2107,8 +2270,21 @@ fn compute_row_height(
     max_height
 }
 
-fn mark_submenu(ui: &mut Ui, key: MarkKey, table: &DataTable, interaction: &mut TableInteraction) {
-    let current_mark = table.marks.get(&key).copied();
+/// Render the right-click "Mark" submenu.
+///
+/// `keys` is the full list of marks to apply when the user picks a colour —
+/// caller-built so a right-click on a cell that's part of a multi-cell
+/// selection colours every selected cell (mirrors Ctrl+M). `current` is the
+/// mark on the *anchor* (the right-clicked target) used to show
+/// "(current)" / surface a Clear entry when the anchor is already marked.
+fn mark_submenu(
+    ui: &mut Ui,
+    keys: Vec<MarkKey>,
+    anchor: &MarkKey,
+    table: &DataTable,
+    interaction: &mut TableInteraction,
+) {
+    let current_mark = table.marks.get(anchor).copied();
     ui.menu_button("Mark", |ui| {
         for &color in MarkColor::ALL {
             let swatch = ThemeColors::mark_swatch(color);
@@ -2119,14 +2295,14 @@ fn mark_submenu(ui: &mut Ui, key: MarkKey, table: &DataTable, interaction: &mut 
             };
             let btn = egui::Button::new(RichText::new(label).color(swatch));
             if ui.add(btn).clicked() {
-                interaction.set_mark = Some((key.clone(), color));
+                interaction.set_mark = Some((keys.clone(), color));
                 ui.close();
             }
         }
         if current_mark.is_some() {
             ui.separator();
             if ui.button("Clear").clicked() {
-                interaction.clear_mark = Some(key.clone());
+                interaction.clear_mark = Some(keys.clone());
                 ui.close();
             }
         }

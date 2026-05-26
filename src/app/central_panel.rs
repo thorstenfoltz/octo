@@ -592,11 +592,15 @@ impl OctaApp {
 
         // --- Color marks ---
         let tab = &mut self.tabs[self.active_tab];
-        if let Some((key, color)) = interaction.set_mark {
-            tab.table.set_mark(key, color);
+        if let Some((keys, color)) = interaction.set_mark {
+            for key in keys {
+                tab.table.set_mark(key, color);
+            }
         }
-        if let Some(key) = interaction.clear_mark {
-            tab.table.clear_mark(key);
+        if let Some(keys) = interaction.clear_mark {
+            for key in keys {
+                tab.table.clear_mark(key);
+            }
         }
 
         // --- Lazy loading: load more rows on demand ---

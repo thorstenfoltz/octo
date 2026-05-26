@@ -313,6 +313,14 @@ pub enum ShortcutAction {
     /// (`ViewMode::Chart`), holds a clone of the source table, and
     /// exposes the chart-kind / column / styling / export controls.
     OpenChart,
+    /// Scroll the table viewport up by one full page and advance the
+    /// selected cell by the same number of rows. Mirrors the way Excel
+    /// and most spreadsheets treat PageUp. No-op when the focus is in a
+    /// TextEdit so the editor can page through its own buffer.
+    ScrollPageUp,
+    /// Scroll the table viewport down by one full page and advance the
+    /// selected cell by the same number of rows. See [`Self::ScrollPageUp`].
+    ScrollPageDown,
 }
 
 impl ShortcutAction {
@@ -370,6 +378,8 @@ impl ShortcutAction {
             Self::ExportSchema => "Export schema…",
             Self::MultiSearch => "Open multi-search panel",
             Self::OpenChart => "Open chart tab",
+            Self::ScrollPageUp => "Scroll up one page",
+            Self::ScrollPageDown => "Scroll down one page",
         }
     }
 
@@ -437,6 +447,10 @@ impl ShortcutAction {
             // F5 is the only free F-key in the (F4–F9) cluster after the
             // v3 batch; "refresh" semantics also map naturally to "re-plot".
             Self::OpenChart => KeyCombo::plain(Key::F5),
+            // Ctrl+PageUp / Ctrl+PageDown — the spreadsheet convention
+            // (Excel, LibreOffice) for paging through long tables.
+            Self::ScrollPageUp => KeyCombo::ctrl(Key::PageUp),
+            Self::ScrollPageDown => KeyCombo::ctrl(Key::PageDown),
         }
     }
 }

@@ -700,6 +700,15 @@ impl MarkColor {
             MarkColor::Purple => "Purple",
         }
     }
+
+    /// Whether this mark needs dark text on top to stay readable. Yellow's
+    /// background is too pale for white text; the rest are saturated enough
+    /// that white reads cleanly. Used in the rainbow easter-egg theme where
+    /// the normal text colour cycles through hues and would otherwise crash
+    /// into the mark fill at unpredictable moments.
+    pub fn needs_dark_text(self) -> bool {
+        matches!(self, MarkColor::Yellow)
+    }
 }
 
 /// An undoable action on the data table.

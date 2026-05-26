@@ -389,6 +389,21 @@ impl OctaApp {
         }
     }
 
+    /// Like [`Self::load_file`] but guarantees the result lands in a *new*
+    /// tab — even if the active tab happened to look "empty" by
+    /// `apply_loaded_table`'s heuristic. Pushes an empty placeholder tab
+    /// first and switches to it; `load_file` then fills the placeholder.
+    ///
+    /// Used by the archive viewer's "Open selected entry" action so the
+    /// archive listing tab is never accidentally replaced by the extracted
+    /// entry's data.
+    pub(crate) fn load_file_in_new_tab(&mut self, path: std::path::PathBuf) {
+        let placeholder = TabState::new(self.settings.default_search_mode);
+        self.tabs.push(placeholder);
+        self.active_tab = self.tabs.len() - 1;
+        self.load_file(path);
+    }
+
     pub(crate) fn load_file(&mut self, path: std::path::PathBuf) {
         // Empty-file easter egg: short-circuit before format dispatch, since
         // most readers will surface a confusing "no schema found" error on a
@@ -445,6 +460,7 @@ impl OctaApp {
                     format_name: reader.name().to_string(),
                     tables,
                     selected: 0,
+                    visible_rows: self.settings.table_picker_visible_rows,
                 });
                 return;
             }

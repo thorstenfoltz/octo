@@ -23,6 +23,12 @@ The fine-grained way, working on whatever you right-click:
 - **Right-click a row number** → **Mark** → pick a colour.
 - **Right-click a column header** → **Mark** → pick a colour.
 
+If the right-clicked target is **already part of the current
+selection** (multi-cell, multi-row, or multi-column), the chosen colour
+is applied to every selected item — the same precedence
+[**Ctrl+M**](#edit-menu-shortcut) follows. Click outside the selection
+first if you want to colour only the single right-clicked target.
+
 ### Edit menu / shortcut
 
 **Edit → Mark** (or the

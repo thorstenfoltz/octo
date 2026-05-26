@@ -147,6 +147,12 @@ impl OctaApp {
                     custom_path: Some(self.settings.custom_font_path.as_str()),
                 },
             );
+            // Invalidate the cached textures so `ensure_logo_textures` swaps
+            // to the rainbow rosette (`assets/octa-random.svg`) on the next
+            // frame. `resolved_icon` is left untouched so leaving Rainbow
+            // restores the user's configured icon.
+            self.logo_texture = None;
+            self.welcome_logo_texture = None;
             self.logo_click_count = 0;
             self.status_message = Some((
                 "\u{1f308} Rainbow mode unlocked".to_string(),

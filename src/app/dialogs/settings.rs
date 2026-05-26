@@ -56,7 +56,16 @@ pub(crate) fn render_settings_dialog(app: &mut OctaApp, ctx: &egui::Context) {
     }
 
     if theme_changed {
+        let was_rainbow = app.theme_mode.is_rainbow();
         app.theme_mode = app.settings.default_theme;
+        // Leaving Rainbow → drop the rainbow-rosette logo textures so
+        // `ensure_logo_textures` re-renders from the user's configured
+        // `resolved_icon` SVG on the next frame.
+        if was_rainbow && !app.theme_mode.is_rainbow() {
+            app.rainbow_active = false;
+            app.logo_texture = None;
+            app.welcome_logo_texture = None;
+        }
     }
     if font_changed || theme_changed {
         app.apply_zoom(ctx);

@@ -63,6 +63,14 @@ impl ThemeMode {
         }
     }
 
+    /// Whether the hidden Rainbow easter-egg theme is active. Used by the
+    /// table view to force a fixed high-contrast text colour on marked /
+    /// selected cells (the live `text_primary` cycles through hues and
+    /// can collide with the mark background).
+    pub fn is_rainbow(self) -> bool {
+        matches!(self, Self::Rainbow)
+    }
+
     /// Convenience toggle between the basic Light and Dark presets used by
     /// the toolbar quick-toggle button. Custom presets toggle to their
     /// brightness opposite (basic Light or Dark).

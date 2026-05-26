@@ -583,6 +583,13 @@ pub struct AppSettings {
     /// Default 200.
     #[serde(default = "default_chart_max_categories")]
     pub chart_max_categories: usize,
+    /// How many table rows the multi-table picker dialog (SQLite / DuckDB /
+    /// other multi-table sources) should fit vertically by default. The
+    /// dialog stays user-resizable — this only controls the initial height
+    /// so the picker doesn't dominate the screen when a database has a
+    /// handful of tables. Default 10.
+    #[serde(default = "default_table_picker_visible_rows")]
+    pub table_picker_visible_rows: usize,
 }
 
 fn default_true() -> bool {
@@ -631,6 +638,10 @@ fn default_chart_max_points() -> usize {
 
 fn default_chart_max_categories() -> usize {
     crate::data::chart::DEFAULT_MAX_BAR_CATEGORIES
+}
+
+fn default_table_picker_visible_rows() -> usize {
+    10
 }
 
 fn default_map_tile_url() -> String {
@@ -690,6 +701,7 @@ impl Default for AppSettings {
             grep_max_file_size_mb: default_grep_max_file_size_mb(),
             chart_max_points: default_chart_max_points(),
             chart_max_categories: default_chart_max_categories(),
+            table_picker_visible_rows: default_table_picker_visible_rows(),
         }
     }
 }
@@ -833,6 +845,9 @@ pub struct SettingsDialog {
     chart_max_points_buf: String,
     /// Buffer backing the chart `max_categories` input.
     chart_max_categories_buf: String,
+    /// Buffer backing the table-picker visible-rows input. Same comma-tolerant
+    /// pattern as the other numeric inputs.
+    table_picker_visible_rows_buf: String,
     /// When the user clicks "Record" for a shortcut, the action is stored here
     /// and the next key press captures a new binding. `None` = not recording.
     recording: Option<ShortcutAction>,
@@ -887,6 +902,8 @@ impl SettingsDialog {
         self.chart_max_points_buf = super::status_bar::format_number(current.chart_max_points);
         self.chart_max_categories_buf =
             super::status_bar::format_number(current.chart_max_categories);
+        self.table_picker_visible_rows_buf =
+            super::status_bar::format_number(current.table_picker_visible_rows);
         self.recording = None;
         self.shortcut_conflict = None;
         self.show_reset_confirm = false;
@@ -1015,6 +1032,9 @@ impl SettingsDialog {
                             }
                             if let Ok(n) = parse_comma_number(&self.chart_max_categories_buf) {
                                 self.draft.chart_max_categories = n.max(1);
+                            }
+                            if let Ok(n) = parse_comma_number(&self.table_picker_visible_rows_buf) {
+                                self.draft.table_picker_visible_rows = n.max(1);
                             }
                             applied = Some(self.draft.clone());
                             self.open = false;
@@ -1787,6 +1807,21 @@ impl SettingsDialog {
                             egui::TextEdit::singleline(&mut self.chart_max_categories_buf)
                                 .desired_width(120.0)
                                 .hint_text("200"),
+                        );
+                        ui.end_row();
+
+                        ui.label("Tables visible in picker:").on_hover_text(
+                            "How many table rows the multi-table picker dialog (SQLite,\n\
+                             DuckDB, …) should fit vertically at its default size. The\n\
+                             dialog is still user-resizable — drag the corner to make\n\
+                             it bigger when a database has many tables.\n\
+                             \n\
+                             Default: 10. Minimum 1.",
+                        );
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.table_picker_visible_rows_buf)
+                                .desired_width(120.0)
+                                .hint_text("10"),
                         );
                         ui.end_row();
                     });

@@ -264,6 +264,15 @@ pub struct ChartConfig {
     pub legend: LegendPosition,
     /// Show the background grid behind the plot. Default `true`.
     pub show_grid: bool,
+    /// Lower bound for the X axis (in original-data units). `None` = auto.
+    /// For date / datetime X axes the bound is in *days since 1970-01-01* /
+    /// *seconds since the Unix epoch* respectively — same coordinate system
+    /// the renderer uses internally.
+    pub x_min: Option<f64>,
+    /// Upper bound for the X axis. `None` = auto.
+    pub x_max: Option<f64>,
+    /// Custom X-axis step size. `None` = let egui_plot auto-pick.
+    pub x_step: Option<f64>,
     /// Lower bound for the Y axis (in original-data units). `None` = auto.
     pub y_min: Option<f64>,
     /// Upper bound for the Y axis (in original-data units). `None` = auto.
@@ -297,6 +306,9 @@ impl Default for ChartConfig {
             y_label_override: String::new(),
             legend: LegendPosition::TopRight,
             show_grid: true,
+            x_min: None,
+            x_max: None,
+            x_step: None,
             y_min: None,
             y_max: None,
             y_step: None,
