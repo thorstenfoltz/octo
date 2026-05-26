@@ -26,10 +26,10 @@ The fine-grained way, working on whatever you right-click:
 If the right-clicked target is **already part of the current
 selection** (multi-cell, multi-row, or multi-column), the chosen colour
 is applied to every selected item — the same precedence
-[**Ctrl+M**](#edit-menu-shortcut) follows. Click outside the selection
+[**Ctrl+M**](#edit-menu-and-shortcut) follows. Click outside the selection
 first if you want to colour only the single right-clicked target.
 
-### Edit menu / shortcut
+### Edit menu and shortcut
 
 **Edit → Mark** (or the
 [**Mark** keyboard shortcut](../reference/shortcuts.md#marking),
