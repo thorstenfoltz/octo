@@ -24,7 +24,7 @@ impl OctaApp {
     }
 
     /// Render a one-row action bar above the archive table. Currently
-    /// the only action is **Open selected entry** — extracts the
+    /// the only action is **Open selected entry** - extracts the
     /// entry referenced by the active cell's row into a tempfile and
     /// opens it as a new tab. Greyed when no row is selected or the
     /// row points at a directory entry.
@@ -35,7 +35,7 @@ impl OctaApp {
 
         // Dismissible orange banner for the most recent extract / load
         // failure on this archive tab. Reuses the parse-error banner
-        // pattern so the user has a clear × to clear it — without that
+        // pattern so the user has a clear × to clear it - without that
         // the message would either fade silently (old behaviour) or
         // appear sticky next to entries that opened fine on retry.
         let banner_text = self.tabs[self.active_tab].parse_error_banner.clone();
@@ -107,7 +107,7 @@ impl OctaApp {
 
     fn open_archive_entry(&mut self, archive_path: &str, entry_path: &str) {
         // Capture the archive tab idx before `load_file` switches the
-        // active tab to the newly-opened entry — we need to clear /
+        // active tab to the newly-opened entry - we need to clear /
         // set the banner on the archive listing tab the user is still
         // looking at when an extraction fails.
         let archive_tab_idx = self.active_tab;
@@ -158,12 +158,12 @@ impl OctaApp {
             }
             return;
         }
-        // Leak the handle so the file survives past the load — readers
+        // Leak the handle so the file survives past the load - readers
         // may stream from disk. OS cleans /tmp on reboot. Same trick
         // Parse-in-new-tab uses.
         let _ = tmp.keep();
 
-        // Always open the extracted entry in a *new* tab — never replace
+        // Always open the extracted entry in a *new* tab - never replace
         // the archive listing the user is still looking at. `load_file`
         // alone can reuse the current tab when `apply_loaded_table`'s
         // empty-tab heuristic fires; the new-tab variant pushes a

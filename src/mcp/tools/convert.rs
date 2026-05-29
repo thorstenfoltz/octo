@@ -1,4 +1,4 @@
-//! MCP tool: `convert` — read a file in one format, write in another.
+//! MCP tool: `convert` - read a file in one format, write in another.
 
 use std::path::PathBuf;
 
@@ -51,7 +51,7 @@ pub async fn handle(_server: &OctaMcpServer, p: Params) -> Result<CallToolResult
         })?;
         if !out_reader.supports_write() {
             anyhow::bail!(
-                "format {} does not support writing — pick a different output extension",
+                "format {} does not support writing - pick a different output extension",
                 out_reader.name()
             );
         }

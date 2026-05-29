@@ -110,7 +110,7 @@ impl SqlEditorFont {
 /// Display unit for the syntax-highlight size cap in the Settings dialog.
 /// Octa stores the cap as raw bytes in `settings.toml`; this enum only
 /// governs how the value is presented and edited in the dialog. Not
-/// persisted to the toml — defaults to MB at each open and the dialog
+/// persisted to the toml - defaults to MB at each open and the dialog
 /// picks the most natural unit for the current value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SyntaxSizeUnit {
@@ -140,7 +140,7 @@ impl SyntaxSizeUnit {
     }
 
     /// Pick the largest unit that represents `bytes` as an integer
-    /// (so 1,048,576 → 1 MB; 2,048 → 2 KB; 1,500 → 1500 Bytes).
+    /// (so 1,048,576 -> 1 MB; 2,048 -> 2 KB; 1,500 -> 1500 Bytes).
     pub fn best_fit(bytes: usize) -> Self {
         if bytes == 0 {
             return Self::MB;
@@ -156,7 +156,7 @@ impl SyntaxSizeUnit {
 }
 
 /// Parse a string with optional comma thousand-separators into a `usize`.
-/// Empty after stripping commas → Err. Used by the Performance settings
+/// Empty after stripping commas -> Err. Used by the Performance settings
 /// inputs so users can type "1,000,000" the same way Octa renders numbers
 /// elsewhere in the UI.
 pub fn parse_comma_number(s: &str) -> Result<usize, std::num::ParseIntError> {
@@ -264,7 +264,7 @@ impl IconVariant {
         Self::Pink,
     ];
 
-    /// All concrete (non-Random) variants — what `Random` rolls between.
+    /// All concrete (non-Random) variants - what `Random` rolls between.
     pub const CONCRETE: &[IconVariant] = &[
         Self::Rose,
         Self::Amber,
@@ -408,6 +408,16 @@ pub struct AppSettings {
     /// Whether negative numbers are displayed in red.
     #[serde(default)]
     pub negative_numbers_red: bool,
+    /// Whether `Int` / `Float` cells render with thousand separators
+    /// (e.g. `1,234,567.89`) in the table view. Display-only - never alters
+    /// saved / exported data. Default `true`.
+    #[serde(default = "default_true")]
+    pub thousands_separators_in_cells: bool,
+    /// Grouping / decimal-mark convention for numeric cells: English
+    /// (`1,234.56`) or European (`1.234,56`). The decimal mark follows this
+    /// even when `thousands_separators_in_cells` is off. Default English.
+    #[serde(default)]
+    pub number_separator_style: crate::data::num_format::SeparatorStyle,
     /// Whether edited cells are highlighted with a background color.
     #[serde(default)]
     pub highlight_edits: bool,
@@ -493,7 +503,7 @@ pub struct AppSettings {
     /// When `true`, Octa requests an undecorated viewport at startup and
     /// renders its own slim title bar (logo + title + min/max/close
     /// buttons). Useful on tiling WMs / minimal compositors that don't
-    /// provide window controls. Default `false` — system decorations are
+    /// provide window controls. Default `false` - system decorations are
     /// preferred unless the user explicitly opts in.
     #[serde(default)]
     pub use_custom_title_bar: bool,
@@ -515,7 +525,7 @@ pub struct AppSettings {
     /// is `true`.
     #[serde(default = "default_initial_load_rows")]
     pub initial_load_rows: usize,
-    /// When `true`, disables the initial-load cap entirely — every row in
+    /// When `true`, disables the initial-load cap entirely - every row in
     /// the file is loaded up front. Trumps [`initial_load_rows`](Self::initial_load_rows).
     /// Default `false`. Power users on machines with plenty of RAM can flip
     /// this on so a single huge parquet/CSV opens in one shot.
@@ -531,14 +541,14 @@ pub struct AppSettings {
     /// Absolute paths of pinned tabs. Restored on next launch through the
     /// regular `load_file` path. Files that no longer exist on disk are
     /// silently dropped from this list. Unsaved changes in a pinned tab are
-    /// **not** auto-saved at close — the standard unsaved-changes dialog
+    /// **not** auto-saved at close - the standard unsaved-changes dialog
     /// still runs.
     #[serde(default)]
     pub pinned_tabs: Vec<String>,
     /// Default row cap applied by the MCP server (`octa --mcp`) when a tool
     /// call omits its `limit` parameter. `None` means "return every row";
     /// `Some(n)` caps the response and sets `truncated: true` in the JSON.
-    /// Defaults to `Some(1000)`. Read once at server startup — changing this
+    /// Defaults to `Some(1000)`. Read once at server startup - changing this
     /// while a server is running needs an `octa --mcp` restart.
     #[serde(default = "default_mcp_row_limit")]
     pub mcp_default_row_limit: Option<usize>,
@@ -561,7 +571,7 @@ pub struct AppSettings {
     #[serde(default = "default_true")]
     pub map_fallback_to_geometry: bool,
     /// Tile URL template, `{z}/{x}/{y}` for zoom + tile coordinates. The
-    /// default points at the OSM tile server — please honour the
+    /// default points at the OSM tile server - please honour the
     /// [OSM Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)
     /// in production deployments (point at a self-hosted or commercial
     /// provider, or get an API key).
@@ -576,18 +586,33 @@ pub struct AppSettings {
     /// evenly-spaced downsampling kicks in. Histogram, Line, and Scatter
     /// all honour this; Bar always aggregates the full input and is
     /// bounded by `chart_max_categories` instead. Default 100,000.
-    /// `0` disables sampling — at your own risk for very large tables.
+    /// `0` disables sampling - at your own risk for very large tables.
     #[serde(default = "default_chart_max_points")]
     pub chart_max_points: usize,
     /// Maximum distinct X categories a Bar chart will accept. Above this
     /// the chart refuses to draw rather than rendering a wall of
-    /// unreadable bars — the user should filter or group before charting.
+    /// unreadable bars - the user should filter or group before charting.
     /// Default 200.
     #[serde(default = "default_chart_max_categories")]
     pub chart_max_categories: usize,
+    /// How many sheets of a multi-sheet Excel workbook to open automatically
+    /// (each in its own tab) without prompting. If a workbook has more sheets
+    /// than this, Octa shows a sheet picker so the user chooses which to open
+    /// (they may pick more than this number, or all of them). Default 5.
+    #[serde(default = "default_excel_max_auto_sheets")]
+    pub excel_max_auto_sheets: usize,
+    /// Whether to strip leading/trailing whitespace from string cells when a
+    /// file is loaded. Interior whitespace is untouched. Default `true`.
+    #[serde(default = "default_true")]
+    pub trim_whitespace_on_load: bool,
+    /// Whether to show a dismissible banner listing the columns that had
+    /// whitespace trimmed on load. Default `true`. Independent of
+    /// [`trim_whitespace_on_load`] - trimming can run silently if this is off.
+    #[serde(default = "default_true")]
+    pub warn_on_whitespace_trim: bool,
     /// How many table rows the multi-table picker dialog (SQLite / DuckDB /
     /// other multi-table sources) should fit vertically by default. The
-    /// dialog stays user-resizable — this only controls the initial height
+    /// dialog stays user-resizable - this only controls the initial height
     /// so the picker doesn't dominate the screen when a database has a
     /// handful of tables. Default 10.
     #[serde(default = "default_table_picker_visible_rows")]
@@ -646,6 +671,10 @@ fn default_table_picker_visible_rows() -> usize {
     10
 }
 
+fn default_excel_max_auto_sheets() -> usize {
+    5
+}
+
 fn default_map_tile_url() -> String {
     // Stock OSM tile server. Walkers ships a `sources::OpenStreetMap`
     // helper that points at the same URL; we duplicate the literal here
@@ -667,6 +696,8 @@ impl Default for AppSettings {
             show_row_numbers: true,
             alternating_row_colors: true,
             negative_numbers_red: true,
+            thousands_separators_in_cells: true,
+            number_separator_style: crate::data::num_format::SeparatorStyle::default(),
             highlight_edits: false,
             cell_line_breaks: false,
             binary_display_mode: BinaryDisplayMode::default(),
@@ -704,6 +735,9 @@ impl Default for AppSettings {
             chart_max_points: default_chart_max_points(),
             chart_max_categories: default_chart_max_categories(),
             table_picker_visible_rows: default_table_picker_visible_rows(),
+            excel_max_auto_sheets: default_excel_max_auto_sheets(),
+            trim_whitespace_on_load: true,
+            warn_on_whitespace_trim: true,
         }
     }
 }
@@ -799,7 +833,7 @@ fn dirs_path_home() -> Option<PathBuf> {
 #[derive(Default)]
 pub struct SettingsDialog {
     pub open: bool,
-    /// Working copy — committed on Apply/OK.
+    /// Working copy - committed on Apply/OK.
     pub draft: AppSettings,
     /// Whether the icon changed (needs texture + window icon refresh).
     pub icon_changed: bool,
@@ -815,7 +849,7 @@ pub struct SettingsDialog {
     /// comma thousand separators so it matches Octa's display conventions.
     /// Parsed on Apply.
     syntax_highlight_max_bytes_buf: String,
-    /// Display unit for the syntax-highlight size input. Not persisted —
+    /// Display unit for the syntax-highlight size input. Not persisted -
     /// reset each time the dialog opens.
     syntax_highlight_size_unit: SyntaxSizeUnit,
     /// Buffer backing the initial-load-rows text input. Holds a comma-
@@ -850,6 +884,8 @@ pub struct SettingsDialog {
     /// Buffer backing the table-picker visible-rows input. Same comma-tolerant
     /// pattern as the other numeric inputs.
     table_picker_visible_rows_buf: String,
+    /// Buffer backing the Excel max-auto-sheets input.
+    excel_max_auto_sheets_buf: String,
     /// When the user clicks "Record" for a shortcut, the action is stored here
     /// and the next key press captures a new binding. `None` = not recording.
     recording: Option<ShortcutAction>,
@@ -859,7 +895,7 @@ pub struct SettingsDialog {
     /// Whether the "Reset to defaults" confirmation modal is currently shown.
     show_reset_confirm: bool,
     /// Window-size mode for the dialog (Normal / Maximized / Minimized).
-    /// Persists across re-opens within the same app session — closing and
+    /// Persists across re-opens within the same app session - closing and
     /// reopening Settings keeps the size choice the user last picked.
     size: DialogSize,
 }
@@ -882,14 +918,14 @@ pub enum DialogSize {
 /// the user clicked the close button.
 ///
 /// Glyph choice: stick to characters the egui default font definitely
-/// renders — underscore, U+25A1 white square, and `x`. Trying ─ / ⛶ / ✕
+/// renders - underscore, U+25A1 white square, and `x`. Trying ─ / ⛶ / ✕
 /// silently falls back to a missing-glyph box so all three buttons end up
 /// visually identical.
 pub fn draw_window_controls(ui: &mut egui::Ui, size: &mut DialogSize) -> bool {
     let btn_size = egui::vec2(26.0, 22.0);
     let mut close = false;
 
-    // Close — bold lowercase `x`.
+    // Close - bold lowercase `x`.
     if ui
         .add(egui::Button::new(egui::RichText::new("x").size(15.0).strong()).min_size(btn_size))
         .on_hover_text("Close")
@@ -897,7 +933,7 @@ pub fn draw_window_controls(ui: &mut egui::Ui, size: &mut DialogSize) -> bool {
     {
         close = true;
     }
-    // Maximize — U+25A1 WHITE SQUARE. `selected(active)` highlights it.
+    // Maximize - U+25A1 WHITE SQUARE. `selected(active)` highlights it.
     let max_active = *size == DialogSize::Maximized;
     if ui
         .add(
@@ -914,7 +950,7 @@ pub fn draw_window_controls(ui: &mut egui::Ui, size: &mut DialogSize) -> bool {
             DialogSize::Maximized
         };
     }
-    // Minimize — plain ASCII underscore, lowered visually so it sits where
+    // Minimize - plain ASCII underscore, lowered visually so it sits where
     // the Windows minimize bar sits (the underscore baseline draws low,
     // matching the convention).
     let min_active = *size == DialogSize::Minimized;
@@ -964,7 +1000,7 @@ mod tests {
     fn unknown_fields_are_silently_ignored() {
         // A field this binary doesn't know about (e.g. left over from a future
         // release downgraded back to the current one) must not blow up the
-        // whole config — just skip it.
+        // whole config - just skip it.
         let with_unknown = "font_size = 11.0\nmysterious_future_field = \"hi\"\n";
         let settings: AppSettings =
             toml::from_str(with_unknown).expect("unknown fields should be tolerated");

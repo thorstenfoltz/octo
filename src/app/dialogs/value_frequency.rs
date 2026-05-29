@@ -1,11 +1,14 @@
 //! Value-frequency dialog: top-N most common values in a column, with
 //! their counts and percentages. Opened by:
 //!
-//! - Column-header right-click → "Value frequency…"
+//! - Column-header right-click -> "Value frequency..."
+//! - **Analyse -> Value frequency...** (via the column picker)
 //! - `ShortcutAction::ColumnValueFrequency` (default Ctrl+Shift+I), which
 //!   targets the column of the currently selected cell.
 //!
 //! Compute lives in `octa::data::value_frequency`; this file only renders.
+//! The controls (Top-N / binning / bin count) are drawn *before* the result
+//! is computed, so edits take effect in the same frame.
 
 use eframe::egui;
 use egui::RichText;
@@ -27,52 +30,34 @@ const TOP_N_PRESETS: &[(Option<usize>, &str)] = &[
 ];
 
 pub(crate) fn render_value_frequency_dialog(app: &mut OctaApp, ctx: &egui::Context) {
-    let Some(col_idx) = app.tabs[app.active_tab].value_frequency_col else {
+    let active = app.active_tab;
+    let Some(col_idx) = app.tabs[active].value_frequency_col else {
         return;
     };
 
     // Guard: the active tab might have lost the column (load_file replaced
     // the table while the dialog flag persisted). Close cleanly in that
     // case rather than rendering against stale state.
-    let col_count = app.tabs[app.active_tab].table.col_count();
+    let col_count = app.tabs[active].table.col_count();
     if col_idx >= col_count {
-        app.tabs[app.active_tab].value_frequency_col = None;
+        app.tabs[active].value_frequency_col = None;
         return;
     }
 
-    let top_n = app.tabs[app.active_tab].value_frequency_top_n;
-    let bin = app.tabs[app.active_tab].value_frequency_bin_numeric;
-    let mut size = app.tabs[app.active_tab].value_frequency_size;
+    let top_n = app.tabs[active].value_frequency_top_n;
+    let bin = app.tabs[active].value_frequency_bin_numeric;
+    let mut size = app.tabs[active].value_frequency_size;
     let mut top_n_state = top_n;
     let mut bin_state = bin;
+    let mut bins_buf = app.tabs[active].value_frequency_bins_buf.clone();
     let mut close_requested = false;
     let mut copy_payload: Option<String> = None;
     let mut filter_to_this: Option<String> = None;
 
     let (column_name, is_numeric) = {
-        let tab = &app.tabs[app.active_tab];
+        let tab = &app.tabs[active];
         let col = &tab.table.columns[col_idx];
         (col.name.clone(), is_numeric_data_type(&col.data_type))
-    };
-
-    let binning_mode = if is_numeric && bin {
-        BinningMode::Sturges
-    } else {
-        BinningMode::None
-    };
-
-    let freq = {
-        let tab = &app.tabs[app.active_tab];
-        match compute_value_frequency(&tab.table, col_idx, top_n, binning_mode) {
-            Some(f) => f,
-            None => {
-                // Shouldn't reach here — the bounds check above already
-                // ruled out an out-of-range index — but the function returns
-                // Option for caller safety. Close defensively.
-                app.tabs[app.active_tab].value_frequency_col = None;
-                return;
-            }
-        }
     };
 
     let mut window = egui::Window::new("Value Frequency")
@@ -96,7 +81,7 @@ pub(crate) fn render_value_frequency_dialog(app: &mut OctaApp, ctx: &egui::Conte
             .show_inside(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new(format!("Value Frequency — {}", column_name))
+                        RichText::new(format!("Value Frequency - {}", column_name))
                             .strong()
                             .size(16.0),
                     );
@@ -112,6 +97,68 @@ pub(crate) fn render_value_frequency_dialog(app: &mut OctaApp, ctx: &egui::Conte
             return;
         }
 
+        // Controls first, so the result below reflects this frame's edits.
+        egui::Panel::top("value_frequency_controls")
+            .frame(egui::Frame::default().inner_margin(egui::Margin::symmetric(0, 6)))
+            .show_inside(ui, |ui| {
+                let binning_active = is_numeric && bin_state;
+                ui.horizontal_wrapped(|ui| {
+                    // Top-N only applies to raw value counts; when binning, the
+                    // bin count is the control, so hide the presets.
+                    if !binning_active {
+                        ui.label("Show:");
+                        for (preset, label) in TOP_N_PRESETS {
+                            let selected = top_n_state == *preset;
+                            if ui.selectable_label(selected, *label).clicked() {
+                                top_n_state = *preset;
+                            }
+                        }
+                    }
+                    if is_numeric {
+                        if !binning_active {
+                            ui.add_space(8.0);
+                        }
+                        ui.checkbox(&mut bin_state, "Bin numeric values");
+                        if bin_state {
+                            ui.add_space(4.0);
+                            ui.label("Bins:");
+                            ui.add(
+                                egui::TextEdit::singleline(&mut bins_buf)
+                                    .desired_width(48.0)
+                                    .hint_text("auto"),
+                            )
+                            .on_hover_text(
+                                "Number of equal-width value ranges to split the\n\
+                                 column into. Each row is one range and its count.\n\
+                                 Empty = automatic (Sturges) bin count.",
+                            );
+                            ui.label(
+                                egui::RichText::new("(equal-width ranges, in order)")
+                                    .small()
+                                    .color(ui.visuals().weak_text_color()),
+                            );
+                        }
+                    }
+                });
+            });
+
+        // Compute the result from the live control values (no frame lag).
+        let custom_bins: Option<usize> = bins_buf.trim().parse::<usize>().ok().filter(|n| *n > 0);
+        let binning_mode = if is_numeric && bin_state {
+            match custom_bins {
+                Some(n) => BinningMode::Custom(n),
+                None => BinningMode::Sturges,
+            }
+        } else {
+            BinningMode::None
+        };
+        let Some(freq) =
+            compute_value_frequency(&app.tabs[active].table, col_idx, top_n_state, binning_mode)
+        else {
+            // Bounds already checked above; defensive only.
+            return;
+        };
+
         egui::Panel::bottom("value_frequency_footer")
             .frame(egui::Frame::default().inner_margin(egui::Margin::symmetric(0, 8)))
             .show_inside(ui, |ui| {
@@ -124,11 +171,11 @@ pub(crate) fn render_value_frequency_dialog(app: &mut OctaApp, ctx: &egui::Conte
                     }
                     ui.label(
                         RichText::new(format!(
-                            "{} distinct · {} non-null · {} null{}",
+                            "{} distinct | {} non-null | {} null{}",
                             freq.unique_count,
                             freq.total_non_null,
                             freq.nulls,
-                            if freq.binned { " · binned" } else { "" }
+                            if freq.binned { " | binned" } else { "" }
                         ))
                         .size(10.0)
                         .color(ui.visuals().weak_text_color()),
@@ -139,21 +186,6 @@ pub(crate) fn render_value_frequency_dialog(app: &mut OctaApp, ctx: &egui::Conte
         egui::CentralPanel::default()
             .frame(egui::Frame::default())
             .show_inside(ui, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("Show:");
-                    for (preset, label) in TOP_N_PRESETS {
-                        let selected = top_n_state == *preset;
-                        if ui.selectable_label(selected, *label).clicked() {
-                            top_n_state = *preset;
-                        }
-                    }
-                    if is_numeric {
-                        ui.add_space(8.0);
-                        ui.checkbox(&mut bin_state, "Bin numeric values (Sturges)");
-                    }
-                });
-                ui.separator();
-
                 if freq.rows.is_empty() {
                     ui.add_space(12.0);
                     ui.label(
@@ -169,7 +201,7 @@ pub(crate) fn render_value_frequency_dialog(app: &mut OctaApp, ctx: &egui::Conte
                 let total_for_pct = freq.total_non_null.max(1) as f64;
                 let body_height = ui.available_height();
                 // Capture the weak text color before TableBuilder takes the
-                // exclusive borrow on `ui` — looking it up inside the body
+                // exclusive borrow on `ui` - looking it up inside the body
                 // closure would re-borrow `ui` and the compiler rejects.
                 let weak_text = ui.visuals().weak_text_color();
 
@@ -243,16 +275,19 @@ pub(crate) fn render_value_frequency_dialog(app: &mut OctaApp, ctx: &egui::Conte
     if let Some(value) = filter_to_this {
         // Add a column filter limiting the active tab to this exact value.
         // Same path as the column-filter dialog's apply step.
-        let tab = &mut app.tabs[app.active_tab];
+        let tab = &mut app.tabs[active];
         let mut allow = std::collections::HashSet::new();
         allow.insert(value);
         tab.column_filters.insert(col_idx, allow);
         tab.filter_dirty = true;
     }
 
-    let tab = &mut app.tabs[app.active_tab];
+    let custom_bins: Option<usize> = bins_buf.trim().parse::<usize>().ok().filter(|n| *n > 0);
+    let tab = &mut app.tabs[active];
     tab.value_frequency_top_n = top_n_state;
     tab.value_frequency_bin_numeric = bin_state;
+    tab.value_frequency_bins = custom_bins;
+    tab.value_frequency_bins_buf = bins_buf;
     tab.value_frequency_size = size;
     if close_requested {
         tab.value_frequency_col = None;

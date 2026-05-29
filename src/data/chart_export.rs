@@ -1,14 +1,14 @@
 //! Chart export (PNG / SVG / PDF).
 //!
-//! All three formats go through one hand-emitted **SVG** representation —
+//! All three formats go through one hand-emitted **SVG** representation -
 //! we never screenshot the egui_plot widget. That keeps the export
 //! resolution-independent and reproducible (no DPI / window-size
 //! variance) and lets the same source feed all three writers:
 //!
 //! - **SVG**: the emitted string is the artefact.
-//! - **PNG**: SVG → `resvg::usvg::Tree` → `resvg::render` → `tiny_skia::Pixmap`
-//!   → PNG bytes via the `png` encoder shipped with `resvg::tiny_skia`.
-//! - **PDF**: SVG → `svg2pdf::usvg::Tree` → `svg2pdf::to_pdf` → PDF bytes.
+//! - **PNG**: SVG -> `resvg::usvg::Tree` -> `resvg::render` -> `tiny_skia::Pixmap`
+//!   -> PNG bytes via the `png` encoder shipped with `resvg::tiny_skia`.
+//! - **PDF**: SVG -> `svg2pdf::usvg::Tree` -> `svg2pdf::to_pdf` -> PDF bytes.
 //!
 //! The chart itself is laid out in a fixed 800×500 SVG viewport; PNG
 //! callers can up-scale by passing a higher `scale` factor.
@@ -26,7 +26,7 @@ use super::chart::{
 #[derive(Debug, Clone)]
 pub struct ResolvedSeries {
     pub display_name: String,
-    /// `None` → fall back to the palette color at this slot.
+    /// `None` -> fall back to the palette color at this slot.
     pub color: Option<[u8; 4]>,
 }
 
@@ -87,7 +87,7 @@ impl ExportOptions {
     }
 }
 
-/// Pull a default name per series from the prepped data — used as the
+/// Pull a default name per series from the prepped data - used as the
 /// fallback when no per-series rename was set.
 pub fn series_names(data: &ChartData) -> Vec<String> {
     match data {
@@ -107,7 +107,7 @@ const PAD_BOTTOM: f64 = 70.0;
 const PAD_LEFT: f64 = 80.0;
 const PAD_RIGHT: f64 = 40.0;
 
-/// Default color palette — one per series. Mirrors egui_plot's
+/// Default color palette - one per series. Mirrors egui_plot's
 /// default auto-color cycle closely enough that exports look the
 /// same as the on-screen plot.
 const PALETTE: &[[u8; 4]] = &[
@@ -579,7 +579,7 @@ fn emit_legend(out: &mut String, opts: &ExportOptions) {
 /// 1.0 = native size, 2.0 = retina-quality. `resvg::tiny_skia` ships a PNG
 /// encoder so we don't need a separate `png` crate dep.
 ///
-/// Loads system fonts into the usvg fontdb before parsing — without that,
+/// Loads system fonts into the usvg fontdb before parsing - without that,
 /// every `<text>` element drops out and the rendered PNG is mostly blank
 /// (only the rects / lines survive). Slow on first call while fontdb scans
 /// the system font directories, near-instant after.

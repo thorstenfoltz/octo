@@ -1,7 +1,7 @@
 //! Static Markdown bodies for the in-app documentation dialog. One `const &str`
 //! per section; the parent module's `sections()` joins them with the live
 //! shortcut table at render time. Split out of `documentation/mod.rs` purely
-//! to keep the dialog code itself readable — no behavioural change.
+//! to keep the dialog code itself readable - no behavioural change.
 
 pub(super) const GETTING_STARTED: &str = r#"# Getting Started
 
@@ -42,6 +42,14 @@ to open files.
 When saving, the original format and settings (e.g. CSV delimiter) are
 preserved. Database writes only update changed rows and reject schema
 changes; rename or add columns in another tool first.
+
+## Multi-sheet Excel
+
+Each worksheet of an Excel workbook is treated as a table. Workbooks
+with up to N sheets (default 5, **Settings > Performance > Excel sheets
+to auto-open**) open all sheets at once, each in its own tab. With more
+than N sheets, a picker lets you choose which to open (you can pick more
+than N, or all).
 "#;
 
 pub(super) const NAVIGATION: &str = r#"# Navigation & Selection
@@ -83,6 +91,29 @@ Structural edits:
 - **Drag a column header** to reorder columns.
 - **Double-click a column header** to rename it inline.
 - **Right-click a column header** to change the column data type.
+
+## Number display
+
+Numeric columns show **thousand separators** by default
+(`1,234,567.89`). This is display-only; saved/exported data keeps raw
+values. Toggle it, or switch English (`1,234.56`) vs European
+(`1.234,56`) style, under **Settings > Table View** (**Thousand
+separators** + **Number style**).
+
+Right-click a numeric column header (or **Edit > Number format...**) for
+a per-column **rounding format**. The dialog applies live (no Apply
+step) and is movable/resizable. Type the number of **Decimals** (empty =
+Auto; a negative count rounds before the decimal point, e.g. -2 = nearest
+100) and pick a rounding mode (Normal / Up / Down). Fixed decimals pad
+with trailing zeros. Formats are display-only and per-tab; on **Save**
+Octa asks whether to write rounded values or full precision.
+
+## Whitespace trimming on load
+
+By default Octa strips leading/trailing whitespace from string cells
+**and column titles** when a file opens (interior spaces are kept), and
+shows a banner listing which columns changed. Both the trimming and the
+banner can be turned off under **Settings > File-Specific**.
 
 Saving an edited file is described under **Saving**.
 "#;
@@ -258,9 +289,11 @@ SELECT lists or scripts from Octa's view of the file.
 
 pub(super) const VALUE_FREQUENCY: &str = r#"# Value Frequency
 
-Open via the column-header right-click **Value frequency...** entry, or
-**Ctrl+Shift+I** (remappable). The dialog lists the most common values
-in one column, ranked by count.
+Open via the column-header right-click **Value frequency...** entry,
+**Analyse -> Value frequency...** (which asks you to pick a column
+first), or **Ctrl+Shift+I** (remappable; with no cell selected it opens
+the same column picker). The dialog lists the most common values in one
+column, ranked by count.
 
 Each row shows:
 
@@ -276,16 +309,25 @@ alphabetically.
 
 The toolbar offers **Top 20 / 50 / 100 / 500 / All**. The default is
 **Top 50**. The choice persists per tab while the dialog stays open.
+(Hidden while binning is on, since the bin count is the control there.)
 
-## Numeric binning
+## Numeric binning (histogram)
 
-For numeric columns, a **Bin numeric values (Sturges)** checkbox groups
-the values into `ceil(1 + log2(n))` buckets (clamped to 5..30). Useful
-for getting a quick histogram-shaped read on a column. Non-numeric
-columns hide the checkbox.
+For numeric columns, a **Bin numeric values** checkbox builds a
+histogram: the value range [min, max] is split into N equal-width
+ranges (width = (max - min) / N) and each row counts how many values
+fall in that range.
 
-NaN, +Inf, and -Inf show up as separate rows alongside the bins so
-type drift is visible.
+Type N into the **Bins:** field (1..1000), or leave it empty for an
+automatic count via Sturges' rule (`ceil(1 + log2(n))`, clamped 5..30).
+
+- N bins = N rows: every range is shown in ascending order, including
+  empty ones (count 0), so the row count always matches what you asked.
+- Labels are `[lo, hi)` half-open (last bin closed `[lo, hi]`).
+- An all-identical column has no range to split, so you get one bucket.
+
+NaN, +Inf, and -Inf show up as separate rows after the bins so type
+drift is visible. Non-numeric columns hide the checkbox.
 
 ## Acting on a row
 
@@ -302,7 +344,7 @@ The bottom **Copy as TSV** button copies the whole visible table as
 pub(super) const FIND_DUPLICATES: &str = r#"# Find Duplicates
 
 Open via **Search > Find duplicates...** or **Ctrl+Shift+D** (remappable).
-A modal lists every column with a checkbox — tick the ones you want
+A modal lists every column with a checkbox - tick the ones you want
 to use as the dedupe key. Two rows are duplicates when every checked
 column has the same displayed text.
 
@@ -318,7 +360,7 @@ Output modes (radio buttons):
 Notes:
 
 - The Apply button is greyed until at least one column is checked.
-- A row whose key only matches itself is not a duplicate — results
+- A row whose key only matches itself is not a duplicate - results
   always come in pairs or larger groups.
 - Hashing is text-based, so `Int(1)` and `Float(1.0)` render as `"1"`
   vs `"1.0"` and therefore do *not* dedupe. Change the column type
@@ -327,7 +369,7 @@ Notes:
   active table is unchanged.
 
 The dialog seeds the key with whatever column is currently selected,
-so Ctrl+Shift+D → Apply is the fastest path for a one-column dedupe
+so Ctrl+Shift+D -> Apply is the fastest path for a one-column dedupe
 check.
 "#;
 
@@ -440,7 +482,7 @@ entry is greyed out for them.
 Pinning does not change save semantics in any way. Closing the
 application or closing the tab with unsaved changes still runs the
 standard Save / Don't Save / Cancel dialog. The pinned tab reopens
-on next launch with whatever is on disk — any unsaved edits from
+on next launch with whatever is on disk - any unsaved edits from
 the previous session are gone if you didn't save them. Save with
 Ctrl+S (or Save As) before quitting.
 "#;
@@ -471,8 +513,8 @@ enabled.
 - **Raw Text**: shows the file content as plain text. For CSV/TSV the toolbar
   exposes Quote / Escape / Delimiter combos and an **Align Columns** toggle
   with per-column coloring. Syntect-based syntax highlighting kicks in for
-  source-code extensions (Python, Rust, shell, Terraform, …); the size cap
-  is configurable under **Settings → Performance**.
+  source-code extensions (Python, Rust, shell, Terraform, ...); the size cap
+  is configurable under **Settings -> Performance**.
 - **Markdown View**: rendered markdown for `.md` files. A toolbar toggle
   switches between Preview / Split / Edit. Split places a TextEdit beside the
   preview for live editing.
@@ -498,9 +540,9 @@ pub(super) const COMPARE_VIEW: &str = r#"# Compare View
 
 Compare two files side-by-side. Triggered in three ways:
 
-- **View → Compare with…**: opens a file picker; the active tab is the
+- **View -> Compare with...**: opens a file picker; the active tab is the
   left side, the picked file is the right.
-- **Right-click a tab → Compare with active tab**.
+- **Right-click a tab -> Compare with active tab**.
 - The **Compare selected tabs** shortcut (default **F9**, remappable) when
   exactly one tab is **Ctrl-clicked** as the right side.
 
@@ -560,7 +602,7 @@ Interaction:
 - **Click-drag** pans.
 
 The tile URL template, default mode, and "fall back to geometry on tile
-fetch failure" toggle live under **Settings → Map**. For production
+fetch failure" toggle live under **Settings -> Map**. For production
 deployments please honour the
 [OSM tile-usage policy](https://operations.osmfoundation.org/policies/tiles/)
 or point at a self-hosted or commercial tile provider.
@@ -660,7 +702,7 @@ pub(super) const TABS: &str = r#"# Tabs & Folder Sidebar
 Every opened file has a tab, even when only one is open. Hovering a tab
 reveals the full file path, useful when several tabs share a file name.
 
-**File > Open Directory…** opens a folder browser docked as a sidebar (left
+**File > Open Directory...** opens a folder browser docked as a sidebar (left
 by default; switch to the right under **Settings > Directory Tree**). Click
 any file in the tree to open it in a new tab. **File > Close Directory**
 hides the sidebar without touching the open tabs.
@@ -719,7 +761,7 @@ Six tools cover roughly the CLI surface plus row counting:
 - `convert(input, output, table?)`
 
 Defaults (row limit + per-cell byte cap) are configurable under
-**Settings → MCP**; changes require an `octa --mcp` restart. Every
+**Settings -> MCP**; changes require an `octa --mcp` restart. Every
 result-bearing tool exposes a `limit` parameter (pass `0` for
 unlimited) and surfaces `truncated` / `total_rows_available` /
 `cell_truncated` flags so MCP clients know when there's more.
@@ -740,6 +782,11 @@ pub(super) const SAVING: &str = r#"# Saving
 - For SQLite / DuckDB sources, saves are diff-based: only changed rows are
   updated, deleted rows are DELETEd, new rows are INSERTed. Schema changes
   (rename / add / drop column) are rejected; do those in another tool.
+- If a tab has a per-column **rounding format**, Save asks whether to write
+  the rounded values or full precision. The in-memory table keeps full
+  precision either way.
+- Excel **write** emits a single `.xlsx` sheet (the active tab); there is no
+  multi-sheet write even when the source workbook had several sheets.
 "#;
 
 pub(super) const SETTINGS_REFERENCE: &str = r#"# Settings Reference
@@ -749,11 +796,13 @@ Open **Help > Settings** (default **F3**). Categories are collapsible:
 - **Appearance**: font size and family, theme, icon variant, custom font
   path, custom title bar.
 - **Table View**: row numbers, alternating row colors, negative-number
-  highlight, edit highlight, default mark color, line breaks, binary
-  display mode (Binary / Hex / Text).
+  highlight, thousand separators + number style (English / European)
+  for numeric cells, edit highlight, default mark color, line breaks,
+  binary display mode (Binary / Hex / Text).
 - **Search & Editor**: default search mode, tab size.
 - **File-Specific**: column coloring for raw CSV/TSV, "warn before
-  un-aligning" guard, "warn on date format change" banner, "read-only
+  un-aligning" guard, "warn on date format change" banner, "trim
+  whitespace on load" + "warn on whitespace trim" toggles, "read-only
   mode notice" toggle, notebook output layout.
 - **SQL**: panel position, default row limit, autocomplete, editor font
   (JetBrains Mono / Match UI / System Monospace).
@@ -766,8 +815,9 @@ Open **Help > Settings** (default **F3**). Categories are collapsible:
 - **Shortcuts**: rebind any keyboard shortcut. Conflicting bindings are
   flagged.
 - **Performance**: initial-load row cap (streaming readers), syntax-
-  highlight size cap (raw editor fallback), and a user-extensible list
-  of file extensions to open as plain text.
+  highlight size cap (raw editor fallback), a user-extensible list of
+  file extensions to open as plain text, and how many Excel sheets to
+  auto-open.
 - **Files**: how many recent files to remember.
 - **Window**: default size, start maximized.
 

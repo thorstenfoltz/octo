@@ -9,7 +9,7 @@
 use octa::data::DataTable;
 
 /// Hash the selected columns of one row into a 32-byte BLAKE3 digest.
-/// `cols.is_empty()` means "hash every column" — the typical default until
+/// `cols.is_empty()` means "hash every column" - the typical default until
 /// the user picks specific columns in the UI.
 ///
 /// Column ordering matters: hashing `(a=1, b=2)` produces a different digest

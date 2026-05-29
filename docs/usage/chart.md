@@ -12,7 +12,7 @@ Trigger via:
 The entry is hidden on string-only tables since there's nothing to
 plot.
 
-<!-- SCREENSHOT: chart-tab-overview.png — Chart tab with a Bar chart of
+<!-- SCREENSHOT: chart-tab-overview.png: Chart tab with a Bar chart of
 country → population, the Analyse toolbar dropdown visible, "DE / US /
 JP" tick labels on the X axis, a legend in the top-right, and the
 Customise collapsible expanded showing title / axis renames / per-series

@@ -3,7 +3,7 @@
 //! Pure functions over a [`DataTable`]: pick numeric / categorical values
 //! out of the user-selected columns, apply optional aggregation, downsample
 //! to honour `chart_max_points`, and return a [`ChartPrep`] the view code
-//! can hand straight to `egui_plot`. Nothing in here touches egui — the
+//! can hand straight to `egui_plot`. Nothing in here touches egui - the
 //! split keeps the data-prep pipeline integration-testable without a
 //! windowed GUI.
 
@@ -65,7 +65,7 @@ pub fn format_seconds_as_datetime(seconds: f64) -> String {
 
 /// Sniff the dominant variant of an X column to pick an [`XAxisKind`].
 /// Looks at the first non-null cell; falls back to `Numeric` for empty
-/// columns. We sample one cell — the column's data_type would be more
+/// columns. We sample one cell - the column's data_type would be more
 /// reliable but isn't always populated by every reader.
 fn sniff_x_axis_kind(table: &DataTable, x_col: usize, rows: &[usize]) -> XAxisKind {
     for &r in rows.iter().take(64) {
@@ -82,7 +82,7 @@ fn sniff_x_axis_kind(table: &DataTable, x_col: usize, rows: &[usize]) -> XAxisKi
 /// Default cap on the number of distinct categorical X values a Bar chart
 /// will keep. Above this the chart prep returns an error rather than rendering
 /// thousands of unreadable bars. The user can raise / lower this via
-/// `AppSettings.chart_max_categories` — callers pass the resolved cap into
+/// `AppSettings.chart_max_categories` - callers pass the resolved cap into
 /// [`build_chart`]; this constant only seeds the default.
 pub const DEFAULT_MAX_BAR_CATEGORIES: usize = 200;
 
@@ -196,7 +196,7 @@ impl Aggregation {
     }
 }
 
-/// Where the plot legend sits — or off entirely.
+/// Where the plot legend sits - or off entirely.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum LegendPosition {
     Off,
@@ -228,7 +228,7 @@ impl LegendPosition {
 }
 
 /// Per-Y-column display override: a custom legend name and/or color picked
-/// by the user. Either may be empty / unset — the renderer falls back to the
+/// by the user. Either may be empty / unset - the renderer falls back to the
 /// column name + an auto-cycled color.
 #[derive(Debug, Clone, Default)]
 pub struct SeriesStyle {
@@ -238,7 +238,7 @@ pub struct SeriesStyle {
     pub color: Option<[u8; 4]>,
 }
 
-/// User-driven chart configuration. Lives on `TabState` as transient state —
+/// User-driven chart configuration. Lives on `TabState` as transient state -
 /// not persisted because the right columns are usually obvious from the
 /// table on screen and persisting would re-open the chart on the wrong file.
 #[derive(Debug, Clone)]
@@ -266,7 +266,7 @@ pub struct ChartConfig {
     pub show_grid: bool,
     /// Lower bound for the X axis (in original-data units). `None` = auto.
     /// For date / datetime X axes the bound is in *days since 1970-01-01* /
-    /// *seconds since the Unix epoch* respectively — same coordinate system
+    /// *seconds since the Unix epoch* respectively - same coordinate system
     /// the renderer uses internally.
     pub x_min: Option<f64>,
     /// Upper bound for the X axis. `None` = auto.
@@ -319,7 +319,7 @@ impl Default for ChartConfig {
     }
 }
 
-/// One named numeric series — Line / Scatter / Bar all use this shape.
+/// One named numeric series - Line / Scatter / Bar all use this shape.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChartSeries {
     pub name: String,
@@ -354,7 +354,7 @@ pub enum ChartData {
         series: Vec<ChartSeries>,
     },
     /// Connected polylines, one per Y column. `categories` is `Some` when
-    /// X was a non-numeric column — each point's X is a category index and
+    /// X was a non-numeric column - each point's X is a category index and
     /// the renderer maps it back to the category label on the axis.
     Lines {
         categories: Option<Vec<String>>,
@@ -401,13 +401,13 @@ pub struct ChartPrep {
     pub y_label: String,
     /// What the X-axis numbers *mean* (plain numeric vs. days-since-epoch
     /// vs. seconds-since-epoch). The renderer uses this to format ticks
-    /// back into readable dates — without it, a histogram of a `Date`
+    /// back into readable dates - without it, a histogram of a `Date`
     /// column shows numbers like `19723` instead of `2024-01-30`.
     pub x_axis_kind: XAxisKind,
 }
 
 /// Why a chart couldn't be built. All variants carry a user-displayable
-/// message — the renderer surfaces them inline above the empty plot area.
+/// message - the renderer surfaces them inline above the empty plot area.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ChartError {
     NoXColumn,
@@ -434,7 +434,7 @@ impl ChartError {
                 format!("Y column '{col}' has no numeric values.")
             }
             ChartError::EmptyAfterFilter => {
-                "No rows match the current filter — clear it to chart the full table.".into()
+                "No rows match the current filter - clear it to chart the full table.".into()
             }
             ChartError::TooManyCategories { count, cap } => format!(
                 "X has {count} distinct categories; the Bar chart caps at {cap}. \
@@ -478,7 +478,7 @@ fn parse_date_to_days(s: &str) -> Option<f64> {
 }
 
 /// Parse a datetime string into "seconds since 1970-01-01 UTC". Naive (no
-/// timezone) — same convention chrono uses for `NaiveDateTime`. Subseconds
+/// timezone) - same convention chrono uses for `NaiveDateTime`. Subseconds
 /// preserved as the fractional part.
 fn parse_datetime_to_seconds(s: &str) -> Option<f64> {
     let s = s.trim();
@@ -495,7 +495,7 @@ fn parse_datetime_to_seconds(s: &str) -> Option<f64> {
             return Some(dt.and_utc().timestamp_nanos_opt()? as f64 / 1_000_000_000.0);
         }
     }
-    // Fall back to date-only — treat as midnight UTC.
+    // Fall back to date-only - treat as midnight UTC.
     parse_date_to_days(s).map(|d| d * 86_400.0)
 }
 
@@ -539,7 +539,7 @@ fn col_name(table: &DataTable, col: usize) -> String {
 
 /// Runtime caps the renderer can adjust per call. Threading them through as a
 /// struct keeps the build_chart signature stable as more knobs land later
-/// (per-axis date format, dpi, …).
+/// (per-axis date format, dpi, ...).
 #[derive(Debug, Clone, Copy)]
 pub struct ChartLimits {
     /// Max input rows the pipeline will plot before evenly-spaced sampling.
@@ -682,7 +682,7 @@ fn build_bar(
     let mut category_seen: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
     // For Count aggregation we count every row regardless of Y being
-    // numeric — same semantics SQL's COUNT(*) gives.
+    // numeric - same semantics SQL's COUNT(*) gives.
     let mut buckets: Vec<Vec<Vec<f64>>> = Vec::new();
     let count_only = matches!(cfg.agg, Aggregation::Count);
     for &row in rows {
@@ -746,7 +746,7 @@ fn build_bar(
         x_label: col_name(table, x_col),
         y_label,
         // Bars always show category labels via `x_axis_categories()`, so
-        // the numeric-kind branch never fires here — leave at default.
+        // the numeric-kind branch never fires here - leave at default.
         x_axis_kind: XAxisKind::Numeric,
     })
 }
@@ -765,7 +765,7 @@ fn build_line_or_scatter(
 
     // Probe a few rows to decide whether the X column is numeric (or
     // date-like, which coerces). If not we fall back to the categorical
-    // path so a Line of "country → population" works without forcing the
+    // path so a Line of "country -> population" works without forcing the
     // user to re-type the column first.
     let x_is_numeric = rows
         .iter()
@@ -818,7 +818,7 @@ fn build_line_or_scatter(
         categories = None;
     } else {
         // Categorical path: build a first-seen-order category list,
-        // place each row at its category index. No aggregation — multiple
+        // place each row at its category index. No aggregation - multiple
         // rows in the same category produce multiple points (visible as
         // a vertical stack on the bar).
         let mut category_order: Vec<String> = Vec::new();
@@ -908,7 +908,7 @@ fn build_box(
         let mut values = collect_numeric(table, rows, y_col);
         if values.is_empty() {
             // Skip empty columns but keep going so a partially-bad selection
-            // still draws what it can — the renderer adds a hint if the
+            // still draws what it can - the renderer adds a hint if the
             // result is shorter than the request.
             continue;
         }
@@ -921,7 +921,7 @@ fn build_box(
         let lower_fence = q1 - 1.5 * iqr;
         let upper_fence = q3 + 1.5 * iqr;
         // Whiskers extend to the actual extreme values within the fences,
-        // not all the way to ±IQR — matches Tukey's original definition.
+        // not all the way to ±IQR - matches Tukey's original definition.
         let lower_whisker = *values
             .iter()
             .find(|v| **v >= lower_fence)

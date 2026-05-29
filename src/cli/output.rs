@@ -1,5 +1,5 @@
 //! Shared output formatters for CLI subcommands. Each writes to stdout
-//! directly — the subcommands themselves never touch `println!` for table
+//! directly - the subcommands themselves never touch `println!` for table
 //! data, so adding a new output format is a one-place change.
 
 use std::io::{self, Write};
@@ -22,7 +22,7 @@ pub fn write_table(table: &DataTable, format: OutputFormat) -> anyhow::Result<()
 }
 
 /// Tab-separated values. Field-internal tabs are replaced with two spaces
-/// so the row count never blows out — TSV has no escape mechanism, and
+/// so the row count never blows out - TSV has no escape mechanism, and
 /// silently corrupting cells with embedded tabs would be worse than the
 /// readability loss from the substitution.
 fn write_delimited(w: &mut impl Write, table: &DataTable, delim: u8) -> io::Result<()> {
@@ -50,7 +50,7 @@ fn write_delimited(w: &mut impl Write, table: &DataTable, delim: u8) -> io::Resu
 }
 
 /// RFC 4180 CSV writer. Uses the existing `csv` crate so quoting rules
-/// match the rest of Octa's CSV behaviour — fields with comma, quote, or
+/// match the rest of Octa's CSV behaviour - fields with comma, quote, or
 /// newline get wrapped, internal quotes are doubled.
 fn write_csv(w: &mut impl Write, table: &DataTable) -> anyhow::Result<()> {
     let mut wtr = csv::Writer::from_writer(w);

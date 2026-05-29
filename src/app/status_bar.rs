@@ -35,9 +35,9 @@ impl OctaApp {
         );
         let busy = bg_loading || update_busy;
         let busy_hint = if update_busy {
-            Some("Updating…")
+            Some("Updating...")
         } else if bg_loading {
-            Some("Loading rows…")
+            Some("Loading rows...")
         } else {
             None
         };
@@ -101,7 +101,7 @@ impl OctaApp {
             // Prefixed with "\u{1f419}" so the central-panel renderer paints
             // the message in the accent color instead of error-red.
             self.status_message = Some((
-                "\u{1f419} The kraken stirs from the depths\u{2026}".to_string(),
+                "\u{1f419} The kraken stirs from the depths...".to_string(),
                 std::time::Instant::now(),
             ));
         }

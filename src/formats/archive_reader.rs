@@ -6,7 +6,7 @@
 //! entry to a tempfile and open it as a new tab via the normal
 //! `OctaApp::load_file` path.
 //!
-//! No `tar.bz2` support yet — that would need a bzip2 crate, and the
+//! No `tar.bz2` support yet - that would need a bzip2 crate, and the
 //! current dep allowlist doesn't include one.
 //!
 //! Single-extension matching means **`.tar.gz` doesn't route here**:
@@ -32,7 +32,7 @@ impl FormatReader for ArchiveReader {
     }
 
     fn extensions(&self) -> &[&str] {
-        // No `tar.gz` here — single-component matching in
+        // No `tar.gz` here - single-component matching in
         // FormatRegistry can't disambiguate it from other `.gz` use
         // cases. `.tgz` (the all-in-one extension) is supported and
         // is what we recommend in the docs.
@@ -54,7 +54,7 @@ impl FormatReader for ArchiveReader {
     }
 }
 
-/// Kind of archive — drives which reader codepath fires.
+/// Kind of archive - drives which reader codepath fires.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArchiveKind {
     Zip,
@@ -234,7 +234,7 @@ fn build_table(entries: Vec<ArchiveEntry>, source_path: &Path, kind: ArchiveKind
 
 /// Guess a coarse "type" string for an entry from its extension or
 /// directory status. Used for the `type` column so users can sort by
-/// it. Not authoritative — the file's real format is determined when
+/// it. Not authoritative - the file's real format is determined when
 /// the entry is extracted and re-opened.
 fn classify_path(path: &str, is_dir: bool) -> String {
     if is_dir {
@@ -310,7 +310,7 @@ fn find_in_tar<R: Read>(reader: R, entry_path: &str) -> Result<Vec<u8>> {
                 bail!("entry \"{}\" is a directory, not a file", entry_path);
             }
             let mut out = Vec::new();
-            // Streaming read — tar entries don't store size separately
+            // Streaming read - tar entries don't store size separately
             // from the payload, so we just drain.
             entry
                 .read_to_end(&mut out)
@@ -326,7 +326,7 @@ fn find_in_tar<R: Read>(reader: R, entry_path: &str) -> Result<Vec<u8>> {
 /// approach in `parse_in_new_tab`. Optional Vec on `OctaApp` because
 /// most sessions never touch an archive.
 ///
-/// This struct intentionally has no public fields — the binary side
+/// This struct intentionally has no public fields - the binary side
 /// pushes the `NamedTempFile` after calling `.keep()` is unsafe
 /// (would lose the path) so we hold the wrapper instead.
 pub use tempfile::NamedTempFile;

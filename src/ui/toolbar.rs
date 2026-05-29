@@ -80,9 +80,9 @@ pub struct ToolbarAction {
     pub open_directory: bool,
     pub close_directory: bool,
     pub open_recent: Option<String>,
-    /// Right-click → "Remove from list" on a single recent-files entry.
+    /// Right-click -> "Remove from list" on a single recent-files entry.
     pub remove_recent: Option<String>,
-    /// Right-click → "Clear all" on a recent-files entry.
+    /// Right-click -> "Clear all" on a recent-files entry.
     pub clear_recent: bool,
     pub save_file: bool,
     pub save_file_as: bool,
@@ -105,11 +105,11 @@ pub struct ToolbarAction {
     /// Open the read-only Column Inspector dialog.
     pub show_column_inspector: bool,
     /// Clear the active tab's `hidden_columns` so every column becomes
-    /// visible again. Wired to Edit → Show hidden columns.
+    /// visible again. Wired to Edit -> Show hidden columns.
     pub show_all_columns: bool,
     /// Open the Excel-style Column Filter dialog. Outer `Some` = the user
     /// invoked the action this frame (menu click, header context menu,
-    /// status-bar chip, …); inner `Some(col)` = preselect that column, inner
+    /// status-bar chip, ...); inner `Some(col)` = preselect that column, inner
     /// `None` = no preselect (dialog opens on the first column or the
     /// previously remembered one).
     pub show_column_filter: Option<Option<usize>>,
@@ -128,10 +128,16 @@ pub struct ToolbarAction {
     pub zoom_out: bool,
     pub zoom_reset: bool,
     pub toggle_sql_panel: bool,
-    /// Open a Chart tab for the active table. Fired by **Analyse →
+    /// Open a Chart tab for the active table. Fired by **Analyse ->
     /// Chart** (toolbar) or the `OpenChart` shortcut. Independent from
     /// `toggle_sql_panel` so the user can have either / both / neither.
     pub open_chart_tab: bool,
+    /// Open the Value Frequency column picker (no column context). Fired by
+    /// **Analyse -> Value frequency...**.
+    pub open_value_frequency: bool,
+    /// Open the per-column Number-format dialog for the selected column.
+    /// Fired by **Edit -> Number format...**.
+    pub open_column_format: bool,
     /// Toggle "first row is header" for the active table.
     pub toggle_first_row_header: bool,
     /// Apply a color mark to a set of keys (cell/row/column).
@@ -139,7 +145,7 @@ pub struct ToolbarAction {
     /// Clear color marks from a set of keys.
     pub clear_marks: Vec<MarkKey>,
     /// Clear every color mark on the active table. Wired to the new
-    /// "Clear all marks" entry in **Edit → Mark**; reachable even
+    /// "Clear all marks" entry in **Edit -> Mark**; reachable even
     /// without a selection so users can wipe duplicate-row highlights
     /// without first selecting the rows.
     pub clear_all_marks: bool,
@@ -148,7 +154,7 @@ pub struct ToolbarAction {
     /// Redo the last undone change.
     pub redo: bool,
     /// Logo in the top-left was clicked. Wired to a hidden easter-egg counter
-    /// in the app shell — most users never trigger it.
+    /// in the app shell - most users never trigger it.
     pub logo_clicked: bool,
     /// Toggle session-only read-only mode (also bound to F8 by default).
     pub toggle_readonly: bool,
@@ -163,21 +169,21 @@ pub struct ToolbarAction {
     /// Wired to the Edit menu entry (the Ctrl+Shift+W shortcut is handled
     /// separately in `shortcuts_dispatch`).
     pub fit_all_columns: bool,
-    /// User clicked View → Compare with…  The app shell opens a file
+    /// User clicked View -> Compare with...  The app shell opens a file
     /// picker, loads the picked file as the right side, and flips the
     /// active tab into `ViewMode::Compare`.
     pub compare_with: bool,
-    /// Open the **Edit → Find duplicates…** modal for the active tab.
+    /// Open the **Edit -> Find duplicates...** modal for the active tab.
     /// The dialog itself lives in `app::dialogs::find_duplicates`; the
     /// toolbar just signals "user wants it open".
     pub show_find_duplicates: bool,
     /// Open the Schema Export dialog. The dialog itself lets the user
     /// switch between the seven supported targets; there's no need for
-    /// the toolbar to pre-pick one. Fired by **File → Export schema…**
+    /// the toolbar to pre-pick one. Fired by **File -> Export schema...**
     /// and the `ExportSchema` keyboard shortcut.
     pub show_schema_export: bool,
     /// Toggle the cross-tab + directory multi-search panel. Fired by
-    /// **Search → Multi-search…** and the `MultiSearch` keyboard
+    /// **Search -> Multi-search...** and the `MultiSearch` keyboard
     /// shortcut.
     pub toggle_multi_search: bool,
 }
@@ -210,7 +216,7 @@ pub fn draw_toolbar(
     has_yaml: bool,
     readonly_mode: bool,
     // Kept on the signature so callers don't have to know whether the
-    // Analyse dropdown still reflects panel state — currently it does not
+    // Analyse dropdown still reflects panel state - currently it does not
     // (just two flat buttons), but flipping that back is a one-line edit.
     _sql_panel_open: bool,
     zoom_percent: u32,
@@ -236,7 +242,7 @@ pub fn draw_toolbar(
     // Top-level menus go through `top_menu_button` (defined above), which
     // brings back the hover-switch behaviour egui 0.31's MenuRoot used to
     // provide and that egui 0.34's MenuButton dropped. Plain `ui.horizontal`
-    // is enough here — we do *not* wrap in `egui::MenuBar`, because the
+    // is enough here - we do *not* wrap in `egui::MenuBar`, because the
     // helper handles the menu/submenu plumbing itself.
     ui.horizontal(|ui| {
         ui.add_space(4.0);
@@ -334,8 +340,8 @@ pub fn draw_toolbar(
         // --- Edit menu ---
         if has_data {
             top_menu_button(ui, RichText::new("Edit").color(colors.text_primary), |ui| {
-                // Edit menu entries deliberately omit shortcut suffixes —
-                // bindings are discoverable via Settings → Shortcuts; cramming
+                // Edit menu entries deliberately omit shortcut suffixes -
+                // bindings are discoverable via Settings -> Shortcuts; cramming
                 // them into the menu was visually noisy.
                 if ui
                     .add_enabled(can_undo, egui::Button::new("Undo"))
@@ -448,6 +454,18 @@ pub fn draw_toolbar(
                     ui.close();
                 }
 
+                let num_fmt_btn =
+                    ui.add_enabled(has_selected_cell, egui::Button::new("Number format..."));
+                if num_fmt_btn
+                    .on_hover_text(
+                        "Set decimals + rounding for the selected numeric column (display only)",
+                    )
+                    .clicked()
+                {
+                    action.open_column_format = true;
+                    ui.close();
+                }
+
                 let show_all_btn = ui.add_enabled(
                     has_hidden_columns,
                     egui::Button::new("Show hidden columns"),
@@ -466,7 +484,7 @@ pub fn draw_toolbar(
 
                 ui.separator();
 
-                // "Parse in new tab" submenu — opens a modal that
+                // "Parse in new tab" submenu - opens a modal that
                 // parses the chosen scope (cell / row / column / whole
                 // table) as a user-picked format and opens the result
                 // in a new tab. Cell / Row / Column require a selected
@@ -525,7 +543,7 @@ pub fn draw_toolbar(
 
                 ui.separator();
 
-                // Mark submenu — surfaces the same colors as the right-click
+                // Mark submenu - surfaces the same colors as the right-click
                 // context menu, scoped to the current selection.
                 let mark_keys: Vec<MarkKey> = if !selected_rows.is_empty() {
                     let mut rs: Vec<usize> = selected_rows.iter().copied().collect();
@@ -547,7 +565,7 @@ pub fn draw_toolbar(
                 let has_marks_keys = !mark_keys.is_empty();
                 let any_currently_marked = mark_keys.iter().any(|k| table.marks.contains_key(k));
                 let table_has_any_marks = !table.marks.is_empty();
-                // The submenu opens whenever a clear path is available —
+                // The submenu opens whenever a clear path is available -
                 // either the selection has marks to color/clear, or the
                 // table has marks somewhere (so "Clear all marks" applies).
                 let menu_enabled = has_marks_keys || table_has_any_marks;
@@ -678,11 +696,11 @@ pub fn draw_toolbar(
                         ui.close();
                     }
                 }
-                // Compare with… — always available; the click triggers a
+                // Compare with... - always available; the click triggers a
                 // file picker that loads the right side and switches the
                 // active tab into Compare view.
                 ui.separator();
-                if ui.button("Compare with…").clicked() {
+                if ui.button("Compare with...").clicked() {
                     action.compare_with = true;
                     ui.close();
                 }
@@ -736,7 +754,7 @@ pub fn draw_toolbar(
                     ui.separator();
                     // Excel-style per-column value filter. Deliberately *not*
                     // suffixed with the shortcut combo (Ctrl+Shift+F by default)
-                    // — same convention as the F8 read-only menu entry.
+                    // - same convention as the F8 read-only menu entry.
                     let filter_btn =
                         ui.add_enabled(has_data, egui::Button::new("Column Filter..."));
                     if filter_btn.clicked() {
@@ -760,7 +778,7 @@ pub fn draw_toolbar(
             // --- Analyse group (SQL panel toggle + Open chart) ---
             //
             // Renders as a single dropdown labelled "Analyse" containing
-            // two entries: **SQL** (toggles the existing SQL panel — same
+            // two entries: **SQL** (toggles the existing SQL panel - same
             // behaviour as before, just lives here now) and **Chart**
             // (opens a new tab dedicated to plotting). Independent: the
             // user can open either without the other. Only shown on Table
@@ -774,6 +792,10 @@ pub fn draw_toolbar(
                     }
                     if ui.button("Chart").clicked() {
                         action.open_chart_tab = true;
+                        ui.close();
+                    }
+                    if ui.button("Value frequency...").clicked() {
+                        action.open_value_frequency = true;
                         ui.close();
                     }
                 });
@@ -868,9 +890,9 @@ pub fn draw_toolbar(
             }
         }
 
-        // Window controls — pinned to the far right of the same toolbar.
+        // Window controls - pinned to the far right of the same toolbar.
         // Only rendered when the user opted into a custom title bar
-        // (Settings → File-Specific → "Custom title bar"); `main.rs`
+        // (Settings -> File-Specific -> "Custom title bar"); `main.rs`
         // strips system decorations in that case so these buttons are
         // the only way to close / minimize / maximize the window.
         // `right_to_left` lays them out in visual order `[_] [□] [x]`

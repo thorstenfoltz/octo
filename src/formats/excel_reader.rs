@@ -1,7 +1,7 @@
 use crate::data::{CellValue, ColumnInfo, DataTable};
-use crate::formats::FormatReader;
+use crate::formats::{FormatReader, TableInfo};
 use anyhow::Result;
-use calamine::{Data, Reader, open_workbook_auto};
+use calamine::{Data, Reader, Sheets, open_workbook_auto};
 use rust_xlsxwriter::Workbook;
 use std::path::Path;
 
@@ -19,113 +19,62 @@ impl FormatReader for ExcelReader {
     fn read_file(&self, path: &Path) -> Result<DataTable> {
         let mut workbook = open_workbook_auto(path)?;
         let sheet_names = workbook.sheet_names().to_vec();
-
-        if sheet_names.is_empty() {
+        let Some(first) = sheet_names.first() else {
             return Ok(DataTable::empty());
-        }
-
-        let range = workbook
-            .worksheet_range(&sheet_names[0])
-            .map_err(|e| anyhow::anyhow!("Failed to read sheet: {}", e))?;
-
-        let mut rows_iter = range.rows();
-
-        // First row = headers
-        let header_row = match rows_iter.next() {
-            Some(r) => r,
-            None => return Ok(DataTable::empty()),
         };
+        let first = first.clone();
+        read_sheet(&mut workbook, &first, path)
+    }
 
-        let columns: Vec<ColumnInfo> = header_row
-            .iter()
-            .enumerate()
-            .map(|(i, cell)| {
-                let name = match cell {
-                    Data::String(s) => s.clone(),
-                    Data::Float(f) => format!("{}", f),
-                    Data::Int(i) => format!("{}", i),
-                    Data::Bool(b) => format!("{}", b),
-                    _ => format!("Column{}", i + 1),
-                };
-                ColumnInfo {
-                    name,
-                    data_type: "Utf8".to_string(),
-                }
-            })
-            .collect();
-
-        let col_count = columns.len();
-        let mut rows: Vec<Vec<CellValue>> = Vec::new();
-
-        for row in rows_iter {
-            let mut cells: Vec<CellValue> = row
-                .iter()
-                .map(|cell| match cell {
-                    Data::Empty => CellValue::Null,
-                    Data::String(s) => CellValue::String(s.clone()),
-                    Data::Float(f) => CellValue::Float(*f),
-                    Data::Int(i) => CellValue::Int(*i),
-                    Data::Bool(b) => CellValue::Bool(*b),
-                    Data::DateTime(dt) => CellValue::DateTime(format!("{}", dt)),
-                    Data::DateTimeIso(s) => CellValue::DateTime(s.clone()),
-                    Data::DurationIso(s) => CellValue::String(s.clone()),
-                    Data::Error(e) => CellValue::String(format!("#ERR: {:?}", e)),
-                })
-                .collect();
-            // Pad or truncate to match column count
-            cells.resize(col_count, CellValue::Null);
-            rows.push(cells);
+    /// Each worksheet is exposed as a "table" so the app can open multiple
+    /// sheets (see [`FormatReader::opens_all_tables`]). Columns are reported
+    /// from the header row only - a cheap, header-accurate listing without
+    /// scanning every cell for type refinement.
+    fn list_tables(&self, path: &Path) -> Result<Option<Vec<TableInfo>>> {
+        let mut workbook = open_workbook_auto(path)?;
+        let sheet_names = workbook.sheet_names().to_vec();
+        if sheet_names.is_empty() {
+            return Ok(None);
         }
-
-        // Refine column types based on data
-        let mut final_columns = columns;
-        for (col_idx, col) in final_columns.iter_mut().enumerate() {
-            let mut has_int = false;
-            let mut has_float = false;
-            let mut has_bool = false;
-            let mut has_datetime = false;
-            let mut has_string = false;
-
-            for row in &rows {
-                match row.get(col_idx) {
-                    Some(CellValue::Int(_)) => has_int = true,
-                    Some(CellValue::Float(_)) => has_float = true,
-                    Some(CellValue::Bool(_)) => has_bool = true,
-                    Some(CellValue::DateTime(_)) => has_datetime = true,
-                    Some(CellValue::String(_)) => has_string = true,
-                    _ => {}
+        let mut tables = Vec::with_capacity(sheet_names.len());
+        for name in &sheet_names {
+            let (columns, row_count) = match workbook.worksheet_range(name) {
+                Ok(range) => {
+                    let mut rows = range.rows();
+                    let columns = rows
+                        .next()
+                        .map(|header| {
+                            header
+                                .iter()
+                                .enumerate()
+                                .map(|(i, cell)| ColumnInfo {
+                                    name: header_cell_name(cell, i),
+                                    data_type: "Utf8".to_string(),
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default();
+                    (columns, range.rows().count().saturating_sub(1))
                 }
-            }
-
-            col.data_type = if has_string {
-                "Utf8".to_string()
-            } else if has_datetime {
-                "Timestamp(Microsecond, None)".to_string()
-            } else if has_float {
-                "Float64".to_string()
-            } else if has_int {
-                "Int64".to_string()
-            } else if has_bool {
-                "Boolean".to_string()
-            } else {
-                "Utf8".to_string()
+                Err(_) => (Vec::new(), 0),
             };
+            tables.push(TableInfo {
+                name: name.clone(),
+                schema: None,
+                columns,
+                row_count: Some(row_count),
+            });
         }
+        Ok(Some(tables))
+    }
 
-        Ok(DataTable {
-            columns: final_columns,
-            rows,
-            edits: std::collections::HashMap::new(),
-            source_path: Some(path.to_string_lossy().to_string()),
-            format_name: Some("Excel".to_string()),
-            structural_changes: false,
-            total_rows: None,
-            row_offset: 0,
-            marks: std::collections::HashMap::new(),
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
-            db_meta: None,
-        })
+    fn read_table(&self, path: &Path, table: &str) -> Result<DataTable> {
+        let mut workbook = open_workbook_auto(path)?;
+        read_sheet(&mut workbook, table, path)
+    }
+
+    fn opens_all_tables(&self) -> bool {
+        true
     }
 
     fn supports_write(&self) -> bool {
@@ -133,39 +82,155 @@ impl FormatReader for ExcelReader {
     }
 
     fn write_file(&self, path: &Path, table: &DataTable) -> Result<()> {
-        let mut workbook = Workbook::new();
-        let worksheet = workbook.add_worksheet();
+        write_excel(path, table)
+    }
+}
 
-        // Write headers
-        for (col_idx, col) in table.columns.iter().enumerate() {
-            worksheet.write_string(0, col_idx as u16, &col.name)?;
+/// Name a header cell, falling back to `Column{n}` for empty / non-text cells.
+fn header_cell_name(cell: &Data, idx: usize) -> String {
+    match cell {
+        Data::String(s) => s.clone(),
+        Data::Float(f) => format!("{}", f),
+        Data::Int(i) => format!("{}", i),
+        Data::Bool(b) => format!("{}", b),
+        _ => format!("Column{}", idx + 1),
+    }
+}
+
+/// Read a single worksheet by name into a `DataTable`.
+fn read_sheet(
+    workbook: &mut Sheets<std::io::BufReader<std::fs::File>>,
+    sheet: &str,
+    path: &Path,
+) -> Result<DataTable> {
+    let range = workbook
+        .worksheet_range(sheet)
+        .map_err(|e| anyhow::anyhow!("Failed to read sheet: {}", e))?;
+
+    let mut rows_iter = range.rows();
+
+    // First row = headers
+    let header_row = match rows_iter.next() {
+        Some(r) => r,
+        None => return Ok(DataTable::empty()),
+    };
+
+    let columns: Vec<ColumnInfo> = header_row
+        .iter()
+        .enumerate()
+        .map(|(i, cell)| ColumnInfo {
+            name: header_cell_name(cell, i),
+            data_type: "Utf8".to_string(),
+        })
+        .collect();
+
+    let col_count = columns.len();
+    let mut rows: Vec<Vec<CellValue>> = Vec::new();
+
+    for row in rows_iter {
+        let mut cells: Vec<CellValue> = row
+            .iter()
+            .map(|cell| match cell {
+                Data::Empty => CellValue::Null,
+                Data::String(s) => CellValue::String(s.clone()),
+                Data::Float(f) => CellValue::Float(*f),
+                Data::Int(i) => CellValue::Int(*i),
+                Data::Bool(b) => CellValue::Bool(*b),
+                Data::DateTime(dt) => CellValue::DateTime(format!("{}", dt)),
+                Data::DateTimeIso(s) => CellValue::DateTime(s.clone()),
+                Data::DurationIso(s) => CellValue::String(s.clone()),
+                Data::Error(e) => CellValue::String(format!("#ERR: {:?}", e)),
+            })
+            .collect();
+        // Pad or truncate to match column count
+        cells.resize(col_count, CellValue::Null);
+        rows.push(cells);
+    }
+
+    // Refine column types based on data
+    let mut final_columns = columns;
+    for (col_idx, col) in final_columns.iter_mut().enumerate() {
+        let mut has_int = false;
+        let mut has_float = false;
+        let mut has_bool = false;
+        let mut has_datetime = false;
+        let mut has_string = false;
+
+        for row in &rows {
+            match row.get(col_idx) {
+                Some(CellValue::Int(_)) => has_int = true,
+                Some(CellValue::Float(_)) => has_float = true,
+                Some(CellValue::Bool(_)) => has_bool = true,
+                Some(CellValue::DateTime(_)) => has_datetime = true,
+                Some(CellValue::String(_)) => has_string = true,
+                _ => {}
+            }
         }
 
-        // Write data rows
-        for row_idx in 0..table.row_count() {
-            let xlsx_row = (row_idx + 1) as u32;
-            for col_idx in 0..table.col_count() {
-                if let Some(cell) = table.get(row_idx, col_idx) {
-                    match cell {
-                        CellValue::Int(i) => {
-                            worksheet.write_number(xlsx_row, col_idx as u16, *i as f64)?;
-                        }
-                        CellValue::Float(f) => {
-                            worksheet.write_number(xlsx_row, col_idx as u16, *f)?;
-                        }
-                        CellValue::Bool(b) => {
-                            worksheet.write_boolean(xlsx_row, col_idx as u16, *b)?;
-                        }
-                        CellValue::Null => {}
-                        other => {
-                            worksheet.write_string(xlsx_row, col_idx as u16, other.to_string())?;
-                        }
+        col.data_type = if has_string {
+            "Utf8".to_string()
+        } else if has_datetime {
+            "Timestamp(Microsecond, None)".to_string()
+        } else if has_float {
+            "Float64".to_string()
+        } else if has_int {
+            "Int64".to_string()
+        } else if has_bool {
+            "Boolean".to_string()
+        } else {
+            "Utf8".to_string()
+        };
+    }
+
+    Ok(DataTable {
+        columns: final_columns,
+        rows,
+        edits: std::collections::HashMap::new(),
+        source_path: Some(path.to_string_lossy().to_string()),
+        format_name: Some("Excel".to_string()),
+        structural_changes: false,
+        total_rows: None,
+        row_offset: 0,
+        marks: std::collections::HashMap::new(),
+        undo_stack: Vec::new(),
+        redo_stack: Vec::new(),
+        db_meta: None,
+    })
+}
+
+fn write_excel(path: &Path, table: &DataTable) -> Result<()> {
+    let mut workbook = Workbook::new();
+    let worksheet = workbook.add_worksheet();
+
+    // Write headers
+    for (col_idx, col) in table.columns.iter().enumerate() {
+        worksheet.write_string(0, col_idx as u16, &col.name)?;
+    }
+
+    // Write data rows
+    for row_idx in 0..table.row_count() {
+        let xlsx_row = (row_idx + 1) as u32;
+        for col_idx in 0..table.col_count() {
+            if let Some(cell) = table.get(row_idx, col_idx) {
+                match cell {
+                    CellValue::Int(i) => {
+                        worksheet.write_number(xlsx_row, col_idx as u16, *i as f64)?;
+                    }
+                    CellValue::Float(f) => {
+                        worksheet.write_number(xlsx_row, col_idx as u16, *f)?;
+                    }
+                    CellValue::Bool(b) => {
+                        worksheet.write_boolean(xlsx_row, col_idx as u16, *b)?;
+                    }
+                    CellValue::Null => {}
+                    other => {
+                        worksheet.write_string(xlsx_row, col_idx as u16, other.to_string())?;
                     }
                 }
             }
         }
-
-        workbook.save(path)?;
-        Ok(())
     }
+
+    workbook.save(path)?;
+    Ok(())
 }

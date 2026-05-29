@@ -35,8 +35,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// Mutable at runtime via `set_initial_load_rows` so `AppSettings` can override
 /// the 5 M default without each reader having to know about the settings type.
 /// Background row streaming uses the same value as its per-chunk size.
-/// Setting to `usize::MAX` effectively disables the cap (Settings → Performance
-/// → "Unlimited" checkbox, CLI `--rows all`, MCP `unlimited: true`).
+/// Setting to `usize::MAX` effectively disables the cap (Settings -> Performance
+/// -> "Unlimited" checkbox, CLI `--rows all`, MCP `unlimited: true`).
 static INITIAL_LOAD_ROWS: AtomicUsize = AtomicUsize::new(5_000_000);
 
 /// Returns the current first-load row cap. Streaming readers consult this
@@ -82,11 +82,31 @@ impl Drop for InitialLoadRowsGuard {
 }
 
 /// Schema description of a single table inside a multi-table source (DB file).
+///
+/// `schema` is `None` for formats with no schema concept (SQLite, GeoPackage,
+/// Excel, ODS, HDF5, NetCDF, ...) and `Some(schema_name)` for DuckDB files whose
+/// `information_schema.tables` exposes schemas. The default DuckDB schema is
+/// `main`; the picker renders `main.*` entries unqualified to match the way
+/// SQL itself resolves them.
 #[derive(Debug, Clone)]
 pub struct TableInfo {
     pub name: String,
+    pub schema: Option<String>,
     pub columns: Vec<ColumnInfo>,
     pub row_count: Option<usize>,
+}
+
+impl TableInfo {
+    /// `schema.name` for non-default schemas, bare `name` otherwise. Used as
+    /// both the display label and the identifier handed to
+    /// [`FormatReader::read_table`]. Readers that care about schemas split on
+    /// the first `.` to recover the pair.
+    pub fn qualified_name(&self) -> String {
+        match &self.schema {
+            Some(s) if s != "main" => format!("{}.{}", s, self.name),
+            _ => self.name.clone(),
+        }
+    }
 }
 
 /// Trait that every format reader must implement.
@@ -125,6 +145,15 @@ pub trait FormatReader: Send + Sync {
     /// implementation falls back to `read_file` and ignores the table name.
     fn read_table(&self, path: &Path, _table: &str) -> Result<DataTable> {
         self.read_file(path)
+    }
+
+    /// Whether a multi-table source should open *all* its tables at once
+    /// (each in its own tab) rather than prompting the user to pick a single
+    /// one. Excel workbooks set this so every sheet opens; DB readers keep the
+    /// default `false` (single-select picker). The app still caps the
+    /// auto-open count and shows a multi-select picker above that cap.
+    fn opens_all_tables(&self) -> bool {
+        false
     }
 }
 

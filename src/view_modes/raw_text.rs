@@ -72,7 +72,7 @@ pub fn render_raw_view(
 
     // Parse-error fallback banner: shown when load_file failed to parse the
     // detected format and dropped the user into the raw text view. Dismissable
-    // — clicking ✕ clears `tab.parse_error_banner` for the rest of the session.
+    // - clicking ✕ clears `tab.parse_error_banner` for the rest of the session.
     if let Some(banner_text) = tab.parse_error_banner.clone()
         && render_parse_error_banner(ui, &banner_text, theme_mode)
     {
@@ -101,7 +101,7 @@ pub fn render_raw_view(
                         );
                         tab.raw_content_modified = true;
                     } else if warn_unalign && tab.raw_content_modified {
-                        // Reloading would discard in-buffer edits — bounce the
+                        // Reloading would discard in-buffer edits - bounce the
                         // checkbox back and let the app confirm first.
                         tab.raw_view_formatted = true;
                         action.confirm_unalign = true;
@@ -237,10 +237,10 @@ pub fn render_raw_view(
         // in when:
         //   - We're NOT doing CSV/TSV column coloring (those keep their own palette).
         //   - The file extension is on the syntax module's whitelist
-        //     (JSON/YAML/XML/Markdown/TOML are deliberately excluded — they
+        //     (JSON/YAML/XML/Markdown/TOML are deliberately excluded - they
         //     have dedicated tree/preview views, and running syntect every
         //     frame on a multi-MB JSON made the raw editor sluggish).
-        //   - The buffer is below `MAX_HIGHLIGHT_BYTES` (1 MB) — past that
+        //   - The buffer is below `MAX_HIGHLIGHT_BYTES` (1 MB) - past that
         //     point per-line tokenisation on every layouter call is too slow.
         let syntect_syntax = (!use_col_colors && content.len() <= syntax_highlight_max_bytes)
             .then(|| {
@@ -351,7 +351,7 @@ pub fn render_raw_view(
                     );
                     ui.painter().rect_filled(sep_rect, 0.0, colors.border);
                     ui.add_space(4.0);
-                    // Text editor (no wrapping — scroll horizontally)
+                    // Text editor (no wrapping - scroll horizontally)
                     // lock_focus(true) prevents Tab from navigating to other widgets
                     let editor_id = egui::Id::new("raw_text_editor");
                     let mut output = if use_col_colors {
@@ -388,7 +388,7 @@ pub fn render_raw_view(
                     // then manually insert spaces at the cursor for our Tab handling.
                     // We must do the \t replacement first so we can adjust the cursor
                     // position to account for any expansion. Skipped under read-only
-                    // — `interactive(false)` already prevents new tab insertions.
+                    // - `interactive(false)` already prevents new tab insertions.
                     let had_tabs = !readonly && content.contains('\t');
                     if had_tabs {
                         // Track cursor so we can restore it after replacement
@@ -815,7 +815,7 @@ mod tests {
 
     #[test]
     fn ranges_quoted_field_with_internal_delim_is_one_column() {
-        // The whole `"1,2,3,4,5"` must come back as one column range — that's
+        // The whole `"1,2,3,4,5"` must come back as one column range - that's
         // the bug the colored layouter was hitting before this fix.
         let line = r#""1,2,3,4,5",foo"#;
         let r = split_delimited_line_ranges(line, ',', RawCsvQuote::Double, RawCsvEscape::Doubled);
@@ -879,7 +879,7 @@ mod tests {
     #[test]
     fn ranges_tsv_with_tab_delimiter_does_not_eat_tabs() {
         // Tab is the delimiter here, so the leading-whitespace skip MUST NOT
-        // consume tab characters — they are separators, not padding.
+        // consume tab characters - they are separators, not padding.
         let line = "a\t\"b\tc\"\td";
         let r = split_delimited_line_ranges(line, '\t', RawCsvQuote::Double, RawCsvEscape::Doubled);
         assert_eq!(r.len(), 3);

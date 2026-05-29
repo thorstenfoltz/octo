@@ -4,7 +4,7 @@ Export the active table's column list. Useful for bootstrapping a database table
 TypeScript interface, or a Rust struct from real data without
 re-typing every column name.
 
-<!-- SCREENSHOT: schema-export-overview.png — Schema Export dialog with the Postgres CREATE TABLE preview visible. -->
+<!-- SCREENSHOT: schema-export-overview.png: Schema Export dialog with the Postgres CREATE TABLE preview visible. -->
 ![Schema Export](../assets/screenshots/schema-export-overview.png){ .screenshot-placeholder }
 
 ## Opening the dialog
@@ -94,7 +94,7 @@ Column names with spaces, hyphens, or leading digits would make invalid identifi
 - **Pydantic**: invalid identifier names get `_` substitution +
   `Field(..., alias="<original>")` so JSON round-trip preserves the
   source key.
-- **TypeScript**: invalid keys are wrapped in `"…"` — valid TS for
+- **TypeScript**: invalid keys are wrapped in `"…"`, which is valid TS for
   object properties.
 - **JSON Schema**: keys are passed through verbatim (JSON allows any
   string).
@@ -117,10 +117,10 @@ exports the same DDL as the same table with zero filter.
 
 ## See also
 
-- [`octa --export-schema`](../cli/export-schema.md) — the same feature
+- [`octa --export-schema`](../cli/export-schema.md): the same feature
   from the command line.
-- [MCP `export_schema` tool](../mcp/tools/export_schema.md) — the same
+- [MCP `export_schema` tool](../mcp/tools/export_schema.md): the same
   renderers over MCP, with multi-table support.
-- [Column Inspector](column-inspector.md) — see types and basic
+- [Column Inspector](column-inspector.md): see types and basic
   stats without leaving Octa.
-- [Saving](saving.md) — for writing back to the same DB.
+- [Saving](saving.md): for writing back to the same DB.

@@ -15,7 +15,7 @@ pub(crate) fn render_readonly_notice_dialog(app: &mut OctaApp, ctx: &egui::Conte
 
     // Pull the persisted checkbox state out of the notice so the dialog
     // can mutate it across frames. Without this round-trip the box would
-    // flicker — re-deriving the initial value from settings on every frame
+    // flicker - re-deriving the initial value from settings on every frame
     // overwrites the user's click in the same frame they made it.
     let mut suppress_future = notice.suppress_future;
     let mut close = false;
@@ -47,7 +47,7 @@ pub(crate) fn render_readonly_notice_dialog(app: &mut OctaApp, ctx: &egui::Conte
             ui.checkbox(&mut suppress_future, "Don't show this again");
             ui.add_space(4.0);
             ui.label(
-                RichText::new("(Re-enable in Settings → Read-only notice.)")
+                RichText::new("(Re-enable in Settings -> Read-only notice.)")
                     .weak()
                     .size(11.0),
             );

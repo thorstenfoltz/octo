@@ -2,8 +2,8 @@
 //! diff of `tab.raw_content` (left) vs `tab.compare_right_raw` (right).
 //!
 //! Uses `similar` for the diff computation. Each line is annotated with one
-//! of three states — Equal, Insert, Delete (Replace is split into Insert +
-//! Delete by the line-diff algorithm) — and painted with a small marker
+//! of three states - Equal, Insert, Delete (Replace is split into Insert +
+//! Delete by the line-diff algorithm) - and painted with a small marker
 //! column and a background tint so the visual reads like a `git diff`.
 
 use eframe::egui;

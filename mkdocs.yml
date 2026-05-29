@@ -128,6 +128,10 @@ nav:
       - "--convert": cli/convert.md
       - "--sql": cli/sql.md
       - "--export-schema": cli/export-schema.md
+      - "--compare-schemas": cli/compare-schemas.md
+      - "--describe": cli/describe.md
+      - "--validate-schema": cli/validate-schema.md
+      - "--unique-columns": cli/unique-columns.md
       - Man Page: cli/man-page.md
   - MCP Server:
       - Overview: mcp/index.md
@@ -145,6 +149,10 @@ nav:
           - find_duplicates: mcp/tools/find_duplicates.md
           - value_frequency: mcp/tools/value_frequency.md
           - search: mcp/tools/search.md
+          - compare_schemas: mcp/tools/compare_schemas.md
+          - describe_file: mcp/tools/describe_file.md
+          - validate_against_schema: mcp/tools/validate_against_schema.md
+          - unique_columns: mcp/tools/unique_columns.md
       - Limits & Truncation: mcp/limits-and-truncation.md
       - Examples: mcp/examples.md
       - Troubleshooting: mcp/troubleshooting.md

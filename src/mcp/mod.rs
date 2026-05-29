@@ -7,13 +7,13 @@
 //! ## Modular tool layout
 //!
 //! Every tool lives in its own file under `src/mcp/tools/`. The
-//! `OctaMcpServer` impl in this file is a thin dispatcher — each `#[tool]`
+//! `OctaMcpServer` impl in this file is a thin dispatcher - each `#[tool]`
 //! method delegates to `tools::<name>::handle`. Adding a new tool is a
 //! drop-in: create `tools/foo.rs` with `Params` + `handle`, register the
 //! module in `tools/mod.rs`, and add a wrapper method below.
 //!
 //! Tool descriptions are inlined as string literals at the `#[tool]` site
-//! (rmcp's macro doesn't accept a `const &str` there) — keep them in sync
+//! (rmcp's macro doesn't accept a `const &str` there) - keep them in sync
 //! with the per-tool docstrings.
 //!
 //! ## Row + cell limits
@@ -56,8 +56,8 @@ pub struct OctaMcpServer {
 
 impl OctaMcpServer {
     /// Resolve the effective row cap for a single tool call. Precedence:
-    /// caller's `Some(0)` → unlimited; caller's `Some(n)` → that value;
-    /// caller omitted (None) → fall back to the server's configured default
+    /// caller's `Some(0)` -> unlimited; caller's `Some(n)` -> that value;
+    /// caller omitted (None) -> fall back to the server's configured default
     /// (None = unlimited there too).
     pub fn resolve_row_cap(&self, requested: Option<usize>) -> Option<usize> {
         match requested {
@@ -101,7 +101,7 @@ to truly return every row."
 
     #[tool(
         description = "Return the column schema (name + data type) of a tabular file. The response \
-contains only schema metadata — no rows are serialised — though the file is still loaded through \
+contains only schema metadata - no rows are serialised - though the file is still loaded through \
 the standard reader (subject to the initial-load cap for streaming formats). Cheap to call as a \
 discovery step before `read_table` or `run_sql`. For multi-table sources, pass the `table` \
 parameter to get a specific table's schema."
@@ -116,7 +116,7 @@ parameter to get a specific table's schema."
     #[tool(
         description = "List the tables inside a multi-table container (SQLite, DuckDB, \
 GeoPackage). Returns `tables` as an array of `{name, columns, row_count}` objects. For \
-single-table file formats this returns an empty list — call `schema` or `read_table` directly \
+single-table file formats this returns an empty list - call `schema` or `read_table` directly \
 instead."
     )]
     async fn list_tables(
@@ -141,13 +141,17 @@ total."
     }
 
     #[tool(
-        description = "Run a DuckDB SQL query against a file. The file is loaded and registered \
-as a temporary table named `data` — write queries like `SELECT * FROM data WHERE ...`. Returns \
-`kind` (\"select\" or \"mutation\"), the result rows, and (for mutations) the affected count. \
-Mutations do NOT persist: the DuckDB session is ephemeral, the original file is untouched, and \
-every subsequent tool call re-reads the file from disk. Pass `limit: 0` for unlimited response \
-rows; pass `unlimited: true` to also lift the 5,000,000-row file-loader cap so the query sees \
-every row in the source."
+        description = "Run a DuckDB SQL query against one or more files using the multi-table \
+SQL workspace. The primary `path` file is loaded and registered as `data`. Use `extra_tables` \
+to register additional files (any format Octa supports) under SQL identifiers so the query can \
+JOIN across heterogeneous sources. Use `attach` to ATTACH whole DuckDB or SQLite files so \
+their tables are queryable as `alias.schema.tbl` without row copies. Use `write_to` to write \
+the SELECT result back into a DuckDB or SQLite file (target schema + table + mode \
+`create|replace|append`); the response then becomes `{ kind: 'write_back', rows_written, \
+created_schema, target }`. For row-returning queries the response is `{ kind: 'select' | \
+'mutation', result, affected? }` carrying the same `truncated` / `cell_truncated` flags as \
+`read_table`. Pass `limit: 0` for unlimited response rows; pass `unlimited: true` to also \
+lift the 5,000,000-row file-loader cap so every loaded file is read in full."
     )]
     async fn run_sql(
         &self,
@@ -158,7 +162,7 @@ every row in the source."
 
     #[tool(
         description = "Convert a file from one tabular format to another. Both ends are \
-resolved by file extension. The output extension must map to a writable format — read-only \
+resolved by file extension. The output extension must map to a writable format - read-only \
 formats (SAS, RDS, HDF5, NetCDF) cannot be a target. The input is read with the streaming \
 initial-load cap (5,000,000 rows by default); pass `unlimited: true` to convert the entire \
 source. Returns the row/column count and the output path on success."
@@ -176,7 +180,7 @@ MySQL, SQLite, Databricks, or Snowflake, or a Pydantic v2 model, a TypeScript in
 JSON Schema document, or a Rust struct. Pick the output with the `target` parameter \
 (`postgres`, `mysql`, `sqlite`, `databricks`, `snowflake`, `pydantic`, `typescript`, \
 `json-schema`, `rust`). Returns `target`, `table_name`, `column_count`, and the generated \
-`code`. Only the column schema is read — no rows are serialised."
+`code`. Only the column schema is read - no rows are serialised."
     )]
     async fn export_schema(
         &self,
@@ -187,7 +191,7 @@ JSON Schema document, or a Rust struct. Pick the output with the `target` parame
 
     #[tool(
         description = "Profile a tabular file: per-column statistics via DuckDB's SUMMARIZE \
-— data type, min, max, approximate distinct count, mean, standard deviation, q25/q50/q75, \
+- data type, min, max, approximate distinct count, mean, standard deviation, q25/q50/q75, \
 row count, and null percentage. Returns `columns` as an array of per-column stat objects. \
 The fastest way to understand an unfamiliar dataset before reading rows or writing SQL. \
 Stats reflect at most the first 5,000,000 rows by default; pass `unlimited: true` to \
@@ -216,7 +220,7 @@ detection considers every row in the file."
     }
 
     #[tool(
-        description = "Count how often each value appears in one column of a tabular file — \
+        description = "Count how often each value appears in one column of a tabular file - \
 a `value_counts()` equivalent. Returns `rows` (label + count, most frequent first) plus \
 `nulls`, `total_non_null`, and `unique_count`. Set `bin: true` to group a numeric column \
 into Sturges bins instead of counting raw values; use `top_n` to cap the returned rows. \
@@ -243,6 +247,73 @@ Returns `hits` as `{row, col, column_name, snippet}` objects plus `hit_count` an
     ) -> Result<CallToolResult, McpError> {
         tools::search::handle(self, p).await
     }
+
+    #[tool(
+        description = "Compare the column schemas of two tabular files. Reads each file's \
+column metadata only (no row data) and returns the four-way diff: `common` (columns with \
+matching name and type), `only_in_a`, `only_in_b`, and `type_mismatches` (same column name, \
+different `data_type`). Pair this with `export_schema` / `validate_against_schema` for \
+schema-drift workflows across file versions. For multi-table sources, pass `table_a` and / \
+or `table_b` to choose specific tables. Returns `{ identical, common, only_in_a, only_in_b, \
+type_mismatches }`."
+    )]
+    async fn compare_schemas(
+        &self,
+        Parameters(p): Parameters<tools::compare_schemas::Params>,
+    ) -> Result<CallToolResult, McpError> {
+        tools::compare_schemas::handle(self, p).await
+    }
+
+    #[tool(
+        description = "Validate a tabular file's column schema against an expected JSON \
+Schema (typically one produced by `export_schema --target json-schema`). Returns `matches` \
+(true when every column lines up by name and type), `diff` (a full SchemaDiff with `common`, \
+`only_in_a`, `only_in_b`, `type_mismatches`), and `unparsed_types` (JSON Schema type values \
+the parser could not map to an Arrow type - those columns default to `Utf8`). Provide the \
+expected schema via `schema_path` (a file path) OR `schema_inline` (the JSON text); exactly \
+one of the two is required. Use this to gate data ingestion in a CI / pipeline step after \
+locking in a schema with `export_schema`."
+    )]
+    async fn validate_against_schema(
+        &self,
+        Parameters(p): Parameters<tools::validate_schema::Params>,
+    ) -> Result<CallToolResult, McpError> {
+        tools::validate_schema::handle(self, p).await
+    }
+
+    #[tool(
+        description = "One-shot orientation snapshot of a tabular file. Collapses the usual \
+`list_tables` -> `schema` -> `read_table` discovery dance into a single call. Returns `path`, \
+`format_name`, `file_size_bytes`, `table`, `row_count`, `initial_load_capped`, \
+`initial_load_cap`, `columns` (schema), `column_count`, `sample_rows` (first N rows), \
+`sample_row_count`, `cell_truncated`. Use this as the first call when meeting an unfamiliar \
+file. `sample_rows` defaults to 5 (max 100). For multi-table sources pass `table`; without \
+it the reader's default table behaviour applies. Pass `unlimited: true` to lift the \
+5,000,000-row file-loader cap if you need an accurate row count for a very large file."
+    )]
+    async fn describe_file(
+        &self,
+        Parameters(p): Parameters<tools::describe_file::Params>,
+    ) -> Result<CallToolResult, McpError> {
+        tools::describe_file::handle(self, p).await
+    }
+
+    #[tool(
+        description = "Find columns (and optional small combinations) whose values are \
+unique across a tabular file. Useful for primary-key reconnaissance on undocumented sources. \
+Returns `total_rows`, `single` (per-column results with `column`, `distinct_count`, \
+`null_count`, `is_unique`), and `combos` (multi-column results when `max_combo_size > 1`). \
+`is_unique` is true only when every row contributes a distinct value AND there are no \
+nulls - most databases reject NULL in a primary key. `max_combo_size` is clamped to `[1, 3]` \
+(default 1); combo tests skip columns that are already unique on their own or carry only \
+one distinct value. Pass `unlimited: true` to scan the full file."
+    )]
+    async fn unique_columns(
+        &self,
+        Parameters(p): Parameters<tools::unique_columns::Params>,
+    ) -> Result<CallToolResult, McpError> {
+        tools::unique_columns::handle(self, p).await
+    }
 }
 
 // `router = self.tool_router` tells the macro to dispatch via the pre-built
@@ -260,19 +331,20 @@ impl ServerHandler for OctaMcpServer {
             format!("{} bytes", self.cell_byte_cap)
         };
         let instructions = format!(
-            "Octa MCP server — inspect tabular data files (Parquet, CSV, JSON, SQLite, DuckDB, \
+            "Octa MCP server - inspect tabular data files (Parquet, CSV, JSON, SQLite, DuckDB, \
              Excel, ORC, Arrow, Avro, SAS, SPSS, Stata, RDS, HDF5, NetCDF, DBF, GeoPackage, and \
              text formats) and run DuckDB SQL against them.\n\n\
              Default response row limit: {row_limit_str}. Default cell-size cap: {cell_cap_str}.\n\
              Streaming formats (Parquet, CSV, TSV) load up to 5,000,000 rows by default.\n\
              Parquet files with very many row groups fall back to a DuckDB-backed reader.\n\n\
              Every result-bearing tool exposes:\n\
-             - `limit` — caps how many rows the *response* carries (pass 0 for unlimited).\n\
-             - `unlimited: true` — also lifts the streaming file-loader cap so the tool sees \
+             - `limit` - caps how many rows the *response* carries (pass 0 for unlimited).\n\
+             - `unlimited: true` - also lifts the streaming file-loader cap so the tool sees \
              every row on disk. Use both together to truly return every row.\n\
              Flags `truncated` / `cell_truncated` tell you when re-querying is worthwhile.\n\n\
              Available tools: read_table, schema, list_tables, count_rows, run_sql, convert, \
-             export_schema, profile, find_duplicates, value_frequency, search."
+             export_schema, profile, find_duplicates, value_frequency, search, \
+             compare_schemas, validate_against_schema, describe_file, unique_columns."
         );
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::from_build_env())

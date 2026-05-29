@@ -51,7 +51,7 @@ impl TreeKind {
 /// Approximate height of one tree row at the default 13pt monospace font.
 /// Used as the constant row height for `ScrollArea::show_rows` virtualization.
 /// If the actual row layout exceeds this, egui clips per-row but the column
-/// scroll bar will be slightly off — close enough for the use case.
+/// scroll bar will be slightly off - close enough for the use case.
 const JSON_ROW_HEIGHT: f32 = 18.0;
 
 /// One renderable row in the flattened JSON tree.
@@ -82,7 +82,7 @@ pub fn render_json_tree_view(ui: &mut egui::Ui, tab: &mut TabState, theme_mode: 
     render_value_tree(ui, tab, theme_mode, TreeKind::Json);
 }
 
-/// Render the interactive YAML tree view. Shares the JSON tree's renderer —
+/// Render the interactive YAML tree view. Shares the JSON tree's renderer -
 /// YAML is parsed once at load time, converted to a `serde_json::Value`, and
 /// stored on `TabState.yaml_value`. Edits are serialized back as YAML when
 /// the user commits a leaf change.
@@ -520,7 +520,7 @@ fn split_key_path(path: &str) -> Option<(String, String)> {
         Some((parent.to_string(), key.to_string()))
     } else if let Some(idx) = path.rfind(']') {
         // path of the form "arr[2].key" handled above; here we'd have
-        // something like "key" — fall through to the no-parent branch.
+        // something like "key" - fall through to the no-parent branch.
         let parent = &path[..idx + 1];
         let key = &path[idx + 1..];
         if key.is_empty() {
@@ -535,7 +535,7 @@ fn split_key_path(path: &str) -> Option<(String, String)> {
 
 /// Render a row's key. Returns `Some((row_path, initial_buffer))` when the
 /// user double-clicked an editable (non-index) key, signalling the caller to
-/// enter rename mode. Array indices are non-editable — JSON/YAML arrays
+/// enter rename mode. Array indices are non-editable - JSON/YAML arrays
 /// don't have user-facing labels so `[0]` etc. are display-only.
 fn render_key_or_edit(
     ui: &mut egui::Ui,
@@ -627,7 +627,7 @@ fn json_value_color(value: &serde_json::Value, colors: &ui::theme::ThemeColors) 
 }
 
 /// DFS pre-order walk of the JSON value, emitting one [`JsonRow`] per visible
-/// line. Honors the `expanded` set — collapsed subtrees produce a single row
+/// line. Honors the `expanded` set - collapsed subtrees produce a single row
 /// summary and skip their descendants.
 #[allow(clippy::too_many_arguments)]
 fn flatten<'a>(

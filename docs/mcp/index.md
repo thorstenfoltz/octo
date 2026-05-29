@@ -79,14 +79,14 @@ Claude:
 
 > **You:** Give me a quick profile of `events.parquet`.
 >
-> **Claude:** *(calls `profile`)* 6 columns — `user_id` (BIGINT, 0 %
+> **Claude:** *(calls `profile`)* 6 columns: `user_id` (BIGINT, 0 %
 > null, 8.4 k distinct), `amount` (DOUBLE, min 0.0 / max 998.5 / mean
 > 41.2), `country` (VARCHAR, 3 % null, 47 distinct)…
 
 > **You:** Generate a Snowflake `CREATE TABLE` for `sales.parquet`.
 >
 > **Claude:** *(calls `export_schema` with `target: snowflake`)*
-> here's the DDL — `CREATE TABLE "sales" ( … )`.
+> here's the DDL: `CREATE TABLE "sales" ( … )`.
 
 ## How it fits together
 

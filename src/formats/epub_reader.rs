@@ -1,4 +1,4 @@
-//! EPUB reader. Pure-Rust parsing via `rbook` (Apache-2.0), HTML→Markdown
+//! EPUB reader. Pure-Rust parsing via `rbook` (Apache-2.0), HTML->Markdown
 //! via `htmd` (Apache-2.0).
 //!
 //! ## Scope
@@ -9,7 +9,7 @@
 //! per-chapter Markdown + embedded image bytes captured by
 //! [`read_with_extras`].
 //!
-//! The format reader exposes only the table — the side state (rendered
+//! The format reader exposes only the table - the side state (rendered
 //! chapter Markdown + image bytes) is fetched separately by
 //! `app::file_io::apply_loaded_table` and stashed on the `TabState`. This
 //! mirrors how `YamlReader` returns a flat table and the YAML tree value
@@ -32,7 +32,7 @@ pub struct EpubReader;
 #[derive(Debug, Default, Clone)]
 pub struct EpubExtras {
     /// Markdown-rendered body for each chapter, in spine (reading) order.
-    /// Index matches the `chapter` column of the table (1-indexed → off by
+    /// Index matches the `chapter` column of the table (1-indexed -> off by
     /// one, so `chapters_md[chapter - 1]`).
     pub chapters_md: Vec<String>,
     /// Best-effort per-chapter title, derived from the manifest href's
@@ -67,7 +67,7 @@ impl FormatReader for EpubReader {
 ///
 /// Why one entry point with two return values: opening + parsing an EPUB is
 /// not free (zip decompression + XML parse for every spine item), so we
-/// don't want to do it twice — once via `FormatReader::read_file` and a
+/// don't want to do it twice - once via `FormatReader::read_file` and a
 /// second time in `apply_loaded_table` for the side state. Callers that
 /// only need the table (CLI, MCP `read_table`) can drop the extras.
 pub fn read_with_extras(path: &Path) -> Result<(DataTable, EpubExtras)> {
@@ -91,9 +91,9 @@ pub fn read_with_extras(path: &Path) -> Result<(DataTable, EpubExtras)> {
         let href = content.manifest_entry().href().as_str().to_string();
         let xhtml = content.content();
         // htmd preserves headings, lists, emphasis, links, and images. It
-        // returns an `io::Error` on malformed input — surface as anyhow.
+        // returns an `io::Error` on malformed input - surface as anyhow.
         let md = htmd::convert(xhtml)
-            .map_err(|e| anyhow::anyhow!("EPUB → Markdown failed for {href}: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("EPUB -> Markdown failed for {href}: {e}"))?;
 
         // One row per non-empty paragraph block. A "paragraph" here is a
         // run of text separated by blank lines, which matches what htmd
@@ -114,7 +114,7 @@ pub fn read_with_extras(path: &Path) -> Result<(DataTable, EpubExtras)> {
         }
 
         // Best-effort chapter title from the manifest href's filename.
-        // `c1.xhtml` → "c1.xhtml". When we have no usable href, fall back
+        // `c1.xhtml` -> "c1.xhtml". When we have no usable href, fall back
         // to "Chapter N" so the dropdown isn't empty.
         let label = href
             .rsplit('/')
@@ -127,7 +127,7 @@ pub fn read_with_extras(path: &Path) -> Result<(DataTable, EpubExtras)> {
     }
 
     // Walk the manifest's image entries. `read_bytes` decompresses the file
-    // from the EPUB zip; errors here are non-fatal — we just skip the image
+    // from the EPUB zip; errors here are non-fatal - we just skip the image
     // and let the renderer fall back to alt text.
     let mut image_bytes: HashMap<String, Vec<u8>> = HashMap::new();
     for img in epub.manifest().images() {

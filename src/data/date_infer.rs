@@ -1,7 +1,7 @@
 //! Column-wide date / datetime inference.
 //!
 //! Many readers (CSV in particular, but also JSON/JSONL/Excel/XML/etc.) hand
-//! us string columns whose values are clearly dates in a non-ISO layout — the
+//! us string columns whose values are clearly dates in a non-ISO layout - the
 //! common European `DD.MM.YYYY`, the US `MM/DD/YYYY`, slash-separated ISO,
 //! and so on. The reader-level cell inference in `csv_reader.rs` only
 //! recognizes ISO `YYYY-MM-DD`, so those columns load as plain strings and
@@ -15,11 +15,11 @@
 //! of consideration on a value like `13/04/2024`).
 //!
 //! Outcomes per column:
-//! - **Single layout passes** → promote: rewrite cells in-place to typed
+//! - **Single layout passes** -> promote: rewrite cells in-place to typed
 //!   `CellValue::Date` / `CellValue::DateTime` in canonical ISO form.
-//! - **No layout passes** → leave as string.
+//! - **No layout passes** -> leave as string.
 //! - **Multiple layouts pass** (e.g., `02/03/2024` is consistent with both
-//!   DMY and MDY) → return an `Ambiguous` outcome and let the UI ask the user
+//!   DMY and MDY) -> return an `Ambiguous` outcome and let the UI ask the user
 //!   how to interpret the column.
 
 use crate::data::{CellValue, DataTable};
@@ -102,7 +102,7 @@ impl DateLayout {
 /// Datetime layout = a `DateLayout` plus a separator and time precision.
 ///
 /// Timezone-aware variants (`*Tz`) accept ISO offsets (`Z`, `+02:00`, `+0200`,
-/// `-05:00`, …) and **normalize every value to UTC** before storing it. This
+/// `-05:00`, ...) and **normalize every value to UTC** before storing it. This
 /// keeps cross-row comparison consistent (all instants land in the same
 /// timeline) at the price of silently shifting wall-clock times; the format
 /// banner surfaces that to the user the same way it does for European date
@@ -119,9 +119,9 @@ pub enum DateTimeLayout {
     DmySlashSpace,
     /// `MM/DD/YYYY HH:MM[:SS]`
     MdySlashSpace,
-    /// `YYYY-MM-DD HH:MM[:SS]<tz>` — ISO with space separator + offset.
+    /// `YYYY-MM-DD HH:MM[:SS]<tz>` - ISO with space separator + offset.
     YmdDashSpaceTz,
-    /// `YYYY-MM-DDTHH:MM[:SS]<tz>` — ISO with `T` separator + offset.
+    /// `YYYY-MM-DDTHH:MM[:SS]<tz>` - ISO with `T` separator + offset.
     YmdDashTTz,
 }
 
@@ -143,8 +143,8 @@ impl DateTimeLayout {
             Self::DmyDotSpace => "DD.MM.YYYY HH:MM:SS (European)",
             Self::DmySlashSpace => "DD/MM/YYYY HH:MM:SS (European)",
             Self::MdySlashSpace => "MM/DD/YYYY HH:MM:SS (US)",
-            Self::YmdDashSpaceTz => "YYYY-MM-DD HH:MM:SS\u{00B1}HH:MM (\u{2192} UTC)",
-            Self::YmdDashTTz => "YYYY-MM-DDTHH:MM:SS\u{00B1}HH:MM (\u{2192} UTC)",
+            Self::YmdDashSpaceTz => "YYYY-MM-DD HH:MM:SS+/-HH:MM (-> UTC)",
+            Self::YmdDashTTz => "YYYY-MM-DDTHH:MM:SS+/-HH:MM (-> UTC)",
         }
     }
 
@@ -270,8 +270,8 @@ pub enum InferOutcome {
     },
 }
 
-/// Inspect a column of strings and report what date/datetime layout — if any
-/// — every non-null value matches.
+/// Inspect a column of strings and report what date/datetime layout - if any
+/// - every non-null value matches.
 pub fn infer_column(values: &[Option<&str>]) -> InferOutcome {
     let non_null: Vec<&str> = values
         .iter()
@@ -320,7 +320,7 @@ fn sample_values(non_null: &[&str]) -> Vec<String> {
 
 /// Apply a single date layout to every value in `col_idx`, rewriting
 /// `CellValue::String` cells in-place to `CellValue::Date` and updating the
-/// column's data_type. Cells that fail to parse become `CellValue::Null` —
+/// column's data_type. Cells that fail to parse become `CellValue::Null` -
 /// callers should only invoke this with a layout produced by
 /// [`infer_column`], where every non-null value is known to parse.
 pub fn apply_date(table: &mut DataTable, col_idx: usize, layout: DateLayout) {
@@ -368,7 +368,7 @@ pub fn apply_datetime(table: &mut DataTable, col_idx: usize, layout: DateTimeLay
 
 /// Whether a column is a candidate for the inference pass: must be string-
 /// typed (`Utf8`) and contain `CellValue::String`-shaped data. Already-typed
-/// columns are skipped — readers that produce typed dates (Parquet, Arrow,
+/// columns are skipped - readers that produce typed dates (Parquet, Arrow,
 /// SQLite, etc.) are authoritative.
 pub fn column_is_candidate(table: &DataTable, col_idx: usize) -> bool {
     let Some(col) = table.columns.get(col_idx) else {
@@ -626,7 +626,7 @@ mod tests {
     #[test]
     fn mixed_naive_and_tz_rejects() {
         // A column with one tz-aware and one naive row is semantically
-        // inconsistent — neither layout matches every value.
+        // inconsistent - neither layout matches every value.
         let strings = vec![Some("2024-03-15T14:30:00Z"), Some("2024-04-01T08:00:00")];
         assert!(matches!(infer_column(&strings), InferOutcome::Skip));
     }

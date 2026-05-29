@@ -4,7 +4,7 @@ Octa is multi-tab from the ground up. Every file you open lives in
 its own tab; the same file opened twice gets two independent tabs
 with independent edit overlays.
 
-<!-- SCREENSHOT: tabs-and-sidebar.png — Window with the folder sidebar docked on the left, expanded down a few levels, and several tabs open in the strip across the top. -->
+<!-- SCREENSHOT: tabs-and-sidebar.png: Window with the folder sidebar docked on the left, expanded down a few levels, and several tabs open in the strip across the top. -->
 ![Tabs and folder sidebar](../assets/screenshots/tabs-and-sidebar.png)
 
 ## The tab strip
@@ -97,7 +97,7 @@ When you open a `.sqlite` / `.duckdb` / `.gpkg` file with **more than
 one user table**, Octa shows a modal table picker before the data
 loads:
 
-<!-- SCREENSHOT: table-picker.png — Modal dialog listing tables in a database, with table name, row count, and a schema preview for the highlighted one. -->
+<!-- SCREENSHOT: table-picker.png: Modal dialog listing tables in a database, with table name, row count, and a schema preview for the highlighted one. -->
 ![Table picker dialog](../assets/screenshots/table-picker.png){ .screenshot-placeholder }
 
 - Click a table to select it; the right pane previews the schema.

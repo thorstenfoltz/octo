@@ -20,7 +20,7 @@ pub struct TablePickerState {
 /// What the user did with the picker on this frame.
 #[derive(Debug, Clone)]
 pub enum TablePickerAction {
-    /// Still showing — leave state untouched.
+    /// Still showing - leave state untouched.
     None,
     /// User confirmed; load `(path, table_name)`.
     Open(PathBuf, String),
@@ -38,7 +38,7 @@ pub fn render_table_picker(ctx: &egui::Context, state: &mut TablePickerState) ->
     // window taller after it opens.
     let row_height_approx = 22.0_f32;
     let rows_to_show = state.tables.len().min(state.visible_rows.max(1)).max(1) as f32;
-    // 56 px ≈ "contains N tables…" line + spacing.
+    // 56 px ≈ "contains N tables..." line + spacing.
     // 56 px ≈ footer separator + Cancel/Open row + padding.
     let chrome_h = 56.0 + 56.0;
     let raw_default_h = chrome_h + rows_to_show * row_height_approx;
@@ -54,7 +54,7 @@ pub fn render_table_picker(ctx: &egui::Context, state: &mut TablePickerState) ->
     // and start from the new `default_*` numbers on first open.
     let window_id = egui::Id::new("octa_table_picker_dialog_v2");
 
-    egui::Window::new(format!("Open table — {}", state.format_name))
+    egui::Window::new(format!("Open table - {}", state.format_name))
         .id(window_id)
         .collapsible(false)
         .resizable([true, true])
@@ -65,7 +65,7 @@ pub fn render_table_picker(ctx: &egui::Context, state: &mut TablePickerState) ->
         .open(&mut open_flag)
         .default_pos(center - egui::vec2(default_w / 2.0, default_h / 2.0))
         .show(ctx, |ui| {
-            // Footer goes in a bottom panel so egui — not us — works out the
+            // Footer goes in a bottom panel so egui - not us - works out the
             // exact pixel split between body and footer. Doing the math by
             // hand (a fixed `footer_h` literal) was off by a few pixels per
             // frame; the `Resize` widget then auto-grew the window until it
@@ -81,7 +81,11 @@ pub fn render_table_picker(ctx: &egui::Context, state: &mut TablePickerState) ->
                         let can_open = state.selected < state.tables.len();
                         let open_resp = ui.add_enabled(can_open, egui::Button::new("Open table"));
                         if open_resp.clicked() && can_open {
-                            let name = state.tables[state.selected].name.clone();
+                            // Send the qualified name so DuckDB schema-aware
+                            // entries (e.g. `analytics.q4_sales`) route through
+                            // `read_table`'s split-on-first-dot path. Bare names
+                            // (SQLite, default-schema DuckDB) are unchanged.
+                            let name = state.tables[state.selected].qualified_name();
                             action = TablePickerAction::Open(state.path.clone(), name);
                         }
                     });
@@ -138,9 +142,10 @@ fn render_picker_body(ui: &mut egui::Ui, state: &mut TablePickerState) {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         for (idx, t) in state.tables.iter().enumerate() {
+                            let qualified = t.qualified_name();
                             let label = match t.row_count {
-                                Some(n) => format!("{}  ({})", t.name, n),
-                                None => t.name.clone(),
+                                Some(n) => format!("{qualified}  ({n})"),
+                                None => qualified,
                             };
                             if ui.selectable_label(state.selected == idx, label).clicked() {
                                 state.selected = idx;
@@ -149,7 +154,7 @@ fn render_picker_body(ui: &mut egui::Ui, state: &mut TablePickerState) {
                     });
             },
         );
-        // Draggable splitter — thin vertical strip the user can grab
+        // Draggable splitter - thin vertical strip the user can grab
         // to widen the left list when table names are long.
         let splitter = ui.allocate_response(egui::vec2(6.0, body_h), egui::Sense::click_and_drag());
         if splitter.hovered() || splitter.dragged() {
@@ -177,7 +182,7 @@ fn render_picker_body(ui: &mut egui::Ui, state: &mut TablePickerState) {
             egui::Layout::top_down(egui::Align::Min),
             |ui| {
                 if let Some(t) = state.tables.get(state.selected) {
-                    ui.heading(&t.name);
+                    ui.heading(t.qualified_name());
                     ui.add_space(4.0);
                     ui.label(format!("{} columns", t.columns.len()));
                     ui.add_space(4.0);

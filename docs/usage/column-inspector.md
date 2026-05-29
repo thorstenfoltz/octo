@@ -6,8 +6,8 @@ min and max, whether the column contains nulls, and whether all values
 are unique. Useful for sanity-checking a freshly loaded file before
 running queries or edits against it.
 
-<!-- SCREENSHOT: column-inspector-overview.png — Column Inspector dialog open over a Parquet table. Shows column name, type, min, max, nulls, all-unique columns. -->
-![Column Inspector](../assets/screenshots/column-inspector-overview.png){ .screenshot-placeholder }
+<!-- SCREENSHOT: column-inspector-overview.png: Column Inspector dialog open over a Parquet table. Shows column name, type, min, max, nulls, all-unique columns. -->
+![Column Inspector](../assets/screenshots/column-inspector-overview.png)
 
 ## Opening the inspector
 
@@ -50,7 +50,7 @@ main table view, or use **Edit, Sort Columns A -> Z / Z -> A**.
 
 ## See also
 
-- [Value Frequency](value-frequency.md) — `df.value_counts()` for one
+- [Value Frequency](value-frequency.md): `df.value_counts()` for one
   column at a time, including optional numeric binning. Reachable from
   the column-header right-click menu or via
   <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd>.

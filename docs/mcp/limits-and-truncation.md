@@ -167,7 +167,7 @@ Parquet files with more than 32,767 row groups (common with Spark
 or streaming ingest writers that emit many small batches) used to
 fail the native arrow-parquet reader with
 `Row group ordinal 32768 exceeds i16 max value`. Octa retries
-those reads through a DuckDB-backed reader automatically — same
+those reads through a DuckDB-backed reader automatically, with the same
 schema and types, just routed through DuckDB's parquet
 implementation instead. No user action needed.
 

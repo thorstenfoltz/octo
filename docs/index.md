@@ -6,11 +6,11 @@ hide:
 
 # Octa
 
-<!-- SCREENSHOT: hero-table-view.png — Octa's main window with a sample Parquet
+<!-- SCREENSHOT: hero-table-view.png: Octa's main window with a sample Parquet
 file open in Table view. Light theme. Show multiple column types (numeric, date,
 text), maybe a search bar with some filter applied. Aim for a friendly "this is
 what data exploration looks like" hero shot. -->
-![Octa main window in Table view](assets/screenshots/hero-table-view.png){ .screenshot-placeholder }
+![Octa main window in Table view](assets/screenshots/hero-table-view.png)
 
 **Octa** is a native desktop application for viewing and editing tabular
 data files. It opens Parquet, CSV, JSON, SQLite, DuckDB, Excel, and

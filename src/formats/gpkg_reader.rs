@@ -2,7 +2,7 @@
 //!
 //! GeoPackage is a SQLite database with a standardised schema: user data lives
 //! in normal SQLite tables, while metadata (CRS, geometry columns, extensions,
-//! tile matrices, …) lives in `gpkg_*` tables. We delegate read/write to
+//! tile matrices, ...) lives in `gpkg_*` tables. We delegate read/write to
 //! [`SqliteReader`] and only override [`FormatReader::list_tables`] to hide the
 //! `gpkg_*` machinery so the table picker shows just the user's data tables.
 
@@ -46,8 +46,8 @@ impl FormatReader for GeoPackageReader {
 
     fn list_tables(&self, path: &Path) -> Result<Option<Vec<TableInfo>>> {
         // Prefer the GPKG-aware listing so the picker hides metadata tables.
-        // If `gpkg_contents` is absent — i.e. the file has a `.gpkg` extension
-        // but isn't a valid GeoPackage — fall through to SQLite's listing so
+        // If `gpkg_contents` is absent - i.e. the file has a `.gpkg` extension
+        // but isn't a valid GeoPackage - fall through to SQLite's listing so
         // the user still gets *something* useful.
         match list_gpkg_data_tables(path)? {
             Some(tables) if !tables.is_empty() => Ok(Some(tables)),

@@ -1,17 +1,95 @@
-//! `octa --sql <FILE> --query '<SQL>'` — run a SQL query against a file
-//! and print the result. The file is loaded as the in-memory DuckDB table
-//! named `data`; the query can reference any DuckDB SQL feature.
+//! `octa --sql <FILE> --query '<SQL>'` runs a SQL query against a file
+//! and prints the result. Extras and ATTACH-ed databases extend the SQL
+//! workspace so JOINs and write-back work the same way they do in the GUI
+//! and MCP surfaces.
+//!
+//! Plain single-file invocations (no `--sql-table`, no `--sql-attach`,
+//! no `--sql-write-to`) keep the byte-for-byte behaviour of the original
+//! one-shot path: the active file is registered as `data`, the query runs,
+//! and the result is rendered through the shared output writer.
 
 use std::path::PathBuf;
 
-use octa::sql::{QueryKind, run_query};
+use anyhow::Context;
+use octa::sql::{AttachKind, QueryKind, SqlWorkspace, WriteMode, WriteTarget, sanitize_sql_name};
 
+use super::NamedPath;
 use super::OutputFormat;
 use super::output::write_table;
 
-pub fn run(path: PathBuf, query: String, format: OutputFormat) -> anyhow::Result<()> {
-    let table = super::read_table(&path)?;
-    let outcome = run_query(&table, &query)?;
+/// Where a successful `--sql --sql-write-to ...` should write its result.
+/// Built by `Cli::detect_action`; CLI-only because the library type is
+/// re-used by both CLI and MCP surfaces under the same name.
+#[derive(Debug, Clone)]
+pub struct SqlWriteSpec {
+    pub path: PathBuf,
+    pub schema: Option<String>,
+    pub table: String,
+    pub mode: WriteMode,
+}
+
+pub fn run(
+    path: PathBuf,
+    query: String,
+    format: OutputFormat,
+    extras: Vec<NamedPath>,
+    attachments: Vec<NamedPath>,
+    write_target: Option<SqlWriteSpec>,
+) -> anyhow::Result<()> {
+    // Build the workspace and register the primary file as `data`. The
+    // primary file is *always* loaded as `data`; this is the contract the
+    // single-file form has carried since the CLI shipped.
+    let mut ws = SqlWorkspace::new()?;
+    let active = super::read_table(&path)?;
+    ws.set_active_table(&active)?;
+
+    for entry in &extras {
+        let sql_name = sanitize_sql_name(&entry.name);
+        ws.add_table_from_file(&entry.path, None, &sql_name)
+            .with_context(|| {
+                format!(
+                    "registering extra table '{}' from {}",
+                    entry.name,
+                    entry.path.display()
+                )
+            })?;
+    }
+
+    for entry in &attachments {
+        let kind = AttachKind::from_path(&entry.path);
+        ws.attach(&entry.path, &entry.name, kind).with_context(|| {
+            format!(
+                "ATTACHing database '{}' from {}",
+                entry.name,
+                entry.path.display()
+            )
+        })?;
+    }
+
+    if let Some(target) = write_target {
+        let report = ws.write_result_to_db(&WriteTarget {
+            path: target.path.clone(),
+            kind: AttachKind::from_path(&target.path),
+            schema: target.schema.clone(),
+            table: target.table.clone(),
+            mode: target.mode,
+            source_query: query.clone(),
+            create_schema_if_missing: true,
+        })?;
+        eprintln!(
+            "wrote {} row(s) to {}",
+            report.rows_written, report.target_display
+        );
+        // Tidy up workspace attachments so the connection releases any
+        // file locks on the target / extras before this process exits.
+        for entry in &attachments {
+            let _ = ws.detach(&entry.name);
+        }
+        let _ = ws;
+        return Ok(());
+    }
+
+    let outcome = ws.execute(&query)?;
     match outcome.kind {
         QueryKind::Select => {
             write_table(&outcome.table, format)?;
@@ -22,12 +100,16 @@ pub fn run(path: PathBuf, query: String, format: OutputFormat) -> anyhow::Result
             } else {
                 eprintln!("mutation completed");
             }
-            // Mutations against an in-memory snapshot of the file aren't
-            // persisted back to disk by `--sql` — that's a deliberate
-            // safety boundary. Surface the post-mutation `data` table so
-            // the user can pipe it into `--convert` if they want it.
+            // Surface the post-mutation `data` contents so the user can
+            // pipe it on or compare; mutations against an in-memory
+            // workspace are not persisted to the source file by `--sql`.
             write_table(&outcome.table, format)?;
         }
     }
+    // Drop active_table reference for clarity; the workspace owns its own
+    // registration of the underlying data.
+    let _ = active;
+    let _ = extras;
+    let _ = attachments;
     Ok(())
 }

@@ -13,7 +13,7 @@ impl FormatReader for JsonReader {
     }
 
     fn extensions(&self) -> &[&str] {
-        // `.geojson` is intentionally NOT claimed here — `GeoJsonReader`
+        // `.geojson` is intentionally NOT claimed here - `GeoJsonReader`
         // owns that extension because the map view depends on its
         // dedicated parser. `.json` files that happen to be GeoJSON still
         // open through this reader as a flat table.
@@ -118,7 +118,7 @@ pub fn json_to_table(value: Value, path: &Path, format_name: &str) -> Result<Dat
         });
     }
 
-    // Collect all unique keys by flattening objects — preserve insertion order
+    // Collect all unique keys by flattening objects - preserve insertion order
     let mut all_keys: Vec<String> = Vec::new();
     let mut seen_keys: HashSet<String> = HashSet::new();
     let mut flat_records: Vec<Vec<(String, Value)>> = Vec::new();
@@ -248,7 +248,7 @@ pub fn flatten_value(prefix: &str, value: &Value, out: &mut Vec<(String, Value)>
     }
 }
 
-/// Whether an array contains at least one nested object or sub-array — the
+/// Whether an array contains at least one nested object or sub-array - the
 /// signal we use to decide a JSON array is structured data worth expanding
 /// into per-index columns rather than serialized into a single string.
 fn array_has_complex_element(arr: &[Value]) -> bool {

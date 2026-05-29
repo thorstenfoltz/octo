@@ -209,7 +209,7 @@ pub(crate) fn render_find_duplicates_dialog(app: &mut OctaApp, ctx: &egui::Conte
 
 /// Clone the columns + the chosen rows out of `src` into a fresh
 /// `DataTable`. The new table has no source path so Save prompts for
-/// one — same convention as the Parse-in-new-tab and Smart-Paste
+/// one - same convention as the Parse-in-new-tab and Smart-Paste
 /// flows. The format-name string carries a hint about how the tab was
 /// produced so the title is informative.
 fn build_duplicates_table(src: &DataTable, rows: &[usize], key_summary: &str) -> DataTable {

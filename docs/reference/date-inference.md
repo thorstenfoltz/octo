@@ -54,7 +54,7 @@ to convert.
 ## Recognised datetime layouts
 
 When the column has a time component, seven datetime layouts are
-tried — five naive and two timezone-aware:
+tried, five naive and two timezone-aware:
 
 | Layout                      | Example                     | Notes                                        |
 |-----------------------------|-----------------------------|----------------------------------------------|
@@ -83,7 +83,7 @@ fraction also survives a re-export to Parquet / SQLite / DuckDB.
 
 Both `Z` (UTC) and explicit offsets (`+02:00`, `-05:00`, the compact
 `+0200`, etc.) are recognised on the two ISO datetime layouts. Every
-value is **shifted to UTC** before being stored — the cell shows the
+value is **shifted to UTC** before being stored, so the cell shows the
 UTC wall-clock time without an explicit suffix, since the underlying
 `Timestamp(Microsecond, None)` cell type has no slot to preserve the
 original offset. Examples (mixed-offset column, all normalized):
@@ -100,7 +100,7 @@ fires (offset stripped, wall-clock time shifted) so you can see the
 transformation at a glance.
 
 A column that mixes naive (`2024-01-15T14:30:00`) and tz-aware
-(`2024-01-15T14:30:00Z`) values stays as `Utf8` — those are two
+(`2024-01-15T14:30:00Z`) values stays as `Utf8`, because those are two
 semantically different things and inference refuses to silently
 collapse them. Pick one in source data, or pre-process with
 [SQL](../usage/sql.md).
@@ -141,8 +141,8 @@ genuinely-ambiguous cases.
 When a column is consistent with **multiple** layouts (typically
 `DD/MM/YYYY` and `MM/DD/YYYY` both pass), Octa shows a modal:
 
-<!-- SCREENSHOT: date-ambiguity-dialog.png — Modal dialog asking the user to pick between European DD/MM/YYYY and US MM/DD/YYYY for an ambiguous column, with a "Leave as text" escape hatch. Show a few sample values from the column. -->
-![Date format ambiguity dialog](../assets/screenshots/date-ambiguity-dialog.png){ .screenshot-placeholder }
+<!-- SCREENSHOT: date-ambiguity-dialog.png: Modal dialog asking the user to pick between European DD/MM/YYYY and US MM/DD/YYYY for an ambiguous column, with a "Leave as text" escape hatch. Show a few sample values from the column. -->
+![Date format ambiguity dialog](../assets/screenshots/date-ambiguity-dialog.png)
 
 You pick:
 

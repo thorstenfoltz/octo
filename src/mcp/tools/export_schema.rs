@@ -1,4 +1,4 @@
-//! MCP tool: `export_schema` — render a file's column schema as SQL DDL
+//! MCP tool: `export_schema` - render a file's column schema as SQL DDL
 //! or a model / interface / struct in another language.
 
 use std::path::PathBuf;
@@ -18,7 +18,7 @@ use super::read_with_registry;
 
 /// Output target. Mirrors `octa::data::schema_export::SchemaTarget`; kept
 /// as a separate enum so the library type stays free of a `schemars`
-/// derive. Serde renders the variants kebab-case (`json-schema`, …).
+/// derive. Serde renders the variants kebab-case (`json-schema`, ...).
 #[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum Target {

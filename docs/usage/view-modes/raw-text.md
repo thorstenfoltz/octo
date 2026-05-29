@@ -5,7 +5,7 @@ when you want to inspect bytes, peek at a parser's view of a file,
 or work with formats Octa doesn't have a richer view for (source
 code, log files, custom config formats, etc.).
 
-<!-- SCREENSHOT: raw-text-view.png — Raw view of a Python file with syntect highlighting on. Show line numbers, the gutter, syntax-highlighted keywords/strings. -->
+<!-- SCREENSHOT: raw-text-view.png: Raw view of a Python file with syntect highlighting on. Show line numbers, the gutter, syntax-highlighted keywords/strings. -->
 ![Raw Text view with syntect highlighting](../../assets/screenshots/raw-text-view.png){ .screenshot-placeholder }
 
 ## When the Raw view appears
@@ -63,7 +63,7 @@ The theme picks `InspiredGitHub` for light UI mode and
 When the file is a `.csv` or `.tsv`, the toolbar exposes extra
 controls:
 
-<!-- SCREENSHOT: raw-text-csv-toolbar.png — Raw view of a CSV file with the toolbar showing Quote (Double/Single/Either/None), Escape (Doubled/Backslash/None), Delimiter (Comma/Semicolon/Pipe/Tab), Align Columns toggle. -->
+<!-- SCREENSHOT: raw-text-csv-toolbar.png: Raw view of a CSV file with the toolbar showing Quote (Double/Single/Either/None), Escape (Doubled/Backslash/None), Delimiter (Comma/Semicolon/Pipe/Tab), Align Columns toggle. -->
 ![Raw view toolbar for CSV files](../../assets/screenshots/raw-text-csv-toolbar.png){ .screenshot-placeholder }
 
 - **Delimiter** dropdown picks Comma / Semicolon / Pipe / Tab. The
@@ -89,7 +89,7 @@ Toggle under
 [**Settings → File-Specific → Colour aligned columns**](../../reference/settings.md#file-specific)
 (on by default).
 
-<!-- SCREENSHOT: raw-text-csv-toolbar.png — Raw view of a CSV file with the toolbar showing Quote (Double/Single/Either/None), Escape (Doubled/Backslash/None), Delimiter (Comma/Semicolon/Pipe/Tab), Align Columns toggle. -->
+<!-- SCREENSHOT: raw-text-csv-toolbar.png: Raw view of a CSV file with the toolbar showing Quote (Double/Single/Either/None), Escape (Doubled/Backslash/None), Delimiter (Comma/Semicolon/Pipe/Tab), Align Columns toggle. -->
 ![Raw view toolbar for CSV files](../../assets/screenshots/raw-text-csv-toolbar-colour.png)
 
 ### Large-CSV slow-file prompt

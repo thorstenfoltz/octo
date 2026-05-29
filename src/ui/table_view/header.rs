@@ -54,7 +54,7 @@ pub(super) fn draw_header_direct(
         // Hidden columns collapse to zero width and skip every paint /
         // interaction inside this loop. col_idx arithmetic is otherwise
         // unchanged so col_widths, marks, edits, sort arrows, selected_cols
-        // — everything keyed by col_idx — stays correct.
+        // - everything keyed by col_idx - stays correct.
         let hidden = hidden_columns.contains(&col_idx);
         let w = if hidden {
             0.0
@@ -378,7 +378,7 @@ pub(super) fn draw_header_direct(
                 }
                 ui.separator();
                 // Multi-column when the right-clicked column is part of the
-                // existing column selection — mirrors the Copy / Cut handling
+                // existing column selection - mirrors the Copy / Cut handling
                 // above so the user can mark every selected column in one go.
                 let col_anchor = MarkKey::Column(col_idx);
                 let col_keys: Vec<MarkKey> =
@@ -405,6 +405,12 @@ pub(super) fn draw_header_direct(
                 }
                 if ui.button("Value frequency...").clicked() {
                     interaction.ctx_value_frequency = Some(col_idx);
+                    ui.close();
+                }
+                if crate::data::is_numeric_data_type(&col.data_type)
+                    && ui.button("Number format...").clicked()
+                {
+                    interaction.ctx_column_format = Some(col_idx);
                     ui.close();
                 }
                 if ui.button("Hide column").clicked() {
@@ -561,7 +567,7 @@ pub(super) fn draw_header_direct(
                 state.invalidate_row_heights();
             }
 
-            // Double-click on the seam → fit-to-content (best fit) for the
+            // Double-click on the seam -> fit-to-content (best fit) for the
             // column to the LEFT of the seam.
             if resize_response.double_clicked() {
                 let optimal = compute_optimal_col_width(

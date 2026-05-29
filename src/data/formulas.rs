@@ -94,10 +94,10 @@ fn parse_cell_ref(s: &str) -> Option<(usize, usize)> {
 
 /// Try to read a cell as f64. Returns:
 ///
-/// * `Ok(Some(f))` — numeric (int / float, or a Null treated as 0).
-/// * `Ok(None)` — the cell is out of bounds (`table.get` returned None);
+/// * `Ok(Some(f))` - numeric (int / float, or a Null treated as 0).
+/// * `Ok(None)` - the cell is out of bounds (`table.get` returned None);
 ///   not a "bad value", just a missing one.
-/// * `Err(FormulaBadCell)` — the cell exists but isn't a number. Includes a
+/// * `Err(FormulaBadCell)` - the cell exists but isn't a number. Includes a
 ///   short content snippet so the caller can build a user-facing error.
 ///
 /// Strings are accepted only when they parse cleanly as f64; "abc" returns
@@ -134,7 +134,7 @@ fn snippet(s: &str) -> String {
         s.to_string()
     } else {
         let mut t: String = s.chars().take(MAX).collect();
-        t.push('…');
+        t.push_str("...");
         t
     }
 }

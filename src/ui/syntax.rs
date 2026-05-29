@@ -22,7 +22,7 @@ static THEME_SET: OnceLock<ThemeSet> = OnceLock::new();
 
 /// Build the syntax set: syntect's bundled defaults plus the hand-written
 /// Terraform/HCL definition in `assets/Terraform.sublime-syntax`. The
-/// Terraform definition is loaded best-effort — if its YAML ever breaks
+/// Terraform definition is loaded best-effort - if its YAML ever breaks
 /// after a syntect bump, we log a warning and fall back to defaults rather
 /// than crash the GUI.
 fn syntax_set() -> &'static SyntaxSet {
@@ -67,13 +67,13 @@ const HIGHLIGHT_WHITELIST: &[&str] = &[
     "rb", "php", "pl", "lua", "swift", // Data-science neighbours
     "r", "jl", // Web markup we *do* highlight (no dedicated viewer)
     "html", "htm", "css", "scss", "sass", // Misc
-    "tex", "dart", "ex", "exs", // Terraform / HCL — custom syntax bundled in assets/
+    "tex", "dart", "ex", "exs", // Terraform / HCL - custom syntax bundled in assets/
     "tf", "tfvars", "hcl",
 ];
 
 /// Resolve a file extension (without leading dot, lowercased) to a syntax
 /// definition. Returns `None` when the extension isn't on the whitelist or
-/// syntect's default set has no match — the caller falls back to plain
+/// syntect's default set has no match - the caller falls back to plain
 /// rendering in either case.
 ///
 /// We deliberately don't trust `syntect`'s extension matcher for *everything*
@@ -111,7 +111,7 @@ pub fn theme_for_mode(mode: ThemeMode) -> &'static Theme {
 }
 
 /// Highlight `text` with the given syntax + theme and produce an egui
-/// `LayoutJob`. `font_id` controls glyph size and family — pass whatever
+/// `LayoutJob`. `font_id` controls glyph size and family - pass whatever
 /// font the surrounding TextEdit uses so the highlighted spans align with
 /// the editor cursor.
 ///
@@ -131,7 +131,7 @@ pub fn highlight_layout_job(
         let regions = match h.highlight_line(line, ss) {
             Ok(r) => r,
             Err(_) => {
-                // syntect returned an error mid-line. Don't drop the line —
+                // syntect returned an error mid-line. Don't drop the line -
                 // append it as plain text so the user still sees their code.
                 job.append(
                     line,

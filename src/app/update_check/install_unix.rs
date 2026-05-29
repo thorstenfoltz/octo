@@ -5,7 +5,7 @@
 
 use super::InstallError;
 
-/// Check whether the current user can create files next to `exe` — i.e. can
+/// Check whether the current user can create files next to `exe` - i.e. can
 /// we replace the binary without sudo. Creates a short-lived sibling file;
 /// this avoids pulling in libc for an `access(W_OK)` call and sidesteps the
 /// fact that `std::fs::metadata` only exposes the read-only bit.
@@ -100,7 +100,7 @@ pub(crate) fn run_pkexec_install(
     }
 }
 
-/// Minimal `which` — walks `$PATH` looking for an executable named `name`.
+/// Minimal `which` - walks `$PATH` looking for an executable named `name`.
 fn which_bin(name: &str) -> Option<std::path::PathBuf> {
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {

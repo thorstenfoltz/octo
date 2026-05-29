@@ -67,6 +67,6 @@ exceeded the limit.
 
 ## See also
 
-- [`run_sql`](run_sql.md) — `WHERE` clauses for column-scoped, typed
+- [`run_sql`](run_sql.md): `WHERE` clauses for column-scoped, typed
   filtering.
-- [`value_frequency`](value_frequency.md) — counts rather than locations.
+- [`value_frequency`](value_frequency.md): counts rather than locations.

@@ -12,12 +12,12 @@ file extension, both routed through Octa's `FormatRegistry`.
 
 ## Input schema
 
-| Parameter   | Type   | Required? | Default | Description                                                                   |
-|-------------|--------|-----------|---------|-------------------------------------------------------------------------------|
-| `input`     | string | yes       | —       | Source file path. Format inferred from extension                              |
-| `output`    | string | yes       | —       | Destination file path. Format inferred from extension                         |
-| `table`     | string | no        | —       | For multi-table input sources, which table to export                          |
-| `unlimited` | bool   | no        | `false` | Lift the 5,000,000-row file-loader cap so the entire source file is converted |
+| Parameter   | Type   | Required? | Default      | Description                                                                   |
+|-------------|--------|-----------|--------------|-------------------------------------------------------------------------------|
+| `input`     | string | yes       | (no default) | Source file path. Format inferred from extension                              |
+| `output`    | string | yes       | (no default) | Destination file path. Format inferred from extension                         |
+| `table`     | string | no        | (no default) | For multi-table input sources, which table to export                          |
+| `unlimited` | bool   | no        | `false`      | Lift the 5,000,000-row file-loader cap so the entire source file is converted |
 
 ## Response shape
 

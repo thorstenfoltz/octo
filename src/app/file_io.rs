@@ -12,7 +12,7 @@ use super::state::{OctaApp, TabState};
 
 /// Whether a format-name string belongs to a text-shaped reader (one whose
 /// `read_file` opens UTF-8 text on disk). Only these formats are eligible to
-/// fall back to a raw text view when parsing fails — binary formats would
+/// fall back to a raw text view when parsing fails - binary formats would
 /// render as garbage. Update this set when adding a new text reader.
 fn format_is_text_fallback_eligible(format_name: &str) -> bool {
     matches!(
@@ -30,12 +30,35 @@ fn format_is_text_fallback_eligible(format_name: &str) -> bool {
     )
 }
 
-/// Whether the post-load date-inference pass should run for a given format.
-/// Binary formats with their own typed-date support (Parquet, Arrow, SQLite,
-/// DuckDB, SAS, Stata, SPSS, RDS, ORC, Avro, HDF5, GeoPackage) are
-/// authoritative — re-typing their columns from string content would only
-/// confuse users. Inference runs on text-style formats whose readers leave
-/// non-ISO dates as plain strings.
+/// Apply per-column value-rounding formats to a table in place. Only columns
+/// whose format `rounds_values()` are touched; `Int` / `Float` cells are
+/// replaced with their rounded `Float`. Used to build the on-disk snapshot
+/// when the user opts to "save rounded".
+fn round_table_in_place(
+    table: &mut octa::data::DataTable,
+    formats: &std::collections::HashMap<usize, octa::data::num_format::NumberFormat>,
+) {
+    use octa::data::CellValue;
+    use octa::data::num_format::round_value;
+    for (&col_idx, fmt) in formats {
+        if !fmt.rounds_values() || col_idx >= table.col_count() {
+            continue;
+        }
+        for row in &mut table.rows {
+            if let Some(cell) = row.get_mut(col_idx) {
+                let rounded = match cell {
+                    CellValue::Int(n) => Some(round_value(*n as f64, *fmt)),
+                    CellValue::Float(f) => Some(round_value(*f, *fmt)),
+                    _ => None,
+                };
+                if let Some(v) = rounded {
+                    *cell = CellValue::Float(v);
+                }
+            }
+        }
+    }
+}
+
 /// Capture the source-string content of every cell in `col_idx` (None for
 /// pre-existing nulls). Used right before date promotion so the warning
 /// banner's Dismiss button can revert the column back to its on-disk shape.
@@ -52,6 +75,12 @@ fn snapshot_column_strings(table: &octa::data::DataTable, col_idx: usize) -> Vec
     out
 }
 
+/// Whether the post-load date-inference pass should run for a given format.
+/// Binary formats with their own typed-date support (Parquet, Arrow, SQLite,
+/// DuckDB, SAS, Stata, SPSS, RDS, ORC, Avro, HDF5, GeoPackage) are
+/// authoritative - re-typing their columns from string content would only
+/// confuse users. Inference runs on text-style formats whose readers leave
+/// non-ISO dates as plain strings.
 fn date_inference_runs_on(format_name: Option<&str>) -> bool {
     matches!(
         format_name,
@@ -70,7 +99,7 @@ fn date_inference_runs_on(format_name: Option<&str>) -> bool {
 
 /// Shift cell references in a formula to target a specific row. The formula
 /// is written as a template using row 1 (e.g. "A1+B1"). For `target_row=4`
-/// (0-indexed), references are shifted so row 1 → row 5 (1-indexed).
+/// (0-indexed), references are shifted so row 1 -> row 5 (1-indexed).
 /// References that already use a different row number are shifted by the same
 /// offset.
 pub(crate) fn shift_formula_row(formula: &str, target_row: usize) -> String {
@@ -220,7 +249,7 @@ impl OctaApp {
         self.do_open_file_dialog();
     }
 
-    /// Trigger the "Compare with…" flow: pick a right-side file and load
+    /// Trigger the "Compare with..." flow: pick a right-side file and load
     /// both raw content (for TextDiff) and a `DataTable` (for RowHashDiff)
     /// onto the active tab's `compare_*` fields. Switches the active tab
     /// into `ViewMode::Compare` on success.
@@ -253,7 +282,7 @@ impl OctaApp {
         };
 
         // Best-effort DataTable load via the registry. Failures fall
-        // through with `compare_right_table = None` — the row-diff
+        // through with `compare_right_table = None` - the row-diff
         // renderer surfaces a friendly message in that case.
         tab.compare_right_table = match self.registry.reader_for_path(&path) {
             Some(r) => match r.read_file(&path) {
@@ -299,7 +328,7 @@ impl OctaApp {
             return;
         }
         // Read out everything we need from the sibling tab before borrowing
-        // the active tab mutably — split-borrowing two indices of the same
+        // the active tab mutably - split-borrowing two indices of the same
         // Vec needs the snapshots be plain values, not references.
         let right_path = self.tabs[target_idx]
             .table
@@ -381,7 +410,10 @@ impl OctaApp {
     /// table-picker or date-ambiguity dialog is up so the user can resolve
     /// the modal before the next file potentially queues another one.
     pub(crate) fn drain_pending_open_queue(&mut self) {
-        if self.pending_table_picker.is_some() || !self.pending_date_pickers.is_empty() {
+        if self.pending_table_picker.is_some()
+            || self.pending_sheet_picker.is_some()
+            || !self.pending_date_pickers.is_empty()
+        {
             return;
         }
         if let Some(path) = self.pending_open_queue.pop_front() {
@@ -390,7 +422,7 @@ impl OctaApp {
     }
 
     /// Like [`Self::load_file`] but guarantees the result lands in a *new*
-    /// tab — even if the active tab happened to look "empty" by
+    /// tab - even if the active tab happened to look "empty" by
     /// `apply_loaded_table`'s heuristic. Pushes an empty placeholder tab
     /// first and switches to it; `load_file` then fills the placeholder.
     ///
@@ -454,6 +486,40 @@ impl OctaApp {
         };
 
         match reader.list_tables(&path) {
+            // Multi-table sources that open *all* tables at once (Excel
+            // sheets). Open up to `excel_max_auto_sheets` directly; above
+            // that, prompt with a multi-select picker.
+            Ok(Some(tables)) if reader.opens_all_tables() && !tables.is_empty() => {
+                let names: Vec<String> = tables.iter().map(|t| t.name.clone()).collect();
+                let cap = self.settings.excel_max_auto_sheets.max(1);
+                if names.len() <= cap {
+                    // Read every sheet while the reader borrow is alive, then
+                    // apply (apply_loaded_table needs `&mut self`).
+                    let loaded: Vec<(String, anyhow::Result<DataTable>)> = names
+                        .iter()
+                        .map(|n| (n.clone(), reader.read_table(&path, n)))
+                        .collect();
+                    for (name, res) in loaded {
+                        match res {
+                            Ok(table) => self.apply_loaded_table(path.clone(), table),
+                            Err(e) => {
+                                self.status_message = Some((
+                                    format!("Error reading sheet '{name}': {e}"),
+                                    std::time::Instant::now(),
+                                ));
+                            }
+                        }
+                    }
+                } else {
+                    let selected = (0..names.len()).map(|i| i < cap).collect();
+                    self.pending_sheet_picker = Some(super::state::SheetPickerState {
+                        path,
+                        sheet_names: names,
+                        selected,
+                    });
+                }
+                return;
+            }
             Ok(Some(tables)) if tables.len() > 1 => {
                 self.pending_table_picker = Some(ui::table_picker::TablePickerState {
                     path,
@@ -506,7 +572,7 @@ impl OctaApp {
 
     /// Open a file as plain text after a parse failure, surfacing a banner
     /// above the raw view that explains the original format's error. Only
-    /// invoked for text-shaped formats — binary formats (parquet, xlsx, …)
+    /// invoked for text-shaped formats - binary formats (parquet, xlsx, ...)
     /// would render as garbage and skip this fallback.
     fn fallback_to_raw_text(
         &mut self,
@@ -625,7 +691,7 @@ impl OctaApp {
             tab.raw_file_size = Some(file_size);
             tab.raw_perf_prompt_resolved = false;
 
-            // Reset any EPUB side-state — populated below for actual EPUB
+            // Reset any EPUB side-state - populated below for actual EPUB
             // files, cleared here so a non-EPUB tab can't inherit it on
             // reload. Textures aren't persisted across loads (they hold
             // GPU handles tied to the previous tab content).
@@ -636,7 +702,7 @@ impl OctaApp {
             tab.epub_active_chapter = 0;
             tab.epub_title = None;
 
-            // Same reset for the GeoJSON side-state — empties out anything
+            // Same reset for the GeoJSON side-state - empties out anything
             // a previous file on this tab might have left. The `walkers`
             // tile + memory boxes are dropped so the next Map render
             // creates fresh ones tied to the current egui context.
@@ -663,7 +729,7 @@ impl OctaApp {
                 }
                 tab.view_mode = ViewMode::EpubReader;
             } else if tab.table.format_name.as_deref() == Some("GeoJSON") {
-                // Re-parse for `geo-types` geometries — the registry's
+                // Re-parse for `geo-types` geometries - the registry's
                 // `read_file` only returned the table, so we make a second
                 // pass to populate the Map view's side-state. The map
                 // widget itself is initialised lazily in the view (it
@@ -712,10 +778,55 @@ impl OctaApp {
             self.add_recent_file(&path.to_string_lossy());
         }
 
+        // Strip leading/trailing whitespace from string cells (load-time
+        // normalization, gated by the setting). Runs before date inference so
+        // a value like " 2024-01-02 " can still be recognised as a date.
+        self.run_trim_pass(self.active_tab);
+
         // Promote string columns that are uniformly date-shaped. Runs on
         // text-style formats; binary formats already carry typed dates from
         // the reader and would only confuse users by being re-typed here.
         self.run_date_inference_pass(self.active_tab);
+    }
+
+    /// Strip leading/trailing whitespace from every string cell in the tab's
+    /// table when `trim_whitespace_on_load` is on. For DB-backed tables the
+    /// `db_meta.original` snapshot is re-synced from the trimmed rows so the
+    /// diff-on-save logic doesn't mistake trimming for user edits. Surfaces a
+    /// dismissible banner listing the affected columns when
+    /// `warn_on_whitespace_trim` is on.
+    fn run_trim_pass(&mut self, tab_idx: usize) {
+        if !self.settings.trim_whitespace_on_load || tab_idx >= self.tabs.len() {
+            return;
+        }
+        let tab = &mut self.tabs[tab_idx];
+        let trimmed = octa::data::trim::trim_string_columns(&mut tab.table);
+        if trimmed.is_empty() {
+            return;
+        }
+        // Re-sync the DB diff-save baseline so trimming (cells or titles)
+        // isn't seen as edits / a schema change.
+        if tab.table.db_meta.is_some() {
+            let rows = tab.table.rows.clone();
+            let col_names: Vec<String> = tab.table.columns.iter().map(|c| c.name.clone()).collect();
+            if let Some(meta) = tab.table.db_meta.as_mut() {
+                for (row_idx, tag) in meta.row_tags.iter().enumerate() {
+                    if let Some(t) = tag
+                        && let Some(row) = rows.get(row_idx)
+                    {
+                        meta.original.insert(*t, row.clone());
+                    }
+                }
+                meta.original_columns = col_names;
+            }
+        }
+        tab.filter_dirty = true;
+        if self.settings.warn_on_whitespace_trim {
+            self.pending_trim_warning = Some(super::state::TrimWarning {
+                tab_idx,
+                columns: trimmed,
+            });
+        }
     }
 
     /// Walk the freshly-loaded tab's columns and either (a) promote a
@@ -848,7 +959,7 @@ impl OctaApp {
         if let Some(ref path) = self.tabs[self.active_tab].table.source_path.clone() {
             let path = std::path::Path::new(path);
             // Regular save writes the full table back to the source path,
-            // never the filtered view — the file on disk represents the
+            // never the filtered view - the file on disk represents the
             // user's data, not their current view.
             self.do_save(path.to_path_buf(), false);
         }
@@ -939,7 +1050,7 @@ impl OctaApp {
 
     /// `save_filtered_view`: when `true` and the active tab has a reduced
     /// row filter (text search and/or column filters), write only the
-    /// visible rows to disk. The in-memory table is left untouched —
+    /// visible rows to disk. The in-memory table is left untouched -
     /// `source_path` and the modified flag are not updated, so the save
     /// acts as a one-shot export of the current view.
     pub(crate) fn do_save_tab(
@@ -947,6 +1058,20 @@ impl OctaApp {
         tab_idx: usize,
         path: std::path::PathBuf,
         save_filtered_view: bool,
+    ) {
+        self.do_save_tab_inner(tab_idx, path, save_filtered_view, None);
+    }
+
+    /// Inner save implementation. `round_decision` resolves the per-column
+    /// rounding prompt: `None` = ask the user if the tab has rounding formats;
+    /// `Some(true)` = write rounded values; `Some(false)` = write full
+    /// precision. The prompt dialog re-enters here with `Some(_)`.
+    pub(crate) fn do_save_tab_inner(
+        &mut self,
+        tab_idx: usize,
+        path: std::path::PathBuf,
+        save_filtered_view: bool,
+        round_decision: Option<bool>,
     ) {
         let tab = &mut self.tabs[tab_idx];
         if tab.raw_content_modified
@@ -971,13 +1096,47 @@ impl OctaApp {
             return;
         }
 
+        // Per-column rounding is display-only. If the user set any
+        // value-rounding format, ask whether the saved file should carry the
+        // rounded values or full precision - unless that decision was already
+        // made (the prompt dialog re-enters with `Some(_)`).
+        let has_rounding = tab
+            .column_number_formats
+            .values()
+            .any(|f| f.rounds_values());
+        if has_rounding && round_decision.is_none() {
+            self.pending_round_save = Some(super::state::RoundSavePrompt {
+                tab_idx,
+                path,
+                save_filtered_view,
+            });
+            return;
+        }
+        let apply_rounding = has_rounding && round_decision == Some(true);
+        let formats = tab.column_number_formats.clone();
+
         // Decide once whether the writer should see a filtered snapshot of
         // the table or the live in-memory table. A filtered view is built
         // when (a) the caller asked for it (Save As), and (b) the active
         // filter actually hides some rows.
         let filtered_active = save_filtered_view && tab.filtered_rows.len() < tab.table.row_count();
-        let filtered_table = if filtered_active {
+        let mut filtered_table = if filtered_active {
             Some(tab.table.clone_with_rows(&tab.filtered_rows))
+        } else {
+            None
+        };
+        // When rounding is requested and we're not already writing a filtered
+        // snapshot, build a rounded clone of the live table. The live table is
+        // left at full precision (rounding stays display-only); only the
+        // bytes on disk are rounded.
+        if apply_rounding && let Some(t) = filtered_table.as_mut() {
+            round_table_in_place(t, &formats);
+        }
+        let rounded_live = if apply_rounding && filtered_table.is_none() {
+            let mut t = tab.table.clone();
+            t.apply_edits();
+            round_table_in_place(&mut t, &formats);
+            Some(t)
         } else {
             None
         };
@@ -988,7 +1147,8 @@ impl OctaApp {
                 formats::csv_reader::write_delimited(&path, tab.csv_delimiter, ftab)
             } else {
                 tab.table.apply_edits();
-                formats::csv_reader::write_delimited(&path, tab.csv_delimiter, &tab.table)
+                let to_write = rounded_live.as_ref().unwrap_or(&tab.table);
+                formats::csv_reader::write_delimited(&path, tab.csv_delimiter, to_write)
             };
             match write_result {
                 Ok(()) => {
@@ -1034,7 +1194,8 @@ impl OctaApp {
                     reader.write_file(&path, ftab)
                 } else {
                     tab.table.apply_edits();
-                    reader.write_file(&path, &tab.table)
+                    let to_write = rounded_live.as_ref().unwrap_or(&tab.table);
+                    reader.write_file(&path, to_write)
                 };
                 match write_result {
                     Ok(()) => {

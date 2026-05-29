@@ -57,7 +57,7 @@ pub struct TableViewState {
     /// Cached prefix sums of row heights when cell_line_breaks is on.
     /// `[i]` = Y offset of display row i; `[row_count]` = total data height.
     row_y_offsets: Vec<f32>,
-    /// Generation counter — bumped on any change that could affect row heights.
+    /// Generation counter - bumped on any change that could affect row heights.
     row_heights_generation: u64,
     /// Generation at which the cache was last built.
     row_heights_cached_generation: u64,
@@ -292,7 +292,7 @@ pub struct TableInteraction {
     pub needs_more_rows: bool,
     /// Set a color mark on one or more keys. The list lets the right-click
     /// "Mark" submenu honour the current multi-selection (cells / rows /
-    /// columns) instead of always colouring just the clicked target — the
+    /// columns) instead of always colouring just the clicked target - the
     /// same precedence Ctrl+M follows via `mark_selection_default`.
     pub set_mark: Option<(Vec<MarkKey>, MarkColor)>,
     /// Clear a color mark from one or more keys.
@@ -304,15 +304,19 @@ pub struct TableInteraction {
     pub ctx_filter_column: Option<usize>,
     /// Hide a column from the table view. The data is preserved on disk
     /// (Save / Save As writes hidden columns too); only the renderer omits
-    /// them. Cleared via Edit → Show hidden columns.
+    /// them. Cleared via Edit -> Show hidden columns.
     pub ctx_hide_column: Option<usize>,
     /// Open the Value Frequency dialog for this column. Fired by the
-    /// column-header right-click menu's "Value frequency…" entry; the
+    /// column-header right-click menu's "Value frequency..." entry; the
     /// `ColumnValueFrequency` keyboard shortcut goes through
     /// `shortcuts_dispatch` instead.
     pub ctx_value_frequency: Option<usize>,
+    /// Open the per-column Number-format dialog for this column. Fired by the
+    /// column-header right-click menu's "Number format..." entry (numeric
+    /// columns only).
+    pub ctx_column_format: Option<usize>,
     /// The big logo on the welcome screen (rendered when the active tab has
-    /// no columns) was just clicked. Counted by the snow easter egg —
+    /// no columns) was just clicked. Counted by the snow easter egg -
     /// three within 1.5s triggers a 5-second snowfall.
     pub welcome_logo_clicked: bool,
     /// Screen-space rect the welcome-screen logo image was painted into, if
@@ -345,10 +349,16 @@ pub fn draw_table(
     // only to paint the header dot marker; the actual row filtering is
     // already applied in `filtered_rows`.
     filtered_columns: &HashSet<usize>,
-    // Column indices the user has hidden via right-click → "Hide column".
+    // Column indices the user has hidden via right-click -> "Hide column".
     // Hidden columns render with width 0 and skip paint entirely. Data
     // stays in the table (Save / Save As writes them).
     hidden_columns: &HashSet<usize>,
+    // Whether numeric cells render with thousand separators.
+    thousands_separators: bool,
+    // English vs European grouping/decimal marks for numeric cells.
+    separator_style: crate::data::num_format::SeparatorStyle,
+    // Per-column display number formats (decimals + rounding). Display-only.
+    column_number_formats: &std::collections::HashMap<usize, crate::data::num_format::NumberFormat>,
 ) -> TableInteraction {
     let colors = ThemeColors::for_mode(theme_mode);
     let row_height = (font_size * 2.0).max(DEFAULT_ROW_HEIGHT);
@@ -376,7 +386,7 @@ pub fn draw_table(
     if table.col_count() == 0 {
         // Rainbow easter-egg: paint a large, faded copy of the (now-random)
         // welcome icon as a background watermark behind the normal centred
-        // icon. Only on the welcome screen — data views stay clean per the
+        // icon. Only on the welcome screen - data views stay clean per the
         // user choice. The watermark uses the same texture as the centre
         // logo so it follows the random variant rolled at activation time.
         if theme_mode.is_rainbow()
@@ -453,7 +463,7 @@ pub fn draw_table(
     // When the horizontal scrollbar is visible it sits at the bottom of the
     // panel and would otherwise paint over the last data row. Reserve its
     // footprint here so the data area shrinks accordingly and `max_scroll_y`
-    // lands the last row exactly above the scrollbar — no slack, no clipping.
+    // lands the last row exactly above the scrollbar - no slack, no clipping.
     let horizontal_scrollbar_visible = total_col_width > view_width - vscroll_width;
     let horizontal_scrollbar_height = if horizontal_scrollbar_visible {
         11.0
@@ -474,14 +484,14 @@ pub fn draw_table(
 
     // Arrow key navigation: move selected cell and auto-scroll into view.
     //
-    // Key layout (defaults; all remappable via Settings → Shortcuts):
-    //   Arrow           — move the selection by one cell
-    //   Shift+Arrow     — extend the row range from the anchor
-    //   Ctrl+Shift+↑/↓  — jump to first/last row
-    //   Ctrl+Shift+←/→  — jump to first/last column
-    //   Ctrl+↑/↓        — when whole row(s) are selected, grow the row
+    // Key layout (defaults; all remappable via Settings -> Shortcuts):
+    //   Arrow           - move the selection by one cell
+    //   Shift+Arrow     - extend the row range from the anchor
+    //   Ctrl+Shift+↑/↓  - jump to first/last row
+    //   Ctrl+Shift+←/->  - jump to first/last column
+    //   Ctrl+↑/↓        - when whole row(s) are selected, grow the row
     //                     selection by one above/below
-    //   Ctrl+←/→        — when whole column(s) are selected, grow the column
+    //   Ctrl+←/->        - when whole column(s) are selected, grow the column
     //                     selection by one to the left/right
     let any_text_edit_focused = ui
         .ctx()
@@ -664,7 +674,7 @@ pub fn draw_table(
         if !handled {
             let shift = ui.input(|i| i.modifiers.shift);
             // Raw arrow keys (no modifiers, or Shift for row-range extension).
-            // Guard against Ctrl — Ctrl+Arrow is handled via the extend-row /
+            // Guard against Ctrl - Ctrl+Arrow is handled via the extend-row /
             // extend-column shortcuts above; plain arrows must not also fire
             // when Ctrl is held, otherwise we'd both grow and move the cell.
             let no_ctrl = ui.input(|i| !(i.modifiers.ctrl || i.modifiers.mac_cmd));
@@ -863,6 +873,9 @@ pub fn draw_table(
                 readonly,
                 hidden_columns,
                 theme_mode.is_rainbow(),
+                thousands_separators,
+                separator_style,
+                column_number_formats,
             );
         }
 
@@ -1013,7 +1026,7 @@ fn compute_row_height(
 
 /// Render the right-click "Mark" submenu.
 ///
-/// `keys` is the full list of marks to apply when the user picks a colour —
+/// `keys` is the full list of marks to apply when the user picks a colour -
 /// caller-built so a right-click on a cell that's part of a multi-cell
 /// selection colours every selected cell (mirrors Ctrl+M). `current` is the
 /// mark on the *anchor* (the right-clicked target) used to show

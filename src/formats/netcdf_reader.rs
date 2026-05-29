@@ -27,7 +27,7 @@ fn read_netcdf3(path: &Path) -> Result<DataTable> {
         .map_err(|e| anyhow!("opening NetCDF-3 file {}: {e}", path.display()))?;
 
     // Group all 1D variables by their dimension. Pick the dimension with the
-    // largest set of variables as the "main table" — each variable becomes a
+    // largest set of variables as the "main table" - each variable becomes a
     // column whose row index is the dimension axis. Multi-dimensional
     // variables and 0D scalars are skipped (with a count surfaced via
     // `format_name`).

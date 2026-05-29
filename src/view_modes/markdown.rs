@@ -5,7 +5,7 @@ use eframe::egui;
 use egui::RichText;
 
 /// Cheap content hash so we can invalidate `tab.markdown_render_cache` only
-/// when the buffer actually changes. Uses `DefaultHasher` for simplicity —
+/// when the buffer actually changes. Uses `DefaultHasher` for simplicity -
 /// collisions are harmless (worst case is one stale render before the next
 /// keystroke triggers another rebuild).
 fn content_hash(s: &str) -> u64 {
@@ -114,7 +114,7 @@ fn render_editor_pane(ui: &mut egui::Ui, tab: &mut TabState, readonly: bool, _wi
 }
 
 fn render_preview_pane(ui: &mut egui::Ui, tab: &mut TabState, raw_content: &str) {
-    // CRLF normalization for consistent line handling — pulldown_cmark
+    // CRLF normalization for consistent line handling - pulldown_cmark
     // accepts both, but `\r`-only line endings interact poorly with our
     // event-driven renderer's break heuristics.
     let raw_normalized = if raw_content.contains('\r') {
@@ -183,7 +183,7 @@ pub(crate) fn render_pulldown(ui: &mut egui::Ui, src: &str) {
     let mut block_kind = BlockKind::Paragraph;
     let mut list_stack: Vec<ListInfo> = Vec::new();
     let mut code_block_buf = String::new();
-    // Table state. When `Some`, inline events (`Text`, `Code`, …) route into
+    // Table state. When `Some`, inline events (`Text`, `Code`, ...) route into
     // the active cell's buffer instead of the outer block buffer. Reset on
     // `TagEnd::Table` after rendering.
     let mut table: Option<TableState> = None;
@@ -519,7 +519,7 @@ fn render_runs(ui: &mut egui::Ui, runs: &[(String, RunStyle)], size: f32, force_
 }
 
 /// Buffered table being collected during pulldown_cmark event traversal.
-/// Each cell is a `Vec<(String, RunStyle)>` — the same shape the inline-run
+/// Each cell is a `Vec<(String, RunStyle)>` - the same shape the inline-run
 /// flusher already understands, so styling (bold, italic, code, links)
 /// inside cells reuses the existing pipeline.
 struct TableState {
@@ -540,7 +540,7 @@ struct TableState {
 /// Render a buffered markdown table.
 ///
 /// Layout: outer `Frame` with a thin border, then manual rows of fixed-width
-/// cells (no `egui::Grid` — Grid auto-sizes columns from widest content,
+/// cells (no `egui::Grid` - Grid auto-sizes columns from widest content,
 /// which on prose-heavy docs ends up with one column hogging the whole
 /// width). The header row gets a faint bg tint and a divider underneath;
 /// body rows zebra-stripe via per-row `Frame::fill`. Cells respect the
@@ -607,7 +607,7 @@ fn render_table(ui: &mut egui::Ui, table: &TableState, body_size: f32, table_id:
     });
 }
 
-/// Shared layout context for every row in a single table — keeps the
+/// Shared layout context for every row in a single table - keeps the
 /// signature of `render_table_row` short.
 struct TableLayoutCtx<'a> {
     alignments: &'a [pulldown_cmark::Alignment],

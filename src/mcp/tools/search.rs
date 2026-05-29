@@ -1,4 +1,4 @@
-//! MCP tool: `search` — find cells matching a query across every column.
+//! MCP tool: `search` - find cells matching a query across every column.
 
 use std::path::PathBuf;
 

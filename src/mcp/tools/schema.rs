@@ -1,4 +1,4 @@
-//! MCP tool: `schema` — return only the column schema for a file.
+//! MCP tool: `schema` - return only the column schema for a file.
 
 use std::path::PathBuf;
 

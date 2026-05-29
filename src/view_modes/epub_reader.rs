@@ -5,7 +5,7 @@
 //!
 //! `apply_loaded_table` calls `octa::formats::epub_reader::read_with_extras`
 //! when it sees `format_name == "EPUB"` and stashes the rendered chapter
-//! Markdown + image bytes on the tab. This view consumes those — it does
+//! Markdown + image bytes on the tab. This view consumes those - it does
 //! not re-parse the EPUB on every paint.
 //!
 //! ## Image handling (v1)
@@ -88,7 +88,7 @@ fn draw_chapter_toolbar(ui: &mut egui::Ui, tab: &mut TabState) {
             tab.epub_active_chapter -= 1;
         }
 
-        // Chapter picker — combo of every chapter label. Selecting a
+        // Chapter picker - combo of every chapter label. Selecting a
         // chapter jumps directly to it.
         let selected_label = tab
             .epub_chapter_titles
@@ -125,7 +125,7 @@ fn draw_chapter_toolbar(ui: &mut egui::Ui, tab: &mut TabState) {
 
 /// Find every image href referenced by the current chapter's Markdown and
 /// render them as a thumbnail strip beneath the chapter text. References
-/// that don't resolve against `epub_image_bytes` are silently skipped —
+/// that don't resolve against `epub_image_bytes` are silently skipped -
 /// the alt text already appears via `render_pulldown`'s text-event flow.
 fn render_chapter_images(
     ctx: &egui::Context,
@@ -238,7 +238,7 @@ fn resolve_image_href(
         return Some(with_slash);
     }
     // Match by filename. `image/cover.png` and `OEBPS/images/cover.png`
-    // share `cover.png`. This is best-effort — if multiple images share a
+    // share `cover.png`. This is best-effort - if multiple images share a
     // filename the first wins.
     let target_name = href.rsplit('/').next().unwrap_or(href);
     image_bytes

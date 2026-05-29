@@ -43,7 +43,7 @@ pub(crate) fn char_range_to_byte_range(
 
 /// Convert the currently selected text in the TextEdit identified by
 /// `text_edit_id` to upper or lower case. Only operates on a non-empty
-/// selection — if nothing is selected the buffer is left untouched and the
+/// selection - if nothing is selected the buffer is left untouched and the
 /// function returns `false`.
 pub fn apply_case_to_selection(
     ctx: &egui::Context,

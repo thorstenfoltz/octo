@@ -7,7 +7,7 @@
 //! Keying is text-based: each row's selected columns are formatted via
 //! `CellValue::to_string()` and joined with an ASCII unit separator.
 //! This matches the cross-format hashing pattern used by the Compare
-//! view's RowHashDiff — a Parquet row and a CSV row with the same
+//! view's RowHashDiff - a Parquet row and a CSV row with the same
 //! displayed values dedupe to the same key.
 
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ use crate::data::DataTable;
 /// Return the row indices (sorted, ascending) of every row that shares
 /// its key-column values with at least one other row in the table.
 ///
-/// `key_cols` empty or table empty → empty result. Out-of-range
+/// `key_cols` empty or table empty -> empty result. Out-of-range
 /// indices in `key_cols` are skipped silently rather than erroring;
 /// the caller (a UI dialog) has already validated against the live
 /// column count.
@@ -44,7 +44,7 @@ pub fn find_duplicate_rows(table: &DataTable, key_cols: &[usize]) -> Vec<usize> 
             if let Some(v) = table.get(row, col) {
                 key.push_str(&v.to_string());
             }
-            // Unit separator — matches Compare-view's `hash_row` so the
+            // Unit separator - matches Compare-view's `hash_row` so the
             // two paths don't disagree about what counts as identical.
             key.push('\x1F');
         }

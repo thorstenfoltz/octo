@@ -23,7 +23,7 @@ pub(crate) fn render_settings_dialog(app: &mut OctaApp, ctx: &egui::Context) {
 
     // Truncate the recent-files list if the user lowered `max_recent_files`.
     // Without this the menu keeps showing the old (longer) list until a new
-    // file is opened — confusing because the setting appears to do nothing.
+    // file is opened - confusing because the setting appears to do nothing.
     if app.recent_files.len() > app.settings.max_recent_files {
         app.recent_files.truncate(app.settings.max_recent_files);
         app.save_recent_files();
@@ -58,7 +58,7 @@ pub(crate) fn render_settings_dialog(app: &mut OctaApp, ctx: &egui::Context) {
     if theme_changed {
         let was_rainbow = app.theme_mode.is_rainbow();
         app.theme_mode = app.settings.default_theme;
-        // Leaving Rainbow → drop the rainbow-rosette logo textures so
+        // Leaving Rainbow -> drop the rainbow-rosette logo textures so
         // `ensure_logo_textures` re-renders from the user's configured
         // `resolved_icon` SVG on the next frame.
         if was_rainbow && !app.theme_mode.is_rainbow() {

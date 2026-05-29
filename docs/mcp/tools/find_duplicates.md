@@ -41,7 +41,7 @@ Keys are compared on the cells' string representation, so `int(1)` and
 ```
 
 `duplicate_row_count` is the total number of duplicate rows found;
-`result` carries the rows themselves (subject to the row/cell caps —
+`result` carries the rows themselves (subject to the row/cell caps;
 see [Limits & truncation](../limits-and-truncation.md)).
 
 ## Example call
@@ -58,7 +58,7 @@ see [Limits & truncation](../limits-and-truncation.md)).
 
 ## See also
 
-- [`value_frequency`](value_frequency.md) — counts of every value, not
+- [`value_frequency`](value_frequency.md): counts of every value, not
   just the duplicated ones.
-- [`run_sql`](run_sql.md) — `GROUP BY … HAVING count(*) > 1` for custom
+- [`run_sql`](run_sql.md): `GROUP BY … HAVING count(*) > 1` for custom
   duplicate logic.

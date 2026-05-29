@@ -1,4 +1,4 @@
-//! "Unsaved changes" confirmation dialogs — one for closing (whole app or
+//! "Unsaved changes" confirmation dialogs - one for closing (whole app or
 //! single tab) and one for opening a different file.
 
 use eframe::egui;

@@ -70,6 +70,22 @@ If `octa` isn't on `PATH`, use the full path:
 }
 ```
 
+The AppImage works the same way: point `command` at the AppImage
+file directly. No extraction, no wrapper script, no separate
+install step. The same single-file binary that opens the GUI also
+serves as the MCP endpoint.
+
+```json
+{
+  "mcpServers": {
+    "octa": {
+      "command": "/home/you/Octa-x86_64.AppImage",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
 Save the file and **restart Claude Desktop**. You should see the
 **hammer icon** (🔨) in the conversation window; click it to
 confirm Octa's tools are listed.
@@ -133,12 +149,27 @@ fastest path to "does my Octa MCP setup work?"
 Any client that supports stdio-spawned MCP servers works with Octa.
 The pattern is always:
 
-- **command**: `octa` (or the full path to the binary)
+- **command**: `octa` (or the full path to the binary or AppImage)
 - **args**: `["--mcp"]`
 - **transport**: stdio (the default; no special config needed)
 
 Refer to your client's documentation for the exact config syntax;
 the entries above are representative.
+
+## Distribution formats
+
+`octa --mcp` works with every distribution Octa publishes:
+
+- **Plain binary** off the releases page (`/usr/local/bin/octa`,
+  `~/.local/bin/octa`, or anywhere on `PATH`).
+- **`install.sh`** install (system-wide or user-local).
+- **AUR** packages (`octa`, `octa-bin`).
+- **AppImage** (`Octa-*-x86_64.AppImage`), pointed at directly as
+  the `command`.
+
+No wrapper script or extra installation step is needed in any
+case: the same binary that opens the GUI also serves as the MCP
+endpoint.
 
 ## After setup
 

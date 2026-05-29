@@ -6,7 +6,7 @@ renderer that streams large files smoothly and supports inline
 editing, multi-cell selection, sorting, filtering, and clipboard
 operations.
 
-<!-- SCREENSHOT: table-view-overview.png — Octa main window in Table view. Show a file with maybe 8-10 columns, a few rows highlighted (selection), a sort indicator on one column. Light theme. -->
+<!-- SCREENSHOT: table-view-overview.png: Octa main window in Table view. Show a file with maybe 8-10 columns, a few rows highlighted (selection), a sort indicator on one column. Light theme. -->
 ![Table view](../assets/screenshots/hero-table-view.png)
 
 ## Navigation
@@ -96,6 +96,35 @@ For a non-trivial number of edits, see the dedicated
 [Editing page](editing.md) which covers row/column structural
 operations, undo / redo, and the edit overlay.
 
+## Number display (separators and rounding)
+
+Numeric columns (`Int*`, `Float*`) render with **thousand separators**
+by default, e.g. `1,234,567.89`. This is a display-only convenience:
+saved and exported files, the CLI, and the MCP server always carry the
+raw values. Turn it off, or switch between **English** (`1,234.56`) and
+**European** (`1.234,56`) grouping, under
+[**Settings -> Table View**](../reference/settings.md#table-view)
+(**Thousand separators** and **Number style**).
+
+For a per-column rounding format, right-click a numeric column
+header and pick **Number format...** (also available as
+**Edit -> Number format...** for the selected column). The dialog
+applies changes live as you edit (no Apply step), and is movable
+and resizable. Choose:
+
+- **Decimals** - type a number, or leave empty for `Auto` (natural
+  precision). A positive count fixes the digits after the decimal point
+  and pads with trailing zeros (so `2.5` shows as `2.50` at two
+  decimals). A **negative** count rounds *before* the decimal point,
+  e.g. `-2` rounds to the nearest 100.
+- **Rounding** - `Normal` (round half away from zero), `Up` (toward
+  positive infinity), or `Down` (toward negative infinity).
+
+Number formats are display-only and per tab (session-only). When
+you **Save** a tab that has a rounding format, Octa asks whether the
+file should carry the rounded values or the full-precision
+originals - see [Saving](saving.md#rounding-on-save).
+
 ## Lazy row loading (large files)
 
 For streaming formats (Parquet, CSV, TSV), Octa loads the first
@@ -141,7 +170,9 @@ Right-click anywhere on the table for context-aware actions:
 - **On a column header**: Copy column,
   [Mark column](colour-marking.md), Rename, Change Type, Delete
   column, Move column, **Hide column**, **Copy column name(s)**,
-  [Filter values...](search-and-filter.md#column-filter).
+  [Filter values...](search-and-filter.md#column-filter),
+  [Value frequency...](value-frequency.md), and **Number format...**
+  (numeric columns only).
 
 ## Selection stats
 
@@ -164,7 +195,7 @@ table on disk: both **Save** and **Save As** write them out
 unchanged. Pull them back via **Edit → Show hidden columns** (the
 menu entry is greyed when nothing is hidden).
 
-Hidden state is **per tab and session-only** — closing the tab or
+Hidden state is **per tab and session-only**, so closing the tab or
 reopening the file clears the hidden set. Use it as a
 viewport-management tool, not a schema modification.
 
@@ -184,7 +215,7 @@ tab**. Pinned tabs:
 
 - Show a 📌 prefix in the tab label.
 - Hide the small × close button.
-- Refuse to close on Ctrl+W or the unsaved-changes prompt — you
+- Refuse to close on Ctrl+W or the unsaved-changes prompt. You
   have to unpin them first (same right-click menu).
 
 ### Persistence across restarts
@@ -200,7 +231,7 @@ path) cannot be pinned; the menu entry is greyed out for them.
     Pinning does **not** change save semantics. Closing the
     application or closing the tab with unsaved changes still runs
     the standard Save / Don't Save / Cancel dialog. The pinned tab
-    reopens on next launch with whatever is on disk — any unsaved
+    reopens on next launch with whatever is on disk. Any unsaved
     edits from the previous session are lost if you didn't save
     them. Save with **Ctrl+S** (or **Save As**) before quitting.
 

@@ -23,7 +23,14 @@ octa --schema FILE [-f FORMAT] [--rows N|all]
 octa --head FILE [-n N] [-f FORMAT] [--rows N|all]
 octa --convert IN OUT [--rows N|all]
 octa --sql FILE -q QUERY [-f FORMAT] [--rows N|all]
+     [--sql-table NAME=PATH ...] [--sql-attach ALIAS=PATH ...]
+     [--sql-write-to PATH --sql-write-table TABLE
+       [--sql-write-schema SCHEMA] [--sql-write-mode create|append|replace]]
 octa --export-schema FILE [-t TARGET]
+octa --compare-schemas FILE_A FILE_B [--table-a NAME] [--table-b NAME] [-f FORMAT]
+octa --describe FILE [--table NAME] [--sample-rows N] [-f FORMAT]
+octa --validate-schema FILE --expect-schema SCHEMA_FILE [--table NAME] [-f FORMAT]
+octa --unique-columns FILE [--table NAME] [--max-combo N] [-f FORMAT]
 octa --mcp
 ```
 
@@ -38,8 +45,9 @@ comparison.
 When invoked with no flags, it launches the graphical interface,
 optionally opening the supplied *FILE*(s) in tabs. When invoked
 with one of the action flags (`--schema`, `--head`, `--convert`,
-`--sql`, `--export-schema`, `--mcp`), it performs that action and
-exits.
+`--sql`, `--export-schema`, `--compare-schemas`, `--describe`,
+`--validate-schema`, `--unique-columns`, `--mcp`), it performs that
+action and exits.
 
 Action flags are **mutually exclusive**. Trailing *FILE* arguments
 are ignored (with a warning) when an action flag is set.
@@ -70,7 +78,12 @@ are ignored (with a warning) when an action flag is set.
 `--sql FILE`
 :   Run a SQL query against *FILE*. The query is supplied via
     `-q` / `--query`. *FILE* is exposed to DuckDB as a temporary
-    table called **data**. Mutations (INSERT / UPDATE / DELETE) do
+    table called **data**. Extra tables can be loaded with
+    `--sql-table NAME=PATH` and whole DuckDB / SQLite databases can
+    be attached with `--sql-attach ALIAS=PATH`, so a single
+    invocation can JOIN across formats. The SELECT result can be
+    persisted to a DuckDB or SQLite file via `--sql-write-to`.
+    Mutations (INSERT / UPDATE / DELETE) on `data` itself do
     **not** persist back to *FILE*, because the in-memory DuckDB
     connection is discarded at exit. See [`octa --sql`](sql.md).
 
@@ -81,15 +94,42 @@ are ignored (with a warning) when an action flag is set.
     / `--target` (default `postgres`); only the column list is read.
     See [`octa --export-schema`](export-schema.md).
 
+`--compare-schemas FILE_A FILE_B`
+:   Diff the column schemas of two files. Prints a four-column
+    table (`status` / `column` / `type_a` / `type_b`). Matching is
+    by exact, case-sensitive column name. Use `--table-a` /
+    `--table-b` to pick a specific table on multi-table sources.
+    See [`octa --compare-schemas`](compare-schemas.md).
+
+`--describe FILE`
+:   Print a one-shot orientation snapshot of *FILE*: format, file
+    size, row count, column schema, and a small sample of rows.
+    Use `--sample-rows N` to change the preview size (default 5,
+    max 100). See [`octa --describe`](describe.md).
+
+`--validate-schema FILE`
+:   Check *FILE*'s column schema against the JSON Schema given by
+    `--expect-schema SCHEMA_FILE`. Exit code is `0` on a clean
+    match and `1` otherwise, which is CI-pipeable. Schemas produced by
+    `--export-schema -t json-schema` round-trip cleanly. See
+    [`octa --validate-schema`](validate-schema.md).
+
+`--unique-columns FILE`
+:   Find columns (and optional small combinations) whose values are
+    unique across *FILE*. Useful for primary-key reconnaissance.
+    Use `--max-combo N` (clamped to `[1, 3]`) to test pairs /
+    triples. See [`octa --unique-columns`](unique-columns.md).
+
 `--mcp`
 :   Start a Model Context Protocol (MCP) server on standard
-    input / output. Eleven tools are exposed: `read_table`,
+    input / output. Fifteen tools are exposed: `read_table`,
     `schema`, `list_tables`, `count_rows`, `run_sql`, `convert`,
     `export_schema`, `profile`, `find_duplicates`,
-    `value_frequency`, `search`. Defaults for the row limit and
-    per-cell byte cap come from the user's Octa settings
-    ([Settings → MCP](../reference/settings.md#mcp)). See the
-    [MCP server guide](../mcp/index.md) for setup.
+    `value_frequency`, `search`, `compare_schemas`, `describe_file`,
+    `validate_against_schema`, `unique_columns`. Defaults for the
+    row limit and per-cell byte cap come from the user's Octa
+    settings ([Settings → MCP](../reference/settings.md#mcp)). See
+    the [MCP server guide](../mcp/index.md) for setup.
 
 ## Options
 
@@ -100,10 +140,63 @@ are ignored (with a warning) when an action flag is set.
 :   SQL query string for `--sql`. Always reference the file's data
     as the table **data**.
 
+`--sql-table NAME=PATH`
+:   For `--sql` only. Register an extra file as a workspace table
+    named *NAME*. Any supported format. Repeatable.
+
+`--sql-attach ALIAS=PATH`
+:   For `--sql` only. `ATTACH` a DuckDB or SQLite database under
+    *ALIAS*. Repeatable. After attachment every inner table is
+    queryable as `alias.schema.tbl` (DuckDB) or `alias.tbl`
+    (SQLite when the DuckDB sqlite extension is bundled, otherwise
+    fallback registration under `alias__table`).
+
+`--sql-write-to PATH`
+:   For `--sql` only. Persist the SELECT result to *PATH* instead
+    of printing it. *PATH*'s extension picks DuckDB (`.duckdb`,
+    `.ddb`) or SQLite (everything else). The file is created if
+    missing. Requires `--sql-write-table`; `--sql-write-schema` and
+    `--sql-write-mode` are optional.
+
+`--sql-write-table TABLE`
+:   Target table name for `--sql-write-to`.
+
+`--sql-write-schema SCHEMA`
+:   Target schema for `--sql-write-to`. DuckDB only; defaults to
+    `main`. SQLite has no schemas; pass `main` or leave unset.
+
+`--sql-write-mode MODE`
+:   `create` (default; errors if the table already exists),
+    `replace` (drop + recreate), or `append` (`INSERT` into the
+    existing table). Column count and order must match in append
+    mode.
+
 `-t TARGET`, `--target TARGET`
 :   Output target for `--export-schema`. *TARGET* is one of
     `postgres` *(default)*, `mysql`, `sqlite`, `databricks`,
     `snowflake`, `pydantic`, `typescript`, `json-schema`, or `rust`.
+
+`--table-a NAME`, `--table-b NAME`
+:   For `--compare-schemas` only: pick a specific table on each
+    side when the source is multi-table (SQLite, DuckDB,
+    GeoPackage).
+
+`--table NAME`
+:   For `--describe`, `--validate-schema`, and `--unique-columns`:
+    pick a specific table on the file when the source is
+    multi-table.
+
+`--expect-schema SCHEMA_FILE`
+:   Path to the expected JSON Schema for `--validate-schema`.
+    Required by that action.
+
+`--sample-rows N`
+:   Number of preview rows for `--describe` (default 5, clamped to
+    100).
+
+`--max-combo N`
+:   Max combo size for `--unique-columns` (default 1, clamped to
+    `[1, 3]`).
 
 `--rows N|all`
 :   Override the initial-load row cap for this invocation. Streaming
@@ -149,6 +242,8 @@ error occurs, since the data stream stays clean.
 
 Exit code is **0** on success and **1** on any error (invalid
 arguments, file-not-found, parse failure, write rejection, etc.).
+`--validate-schema` also exits **1** on a successful read where
+the schemas differ, so CI pipelines can gate on the schema directly.
 
 ## Examples
 
@@ -197,11 +292,67 @@ octa --sql users.parquet -q 'SELECT email FROM data WHERE active' -f json \
   | jq -r '.[].email'
 ```
 
+JOIN across formats:
+
+```bash
+octa --sql sales.parquet \
+     --sql-table customers=customers.csv \
+     -q 'SELECT c.name, SUM(d.amount) FROM data d
+         JOIN customers c ON d.cid = c.cid GROUP BY c.name'
+```
+
+ATTACH a DuckDB warehouse and JOIN against it:
+
+```bash
+octa --sql sales.parquet \
+     --sql-attach wh=warehouse.duckdb \
+     -q 'SELECT count(*) FROM data d
+         JOIN wh.main.products p ON d.cid = p.cid'
+```
+
+Write a SQL result back to a DuckDB schema:
+
+```bash
+octa --sql sales.parquet -q '
+  SELECT region, SUM(amount) AS total FROM data GROUP BY region
+' --sql-write-to analytics.duckdb \
+  --sql-write-schema reports \
+  --sql-write-table q4_summary
+```
+
 Export a schema as Snowflake DDL or a Pydantic model:
 
 ```bash
 octa --export-schema sales.parquet -t snowflake
 octa -e users.parquet -t pydantic > users_model.py
+```
+
+Diff the schemas of two files:
+
+```bash
+octa --compare-schemas v1.parquet v2.parquet
+octa --compare-schemas a.sqlite b.sqlite --table-a users --table-b users -f json
+```
+
+One-shot file snapshot:
+
+```bash
+octa --describe data.parquet --sample-rows 3
+octa --describe users.sqlite --table customers -f json
+```
+
+Validate a file against a JSON Schema in CI:
+
+```bash
+octa --export-schema sales.parquet -t json-schema > sales.schema.json
+octa --validate-schema sales.parquet --expect-schema sales.schema.json
+```
+
+Find primary-key candidates:
+
+```bash
+octa --unique-columns users.csv
+octa --unique-columns orders.parquet --max-combo 2 -f json
 ```
 
 Start the MCP server:
@@ -226,7 +377,7 @@ octa --mcp
 ## MCP Server
 
 When invoked with `--mcp`, Octa speaks the Model Context Protocol
-over JSON-RPC on stdin/stdout. Eleven tools are exposed:
+over JSON-RPC on stdin/stdout. Fifteen tools are exposed:
 
 - [`read_table(path, limit?, unlimited?, table?)`](../mcp/tools/read_table.md)
   returns schema + rows JSON.
@@ -250,6 +401,14 @@ over JSON-RPC on stdin/stdout. Eleven tools are exposed:
   counts per-column values.
 - [`search(path, query, mode?, …, unlimited?)`](../mcp/tools/search.md)
   matches cells across every column.
+- [`compare_schemas(path_a, path_b, table_a?, table_b?)`](../mcp/tools/compare_schemas.md)
+  diffs the column schemas of two files.
+- [`describe_file(path, table?, sample_rows?, unlimited?)`](../mcp/tools/describe_file.md)
+  returns a one-shot orientation snapshot.
+- [`validate_against_schema(path, table?, schema_path?, schema_inline?)`](../mcp/tools/validate_against_schema.md)
+  checks a file against a JSON Schema.
+- [`unique_columns(path, table?, max_combo_size?, unlimited?)`](../mcp/tools/unique_columns.md)
+  finds primary-key candidates.
 
 Defaults (the response row cap of 1000 rows, per-cell byte cap of
 64 KiB, and file-loader cap of 5,000,000 rows) are configurable

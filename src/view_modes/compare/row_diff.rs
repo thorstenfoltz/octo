@@ -2,14 +2,14 @@
 //! picked columns to *match* rows; the UI shows the actual row content so
 //! the user can see which records are unique to each side or shared.
 //!
-//! - **Left only** — rows whose hash is present in left but missing in right.
-//! - **Right only** — rows whose hash is present in right but missing in left.
-//! - **Shared (in both files)** — hash present in both. Each bucket can hold
+//! - **Left only** - rows whose hash is present in left but missing in right.
+//! - **Right only** - rows whose hash is present in right but missing in left.
+//! - **Shared (in both files)** - hash present in both. Each bucket can hold
 //!   multiple physical rows (duplicates within one file collapse to the same
 //!   hash); all of them are listed so the user spots the cardinality.
 //!
 //! Cross-format works because hashing sees only `CellValue::to_string`
-//! output — a CSV row and a Parquet row with the same logical content
+//! output - a CSV row and a Parquet row with the same logical content
 //! produce identical digests.
 
 use std::collections::HashMap;
@@ -55,7 +55,7 @@ pub fn render(ui: &mut egui::Ui, tab: &mut TabState, theme_mode: ThemeMode) {
         ui.label(
             RichText::new(
                 "Empty selection means \"hash every column\".\n\
-                 Column ordering matters — pick the columns in the same\n\
+                 Column ordering matters - pick the columns in the same\n\
                  order on both sides for matching semantics.",
             )
             .color(colors.text_muted)
@@ -64,7 +64,7 @@ pub fn render(ui: &mut egui::Ui, tab: &mut TabState, theme_mode: ThemeMode) {
     });
     ui.separator();
 
-    // Build hash → row-index buckets per side. Storing indices (not just
+    // Build hash -> row-index buckets per side. Storing indices (not just
     // counts) lets the result panes show the underlying row content.
     let left_hashes = collect_hash_rows(left, &tab.compare_columns_left);
     let right_hashes = collect_hash_rows(right, &tab.compare_columns_right);
@@ -88,7 +88,7 @@ pub fn render(ui: &mut egui::Ui, tab: &mut TabState, theme_mode: ThemeMode) {
     right_only.sort_by_key(|a| short_hex(a.0));
     both.sort_by_key(|a| short_hex(a.0));
 
-    // Summary line — totals upfront so the user knows the scale before
+    // Summary line - totals upfront so the user knows the scale before
     // scrolling.
     ui.horizontal(|ui| {
         ui.label(
@@ -142,7 +142,7 @@ pub fn render(ui: &mut egui::Ui, tab: &mut TabState, theme_mode: ThemeMode) {
         });
 }
 
-/// One hash → all row indices that produced it. Duplicates in one file
+/// One hash -> all row indices that produced it. Duplicates in one file
 /// collapse to the same hash and accumulate into the same Vec.
 fn collect_hash_rows(table: &DataTable, cols: &[usize]) -> HashMap<[u8; 32], Vec<usize>> {
     let mut out: HashMap<[u8; 32], Vec<usize>> = HashMap::with_capacity(table.row_count());
@@ -236,7 +236,7 @@ fn draw_single_side_bucket(
     if buckets.len() > BUCKET_DISPLAY_CAP {
         ui.label(
             RichText::new(format!(
-                "… {} more hash buckets not shown",
+                "... {} more hash buckets not shown",
                 buckets.len() - BUCKET_DISPLAY_CAP
             ))
             .color(colors.text_muted),
@@ -310,7 +310,7 @@ fn draw_shared_bucket(
     if buckets.len() > BUCKET_DISPLAY_CAP {
         ui.label(
             RichText::new(format!(
-                "… {} more hash buckets not shown",
+                "... {} more hash buckets not shown",
                 buckets.len() - BUCKET_DISPLAY_CAP
             ))
             .color(colors.text_muted),
@@ -320,7 +320,7 @@ fn draw_shared_bucket(
 
 /// Resolve which columns to render in the result rows. When the user
 /// hasn't picked any columns we'd otherwise show *all* of them, which can
-/// be unwieldy — fall back to the first 8 so the table stays readable.
+/// be unwieldy - fall back to the first 8 so the table stays readable.
 fn effective_columns(table: &DataTable, picked: &[usize]) -> Vec<usize> {
     if !picked.is_empty() {
         return picked
@@ -381,7 +381,7 @@ fn draw_rows_inline(
             );
             for &c in cols {
                 let text = match table.get(*row_idx, c) {
-                    Some(CellValue::Null) => "—".to_string(),
+                    Some(CellValue::Null) => "-".to_string(),
                     Some(v) => v.to_string(),
                     None => String::new(),
                 };
@@ -391,7 +391,7 @@ fn draw_rows_inline(
         }
         if rows.len() > 50 {
             ui.label(
-                RichText::new(format!("… {} more rows in this bucket", rows.len() - 50))
+                RichText::new(format!("... {} more rows in this bucket", rows.len() - 50))
                     .color(colors.text_muted),
             );
             ui.end_row();

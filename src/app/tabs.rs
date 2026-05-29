@@ -68,6 +68,13 @@ impl TabState {
             sql_panel_open: false,
             sql_ac_selected: 0,
             sql_ac_visible: true,
+            sql_workspace: None,
+            sql_last_query: String::new(),
+            sql_workspace_open: false,
+            sql_inspector_selection: None,
+            sql_inspector_cache: std::collections::HashMap::new(),
+            sql_workspace_tree_expanded: std::collections::HashSet::new(),
+            sql_write_back: None,
             first_row_is_header: true,
             show_column_inspector: false,
             column_inspector_sort: ColumnInspectorSort::Default,
@@ -77,7 +84,13 @@ impl TabState {
             value_frequency_col: None,
             value_frequency_top_n: Some(50),
             value_frequency_bin_numeric: true,
+            value_frequency_bins: None,
+            value_frequency_bins_buf: String::new(),
             value_frequency_size: octa::ui::settings::DialogSize::default(),
+            value_frequency_pick: false,
+            column_number_formats: std::collections::HashMap::new(),
+            column_format_col: None,
+            column_format_decimals_buf: String::new(),
             show_find_duplicates: false,
             find_duplicates_key_cols: std::collections::HashSet::new(),
             find_duplicates_mode: super::state::FindDuplicatesMode::default(),
@@ -120,7 +133,7 @@ impl TabState {
         self.table.is_modified() || self.raw_content_modified
     }
 
-    /// Ordered list of view modes that make sense for this tab — same order
+    /// Ordered list of view modes that make sense for this tab - same order
     /// as the View menu radio buttons. Used by the toolbar (gating which
     /// options are clickable) and by the `CycleViewMode` shortcut handler
     /// (advancing to the next available mode).
@@ -162,7 +175,7 @@ impl TabState {
         if has_map {
             modes.push(ViewMode::Map);
         }
-        // Chart is **not** in the View menu — it opens via the Analyse →
+        // Chart is **not** in the View menu - it opens via the Analyse ->
         // Chart toolbar button as its own dedicated tab. Adding it here
         // would let the user mode-switch a data tab into a chart, which
         // breaks the tab-identity expectation (no source_path, no readers,
@@ -177,6 +190,20 @@ impl TabState {
             modes.push(ViewMode::Compare);
         }
         modes
+    }
+
+    /// Open the Number-format dialog for `col`, seeding the decimals text
+    /// buffer from any existing format on that column.
+    pub(crate) fn open_column_format(&mut self, col: usize) {
+        self.column_format_decimals_buf = match self
+            .column_number_formats
+            .get(&col)
+            .and_then(|f| f.decimals)
+        {
+            Some(n) => n.to_string(),
+            None => String::new(),
+        };
+        self.column_format_col = Some(col);
     }
 
     pub(crate) fn title_display(&self) -> String {
@@ -208,11 +235,44 @@ impl OctaApp {
     /// The new tab gets a deep clone of the table (so subsequent edits in
     /// the source don't drift the chart), an empty `ChartConfig`, and a
     /// title derived from the source filename. Triggered by the
-    /// **Analyse → Chart** toolbar button or the `OpenChart` shortcut.
+    /// **Analyse -> Chart** toolbar button or the `OpenChart` shortcut.
     ///
     /// No-ops with a status message when there's no active table or the
-    /// table has no numeric columns — charting either is useless and the
+    /// table has no numeric columns - charting either is useless and the
     /// rfd dialog cost would be wasted.
+    /// Open the per-column Number-format dialog for the column implied by the
+    /// current selection: the first selected column, else the selected cell's
+    /// column. No-ops (with a status hint) when the target isn't numeric.
+    pub(crate) fn open_column_format_for_selection(&mut self) {
+        let tab = &mut self.tabs[self.active_tab];
+        if tab.table.col_count() == 0 {
+            return;
+        }
+        let col = tab
+            .table_state
+            .selected_cols
+            .iter()
+            .min()
+            .copied()
+            .or_else(|| tab.table_state.selected_cell.map(|(_, c)| c))
+            .filter(|&c| c < tab.table.col_count());
+        let Some(col) = col else {
+            self.status_message = Some((
+                "Select a numeric column first.".to_string(),
+                std::time::Instant::now(),
+            ));
+            return;
+        };
+        if !octa::data::is_numeric_data_type(&tab.table.columns[col].data_type) {
+            self.status_message = Some((
+                "Number format applies to numeric columns only.".to_string(),
+                std::time::Instant::now(),
+            ));
+            return;
+        }
+        tab.open_column_format(col);
+    }
+
     pub(crate) fn open_chart_tab(&mut self) {
         let Some(source) = self.tabs.get(self.active_tab) else {
             return;
@@ -241,13 +301,13 @@ impl OctaApp {
                     .map(|n| n.to_string_lossy().to_string())
             })
             .unwrap_or_else(|| source.title_display());
-        let chart_label = format!("Chart \u{2014} {source_label}");
+        let chart_label = format!("Chart - {source_label}");
 
         let default_search_mode = self.settings.default_search_mode;
         let mut new_tab = super::state::TabState::new(default_search_mode);
         new_tab.table = source.table.clone();
         // Detach from disk: a chart tab can't be saved back over its
-        // source — that would silently overwrite the user's data file.
+        // source - that would silently overwrite the user's data file.
         new_tab.table.source_path = None;
         new_tab.table.format_name = None;
         new_tab.table.structural_changes = false;
@@ -273,7 +333,7 @@ impl OctaApp {
         }
         // Take a snapshot before removal so Ctrl+Shift+T can restore it.
         // Skip wholly empty tabs (no source path, no raw content, no
-        // columns) — those would just be re-created empty.
+        // columns) - those would just be re-created empty.
         if let Some(tab) = self.tabs.get(idx) {
             let snapshot = if let Some(ref p) = tab.table.source_path {
                 Some(super::state::ClosedTabSnapshot::Path(
@@ -315,7 +375,7 @@ impl OctaApp {
     /// re-opens on next launch; unpinning removes it. Settings are saved
     /// immediately so the change survives a crash.
     ///
-    /// Pinning a scratch tab (no `source_path`) is a no-op — the UI already
+    /// Pinning a scratch tab (no `source_path`) is a no-op - the UI already
     /// greys out the menu entry for those.
     pub(crate) fn toggle_tab_pinned(&mut self, idx: usize) {
         let Some(tab) = self.tabs.get_mut(idx) else {
@@ -405,7 +465,7 @@ impl OctaApp {
                         let is_multi_selected = self.tab_multi_selection.contains(&idx);
                         let raw_label = tab.title_display();
                         // 📌 prefix marks pinned tabs at a glance. U+1F4CC,
-                        // supplementary plane — covered by the bundled
+                        // supplementary plane - covered by the bundled
                         // NotoEmoji font.
                         let label = if tab.pinned {
                             format!("\u{1f4cc} {}", raw_label)
@@ -453,7 +513,7 @@ impl OctaApp {
                                 if tab_label_resp.hovered() {
                                     ctx.set_cursor_icon(egui::CursorIcon::Default);
                                 }
-                                // Right-click context menu — "Compare with
+                                // Right-click context menu - "Compare with
                                 // active tab" only makes sense on a non-active
                                 // tab; "Pin tab" / "Unpin tab" applies to any
                                 // tab (active or not) but only file-backed
@@ -506,11 +566,11 @@ impl OctaApp {
                                         self.tab_multi_selection.clear();
                                     }
                                 }
-                                // Close button (hidden on pinned tabs — the
+                                // Close button (hidden on pinned tabs - the
                                 // user has to unpin first via the right-click
                                 // context menu). The leading spacing lives
                                 // outside the label so the response rect tightly
-                                // hugs the × glyph — that way the hover overlay
+                                // hugs the × glyph - that way the hover overlay
                                 // (painted at rect.center) sits exactly where
                                 // egui drew the original glyph and no horizontal
                                 // shift is visible on hover.

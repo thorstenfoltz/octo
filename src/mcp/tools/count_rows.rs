@@ -1,4 +1,4 @@
-//! MCP tool: `count_rows` — return the row count of a file.
+//! MCP tool: `count_rows` - return the row count of a file.
 
 use std::path::PathBuf;
 

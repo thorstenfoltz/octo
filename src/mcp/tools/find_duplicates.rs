@@ -1,4 +1,4 @@
-//! MCP tool: `find_duplicates` — rows sharing identical key-column values.
+//! MCP tool: `find_duplicates` - rows sharing identical key-column values.
 
 use std::path::PathBuf;
 

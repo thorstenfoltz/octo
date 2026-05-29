@@ -220,7 +220,7 @@ impl ThemeColors {
 
     /// Bright manga / shōnen-page palette: cream paper, ink-black text,
     /// sakura pink primary accent, sky blue hover, with warm peach hovers
-    /// and cherry-red selection — a colorful comic feel without sacrificing
+    /// and cherry-red selection - a colorful comic feel without sacrificing
     /// readability.
     pub(super) fn manga() -> Self {
         Self {
@@ -262,7 +262,7 @@ impl ThemeColors {
     }
 
     /// Gentleman palette: deep walnut and burgundy, parchment text, with
-    /// champagne-gold accents — a refined, library-after-dark feel.
+    /// champagne-gold accents - a refined, library-after-dark feel.
     pub(super) fn gentleman() -> Self {
         Self {
             // Warm dark walnut backgrounds with a hint of leather.
@@ -376,7 +376,7 @@ impl ThemeColors {
     }
 
     /// Hidden rainbow theme. Returns the Dark base palette with a placeholder
-    /// accent — the live accent is rotated per-frame in
+    /// accent - the live accent is rotated per-frame in
     /// [`super::apply_theme`] when the mode is `Rainbow`, so any caller that
     /// reads this palette directly only needs sane defaults for non-accent
     /// colors.

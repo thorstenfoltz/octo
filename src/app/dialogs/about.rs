@@ -29,7 +29,7 @@ fn author_names(raw: &str) -> String {
 /// Open `mailto:<addr>` via the platform's default URL handler. egui's
 /// built-in `hyperlink_to` routes through the `webbrowser` crate, which on
 /// some platforms ignores the `mailto:` scheme and falls back to opening
-/// the address as a web URL — so we shell out to the OS handler directly.
+/// the address as a web URL - so we shell out to the OS handler directly.
 fn open_mailto(email: &str) {
     let url = format!("mailto:{}", email);
     #[cfg(target_os = "linux")]

@@ -117,7 +117,7 @@ fn draw_row(
     let max_name_width = (rect.right() - x - ROW_PADDING_X).max(0.0);
     let mut galley = painter.layout_no_wrap(name.to_string(), font_id.clone(), text_color);
     if galley.size().x > max_name_width {
-        let ellipsis = "…";
+        let ellipsis = "...";
         // Cheap character-based truncation (not perfect for variable-width fonts
         // but good enough for a sidebar).
         let mut truncated = name.to_string();

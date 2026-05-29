@@ -63,8 +63,8 @@ of them, or clear the binding on one) before applying.
 | Extend column selection right | <kbd>Ctrl</kbd>+<kbd>→</kbd> |                                                                   |
 
 **Ctrl+click a cell** toggles it in a disjoint multi-cell selection.
-Mark / Copy / Cut then operate on every selected cell — the same
-precedence Ctrl+M follows from the keyboard.
+Mark / Copy / Cut then operate on every selected cell, following the
+same precedence Ctrl+M uses from the keyboard.
 
 ## Editing
 

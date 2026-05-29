@@ -1,7 +1,7 @@
 # `value_frequency`
 
-Count how often each value appears in **one column** of a tabular file —
-a `value_counts()` equivalent. Results are ordered most-frequent first.
+Count how often each value appears in **one column** of a tabular file.
+This is a `value_counts()` equivalent. Results are ordered most-frequent first.
 
 ## When to use
 
@@ -60,7 +60,7 @@ shortens `rows`.
 
 ## See also
 
-- [`profile`](profile.md) — stats for every column at once.
-- [`find_duplicates`](find_duplicates.md) — rows sharing key values.
-- [Value Frequency](../../usage/value-frequency.md) — the same compute
+- [`profile`](profile.md): stats for every column at once.
+- [`find_duplicates`](find_duplicates.md): rows sharing key values.
+- [Value Frequency](../../usage/value-frequency.md): the same compute
   in the GUI.

@@ -8,37 +8,48 @@ An application for viewing data files. Octa opens files in a spreadsheet-like ta
 
 📚 **Documentation:** <https://thorstenfoltz.github.io/octa/>
 
+## Preview
+
+<!-- TODO: add screenshot -->
+
+## Why Octa?
+
+One native tool to open, inspect, query, and compare data files across 20+ formats (Parquet, CSV, JSON, Excel, SQLite, DuckDB, GeoPackage, Arrow, Avro, ORC, SAS, SPSS, Stata, RDS, HDF5, NetCDF, DBF, GeoJSON, EPUB, archives, and more)
+without spinning up Python, opening a browser, or installing a heavyweight database client. Octa runs as a standalone binary on Linux, macOS, and Windows.
+
+The same binary also speaks the Model Context Protocol over stdio (`octa --mcp`), so AI assistants and automation pipelines can read local files directly through Octa instead of round-tripping data through a custom script.
+
 ## Supported Formats
 
-| Format                    | Read | Write |
-|---------------------------|------|-------|
-| Parquet                   | yes  | yes   |
-| CSV/TSV                   | yes  | yes   |
-| JSON/JSON Lines           | yes  | yes   |
-| Excel                     | yes  | yes   |
-| ODS                       | yes  | yes   |
-| Arrow IPC / Feather       | yes  | yes   |
-| Avro                      | yes  | yes   |
-| ORC                       | yes  | yes   |
-| HDF5                      | yes  | no    |
-| NetCDF v3 (.nc)           | yes  | no    |
-| SQLite                    | yes  | yes   |
-| DuckDB                    | yes  | yes   |
-| GeoPackage (.gpkg)        | yes  | yes   |
-| SAS (.sas7bdat)           | yes  | no    |
-| SPSS (.sav, .zsav)        | yes  | yes   |
-| Stata (.dta)              | yes  | yes   |
-| R (.rds, .rdata)          | yes  | no    |
-| DBF/dBase (.dbf)          | yes  | yes   |
-| XML                       | yes  | yes   |
-| TOML                      | yes  | yes   |
-| YAML                      | yes  | yes   |
-| Jupyter Notebook          | yes  | yes   |
-| Markdown                  | yes  | yes   |
-| EPUB                      | yes  | no    |
-| GeoJSON (.geojson)        | yes  | no    |
-| Archive (zip / tar / tgz) | yes  | no    |
-| Plain Text                | yes  | yes   |
+| Format                    | Read | Write | Notes                                                                                                  |
+|---------------------------|------|-------|--------------------------------------------------------------------------------------------------------|
+| Parquet                   | yes  | yes   | Lazy row loading for very large files; DuckDB-backed fallback reader.                                  |
+| CSV/TSV                   | yes  | yes   | Auto-detected delimiter; quote-aware coloured raw view.                                                |
+| JSON/JSON Lines           | yes  | yes   | Collapsible JSON Tree view with inline key / value editing.                                            |
+| Excel                     | yes  | yes   | Opens every sheet as a tab (picker above a configurable cap). `.xlsx` round-trips; calamine read path. |
+| ODS                       | yes  | yes   | Hand-rolled OpenDocument 1.2 writer.                                                                   |
+| Arrow IPC / Feather       | yes  | yes   |                                                                                                        |
+| Avro                      | yes  | yes   |                                                                                                        |
+| ORC                       | yes  | yes   |                                                                                                        |
+| HDF5                      | yes  | no    |                                                                                                        |
+| NetCDF v3 (.nc)           | yes  | no    |                                                                                                        |
+| SQLite                    | yes  | yes   | Multi-table picker; diff-based writes via rowid identity.                                              |
+| DuckDB                    | yes  | yes   | Multi-table picker; SQL Query view exposes the file as `data`.                                         |
+| GeoPackage (.gpkg)        | yes  | yes   | Multi-table picker.                                                                                    |
+| SAS (.sas7bdat)           | yes  | no    |                                                                                                        |
+| SPSS (.sav, .zsav)        | yes  | yes   |                                                                                                        |
+| Stata (.dta)              | yes  | yes   |                                                                                                        |
+| R (.rds, .rdata)          | yes  | no    | `data.frame` / `tibble` only.                                                                          |
+| DBF/dBase (.dbf)          | yes  | yes   |                                                                                                        |
+| XML                       | yes  | yes   |                                                                                                        |
+| TOML                      | yes  | yes   |                                                                                                        |
+| YAML                      | yes  | yes   | Collapsible YAML Tree view (mirrors JSON Tree).                                                        |
+| Jupyter Notebook          | yes  | yes   | Notebook view renders code + markdown cells with syntect highlighting.                                 |
+| Markdown                  | yes  | yes   | Rendered preview, Split, and Edit modes.                                                               |
+| EPUB                      | yes  | no    | EPUB Reader view, chapter-by-chapter with embedded images.                                             |
+| GeoJSON (.geojson)        | yes  | no    | Map view with OSM tile rendering or geometry-only fallback.                                            |
+| Archive (zip / tar / tgz) | yes  | no    | Read-only listing; per-entry extract-and-open action.                                                  |
+| Plain Text                | yes  | yes   | Syntect highlighting for languages without a dedicated view.                                           |
 
 Unknown file extensions are opened as plain text.
 
@@ -54,6 +65,8 @@ Unknown file extensions are opened as plain text.
 - Cell, row, and column selection with clipboard copy/paste
 - Search and filter across all columns in real time (Plain / Wildcard / Regex modes)
 - Excel-style formulas in cells (`=A1+B1`) and as the "Insert column" formula
+- Thousand separators for numeric cells with English (`1,234.56`) / European (`1.234,56`) styles, plus per-column rounding (right-click a column → **Number format…**;
+  negative decimals round before the point). Both are display-only and never change saved data
 
 ### Multiple View Modes
 
@@ -81,6 +94,7 @@ Press F4 to cycle through the available view modes for the current tab. F8 toggl
 - Insert, delete, and move rows and columns
 - Colour marking for cells, rows, and columns with six colour choices
 - Undo / Redo for cell edits, structural changes, and colour marks
+- Leading/trailing whitespace trimmed from string cells and column titles on load (configurable, with a banner listing the affected columns)
 - Unsaved-changes guards on close and file open
 - Save in the original format or export to a different one via Save As
 - **Reopen Last Closed Tab** (default **Ctrl+Shift+T**) restores accidentally-closed tabs
@@ -89,9 +103,11 @@ Press F4 to cycle through the available view modes for the current tab. F8 toggl
 ### Inspecting data
 
 - **Column Inspector** (default **Ctrl+I**) — schema-level overview of every column with types, null counts, and basic stats
-- **Value Frequency** (default **Ctrl+Shift+I**) — `value_counts()`-style top-N values for any column, with Sturges binning for numerics
+- **Value Frequency** (default **Ctrl+Shift+I**, or **Analyse → Value frequency…** with a column picker) — `value_counts()`-style top-N values for any column.
+  Numeric columns can be turned into a histogram: type a bin count (or leave it for automatic Sturges binning) and get that many equal-width ranges with their counts
 - **Schema Export** (default **F7**) — render the column list as Postgres / MySQL / SQLite / Databricks / Snowflake DDL, Pydantic v2, TypeScript interface, JSON Schema, or a Rust struct. Also available from the CLI (`octa --export-schema`) and over MCP.
-- **Chart** (default **F5** / **Analyse → Chart**) — open a new tab plotting the active table as a histogram, bar, line, scatter, or box chart via `egui_plot`. Customisable title / axis / legend / per-series colour, PNG/SVG/PDF export, log scale. See [Chart](docs/usage/chart.md).
+- **Chart** (default **F5** / **Analyse → Chart**) — open a new tab plotting the active table as a histogram, bar, line, scatter, or box chart via `egui_plot`.
+  Customisable title / axis / legend / per-series colour, PNG/SVG/PDF export, log scale. See [Chart](docs/usage/chart.md).
 
 ### Archives
 
@@ -143,6 +159,67 @@ about your local data files.
 - Date inference for text-formatted columns (CSV, JSON, Excel, etc.) with an ambiguity picker for European vs US-format dates
 - Auto-update check from GitHub releases
 - Cross-platform: Linux, macOS, and Windows
+
+## CLI & MCP Server
+
+### CLI Usage
+
+Octa ships a small CLI alongside the GUI. With no flags it launches the GUI; pass one of the action flags to run that action and exit:
+
+```bash
+octa --schema data.parquet      # print column schema
+octa --head data.csv -n 5       # preview the first rows
+octa --describe data.csv        # format + size + schema + sample in one call
+octa --help                     # full reference with worked examples
+```
+
+Action flags are mutually exclusive. The full set is documented in [`docs/cli/`](https://thorstenfoltz.github.io/octa/cli/) and via `octa --help`. Output format for table-printing actions is selectable with `-f / --format {tsv|json|csv}` (TSV default).
+
+These flags work identically across every distribution channel: a plain binary off the releases page, an `install.sh` install, the AUR package, or an AppImage.
+
+```bash
+./Octa-x86_64.AppImage --schema myfile.parquet
+```
+
+### MCP Server
+
+`octa --mcp` starts a stdio-based [Model Context Protocol](https://modelcontextprotocol.io/) server that exposes Octa's file-reading capabilities as MCP tools.
+AI assistants (Claude Desktop, Claude Code, MCP Inspector, any MCP-compatible client) and automation pipelines can then read local Parquet, CSV, DuckDB, SQLite, Excel,
+and every other supported format directly, without scripting a Python or JS shim in between.
+
+The startup banner reports the resolved defaults:
+
+```text
+$ octa --mcp
+octa --mcp ready (default response row limit: 1000, cell cap: 65536 bytes, file-loader cap: 5000000; override per-call via `limit` / `unlimited`)
+```
+
+What those defaults mean:
+
+- **Row limit (1000)** caps how many rows the *response* carries, so an AI client doesn't flood its context with millions of rows by accident.
+- **Cell cap (65,536 bytes)** guards against a single oversized BLOB or long-text cell dominating the response. Oversized cells get a `[truncated: ...]` marker pointing the model at `run_sql` to slice the value.
+- **File-loader cap (5,000,000 rows)** is the streaming-format safety net for very large files (Parquet, CSV, TSV).
+
+Every limit is overridable per call: pass `limit: 0` for an unlimited response, and `unlimited: true` on any read-bearing tool to lift the file-loader cap for that single call.
+Defaults themselves live under **Settings → MCP** and **Settings → Performance**.
+
+`octa --mcp` works with every distribution format: plain binary, `install.sh`, AUR package, and AppImage. No wrapper script and no separate install step are needed; the same binary that opens the GUI is the MCP endpoint.
+
+#### Claude Desktop config example
+
+```json
+{
+  "mcpServers": {
+    "octa": {
+      "command": "/path/to/octa",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+`/path/to/octa` can be a system-installed binary (`/usr/local/bin/octa`), a user-local install (`~/.local/bin/octa`), or an AppImage path (`/home/you/Octa-x86_64.AppImage`).
+See [`docs/mcp/setup.md`](https://thorstenfoltz.github.io/octa/mcp/setup/) for Claude Code, MCP Inspector, and other clients.
 
 ## Installation
 
@@ -267,6 +344,18 @@ Settings are stored in:
 - **Linux:** `$XDG_CONFIG_HOME/octa/settings.toml` (defaults to `~/.config/octa/settings.toml`)
 - **macOS:** `~/Library/Application Support/Octa/settings.toml`
 - **Windows:** `%APPDATA%\Octa\settings.toml`
+
+## Alternatives
+
+A factual feature comparison against tools in the adjacent space. "Yes" means the feature is available out of the box in the default free distribution; the columns are not a quality judgement and the list is not exhaustive.
+
+| Tool                | Native binary       | 20+ formats | MCP server | Chart view  | Map view | Free / OSS       |
+|---------------------|---------------------|-------------|------------|-------------|----------|------------------|
+| Octa                | yes                 | yes         | yes        | yes         | yes      | yes (MIT)        |
+| DBeaver (Community) | yes                 | no          | no         | no          | no       | yes (Apache 2.0) |
+| csvkit              | no (Python toolkit) | no          | no         | no          | no       | yes (MIT)        |
+| VisiData            | no (Python TUI)     | yes         | no         | yes (basic) | no       | yes (GPL-3.0)    |
+| TablePlus           | yes                 | no          | no         | no          | no       | no (proprietary) |
 
 ## License
 

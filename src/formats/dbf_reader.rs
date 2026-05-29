@@ -161,7 +161,7 @@ fn build_writer_for(
             "Int8" | "Int16" | "Int32" | "UInt8" | "UInt16" | "UInt32" => {
                 builder.add_integer_field(field_name)
             }
-            // i64/u64 don't fit in DBF Integer (i32) — store as wide Numeric.
+            // i64/u64 don't fit in DBF Integer (i32) - store as wide Numeric.
             "Int64" | "UInt64" => builder.add_numeric_field(field_name, 20, 0),
             "Float32" | "Float64" => builder.add_numeric_field(field_name, 20, 8),
             "Date" => builder.add_date_field(field_name),
@@ -172,7 +172,7 @@ fn build_writer_for(
                     col.name
                 ));
             }
-            // Utf8, Nested, anything else — write as character string.
+            // Utf8, Nested, anything else - write as character string.
             // 254 is the max single-field length in dBase (length is u8).
             _ => builder.add_character_field(field_name, 254),
         };

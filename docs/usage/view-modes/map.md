@@ -4,7 +4,7 @@ For `.geojson` files Octa shows a **slippy map**: OpenStreetMap
 tiles in the background, feature geometries painted on top. Pan,
 zoom, and switch between tiled and geometry-only rendering.
 
-<!-- SCREENSHOT: map-view-tiles.png — Map view with OSM tiles loaded, several feature geometries painted on top (e.g. a polygon outlining a district, some points marking cities, a line between two points). Default steel-blue palette. -->
+<!-- SCREENSHOT: map-view-tiles.png: Map view with OSM tiles loaded, several feature geometries painted on top (e.g. a polygon outlining a district, some points marking cities, a line between two points). Default steel-blue palette. -->
 ![Map view with OSM tiles](../../assets/screenshots/map-view-tiles.png){ .screenshot-placeholder }
 
 ## What you're looking at
@@ -12,7 +12,7 @@ zoom, and switch between tiled and geometry-only rendering.
 Two independent layers, stacked:
 
 1. **The basemap** is OSM raster tiles, covering the whole world at
-   zoom levels 0–19. Walkers (the egui slippy-map widget) fetches
+   zoom levels 0-19. Walkers (the egui slippy-map widget) fetches
    the 256×256 PNG tiles for whatever region is visible and stitches
    them into the background.
 2. **The GeoJSON layer** is the feature geometries from your file,

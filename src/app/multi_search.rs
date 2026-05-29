@@ -1,19 +1,19 @@
 //! Cross-tab and directory grep. Drives the search panel that lives
-//! between the SQL panel and the central table panel — the actual
+//! between the SQL panel and the central table panel - the actual
 //! cell-walking lives in `octa::data::multi_search` so the algorithm
 //! stays unit-testable.
 //!
 //! Scopes:
 //!
-//! * **All Open Tabs** — runs synchronously on the UI thread. Every loaded
+//! * **All Open Tabs** - runs synchronously on the UI thread. Every loaded
 //!   tab is a few hundred MB of data at most, and a `RowMatcher` over the
 //!   table is faster than the cost of cloning the data into a worker.
-//! * **Directory** — runs on a background thread. The thread walks one
+//! * **Directory** - runs on a background thread. The thread walks one
 //!   directory level, opens each readable file via the format registry,
 //!   feeds cells to the matcher, and streams hits back through an
-//!   `Arc<Mutex<…>>` so the UI can paint them as they arrive.
+//!   `Arc<Mutex<...>>` so the UI can paint them as they arrive.
 //!
-//! The active-tab case keeps using the existing per-tab search bar — see
+//! The active-tab case keeps using the existing per-tab search bar - see
 //! `OctaApp::recompute_filter` and the `FocusSearch` shortcut.
 
 use std::path::{Path, PathBuf};
@@ -59,7 +59,7 @@ pub(crate) struct MultiSearchState {
     pub(crate) mode: SearchMode,
     pub(crate) scope: MultiSearchScope,
     pub(crate) directory: Option<PathBuf>,
-    /// Live hits — written by either the UI thread (AllOpenTabs scope) or
+    /// Live hits - written by either the UI thread (AllOpenTabs scope) or
     /// the background worker (Directory scope), read every frame by the
     /// panel renderer. Capped at `MAX_HITS_TOTAL` so a runaway regex on a
     /// huge dataset doesn't pin the UI thread shoving labels.
@@ -134,7 +134,7 @@ impl OctaApp {
     /// Toggle the multi-search panel and arm the focus-on-open flag.
     pub(crate) fn toggle_multi_search(&mut self) {
         if self.multi_search.visible {
-            // Cancel any in-flight scan as we hide the panel — running it
+            // Cancel any in-flight scan as we hide the panel - running it
             // unattended while users can't see results just chews CPU.
             self.cancel_multi_search();
             self.multi_search.visible = false;
@@ -149,7 +149,7 @@ impl OctaApp {
     pub(crate) fn cancel_multi_search(&mut self) {
         self.multi_search.cancel.store(true, Ordering::Relaxed);
         if let Some(handle) = self.multi_search.handle.take() {
-            // Don't block forever — the worker checks `cancel` between
+            // Don't block forever - the worker checks `cancel` between
             // files and should exit promptly.
             let _ = handle.join();
         }
@@ -396,7 +396,7 @@ impl OctaApp {
                 ui.horizontal(|ui| {
                     let query_edit = egui::TextEdit::singleline(&mut self.multi_search.query)
                         .desired_width(ui.available_width() - 220.0)
-                        .hint_text("Search across all open tabs or a directory…");
+                        .hint_text("Search across all open tabs or a directory...");
                     let resp = ui.add(query_edit);
                     if std::mem::take(&mut self.multi_search.focus_query) {
                         resp.request_focus();
@@ -426,7 +426,7 @@ impl OctaApp {
                             .map(|p| p.to_string_lossy().to_string())
                             .unwrap_or_else(|| "(none picked)".to_string());
                         ui.label(egui::RichText::new(label).color(colors.text_secondary));
-                        if ui.button("Pick directory…").clicked() {
+                        if ui.button("Pick directory...").clicked() {
                             pick_dir_clicked = true;
                         }
                     });
@@ -450,7 +450,7 @@ impl OctaApp {
                     if running && self.multi_search.scope == MultiSearchScope::Directory {
                         ui.add(egui::Spinner::new().size(12.0));
                         ui.label(format!(
-                            "Scanning {} / {} files — {} hit(s)",
+                            "Scanning {} / {} files - {} hit(s)",
                             scanned, total, hit_count
                         ));
                     } else if self.multi_search.scan_completed {
@@ -511,7 +511,7 @@ impl OctaApp {
             .show_header(ui, |ui| {
                 ui.colored_label(
                     colors.warning,
-                    format!("{} file(s) skipped — click to expand", skipped.len()),
+                    format!("{} file(s) skipped - click to expand", skipped.len()),
                 );
             })
             .body(|ui| {
@@ -531,7 +531,7 @@ impl OctaApp {
                                     size_bytes,
                                     cap_bytes,
                                 } => format!(
-                                    "{} — {} MB exceeds {} MB cap",
+                                    "{} - {} MB exceeds {} MB cap",
                                     name,
                                     size_bytes / (1024 * 1024),
                                     cap_bytes / (1024 * 1024),
@@ -543,12 +543,12 @@ impl OctaApp {
                                     let trimmed = msg.lines().next().unwrap_or(msg);
                                     let short = if trimmed.chars().count() > 120 {
                                         let mut s: String = trimmed.chars().take(120).collect();
-                                        s.push('…');
+                                        s.push_str("...");
                                         s
                                     } else {
                                         trimmed.to_string()
                                     };
-                                    format!("{} — {}", name, short)
+                                    format!("{} - {}", name, short)
                                 }
                             };
                             ui.label(detail)
@@ -561,7 +561,7 @@ impl OctaApp {
     fn render_multi_search_results(&mut self, ui: &mut egui::Ui) {
         let colors = ui::theme::ThemeColors::for_mode(self.theme_mode);
         // Snapshot hits so we drop the lock before any UI interaction
-        // re-enters borrowing the app. Cheap clone — hits are small structs.
+        // re-enters borrowing the app. Cheap clone - hits are small structs.
         let hits: Vec<MultiSearchHit> = self
             .multi_search
             .results
@@ -575,7 +575,7 @@ impl OctaApp {
             .show(ui, |ui| {
                 for hit in &hits {
                     let label = format!(
-                        "{} · row {} · {} — {}",
+                        "{} | row {} | {} - {}",
                         hit.source_label,
                         hit.row + 1,
                         hit.column_name,

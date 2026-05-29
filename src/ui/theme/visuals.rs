@@ -1,8 +1,8 @@
 //! Per-theme egui [`Style`] tweaks and background painters.
 //!
 //! Split out of [`super`] purely to keep the theme code navigable. Two
-//! dispatchers — [`apply_theme_decoration`] (style overrides) and
-//! [`paint_background_decoration`] (background art) — both match on
+//! dispatchers - [`apply_theme_decoration`] (style overrides) and
+//! [`paint_background_decoration`] (background art) - both match on
 //! [`ThemeMode`] and call into the per-theme builder below. Light / Dark /
 //! Rainbow are decoration-free; the rest each pair an `apply_*_decoration`
 //! style tweak with a matching `paint_*_background` painter.
@@ -15,12 +15,12 @@ use super::{ThemeColors, ThemeMode};
 /// widths, hover expansion) on top of the colorized base style. Light/Dark
 /// keep the egui defaults.
 ///
-/// IMPORTANT — egui aliases `RichText::strong()` text color to
+/// IMPORTANT - egui aliases `RichText::strong()` text color to
 /// `widgets.active.fg_stroke.color`. That color must be readable on **both**
 /// the panel background (where strong text appears in headings, Settings
 /// section titles, Markdown headings) and the active button fill. If the
 /// active fill is too pale/saturated, darken it instead of brightening the
-/// fg_stroke — otherwise strong text everywhere becomes invisible.
+/// fg_stroke - otherwise strong text everywhere becomes invisible.
 pub(super) fn apply_theme_decoration(style: &mut Style, mode: ThemeMode, colors: &ThemeColors) {
     match mode {
         ThemeMode::Light | ThemeMode::Dark | ThemeMode::Rainbow => {}
@@ -37,7 +37,7 @@ pub(super) fn apply_theme_decoration(style: &mut Style, mode: ThemeMode, colors:
 
 fn apply_manga_decoration(style: &mut Style, colors: &ThemeColors) {
     // "Speech bubble" buttons: pure white fill, thick ink border, very rounded.
-    // Hover/active flip to sakura pink with **ink** text — ink-on-pink stays
+    // Hover/active flip to sakura pink with **ink** text - ink-on-pink stays
     // legible and doubles as a workable strong-text color on the cream panel.
     let radius = CornerRadius::same(12);
     let ink = colors.text_primary;
@@ -95,7 +95,7 @@ fn apply_manga_decoration(style: &mut Style, colors: &ThemeColors) {
 
 fn apply_nord_decoration(style: &mut Style, colors: &ThemeColors) {
     // Frosted-glass Scandinavian panels: gently rounded, thin frost-blue
-    // borders, soft hover halo. Less aggressive than Manga — Nord is about
+    // borders, soft hover halo. Less aggressive than Manga - Nord is about
     // calm minimalism, not pop.
     let radius = CornerRadius::same(8);
     let frost = Color32::from_rgb(0xd8, 0xde, 0xe9); // snow text color
@@ -139,7 +139,7 @@ fn apply_nord_decoration(style: &mut Style, colors: &ThemeColors) {
 
 fn apply_dracula_decoration(style: &mut Style, colors: &ThemeColors) {
     // Cyber-gothic: sharp 4px corners, neon purple borders, glowing pink
-    // hover. Thin, cold, edgy — feels like a terminal in a vampire club.
+    // hover. Thin, cold, edgy - feels like a terminal in a vampire club.
     let radius = CornerRadius::same(4);
     let neon_border = Stroke::new(1.5, colors.accent);
     let pink_border = Stroke::new(2.0, colors.accent_hover);
@@ -208,7 +208,7 @@ fn apply_gruvbox_decoration(style: &mut Style, colors: &ThemeColors) {
     v.widgets.hovered.expansion = 1.5;
 
     v.widgets.active.corner_radius = radius;
-    // Burnt-orange — light text reads well, plus this is the strong-text
+    // Burnt-orange - light text reads well, plus this is the strong-text
     // color so it must read on dark panel bg too (cream-ish does).
     v.widgets.active.bg_fill = Color32::from_rgb(0xaf, 0x6f, 0x1c);
     v.widgets.active.weak_bg_fill = Color32::from_rgb(0xaf, 0x6f, 0x1c);
@@ -301,7 +301,7 @@ fn apply_gentleman_decoration(style: &mut Style, colors: &ThemeColors) {
     v.widgets.hovered.expansion = 1.5;
 
     v.widgets.active.corner_radius = radius;
-    // Deep walnut accent — gold text reads on it, and gold is the strong-text
+    // Deep walnut accent - gold text reads on it, and gold is the strong-text
     // color so it works on dark walnut panel bg too.
     v.widgets.active.bg_fill = Color32::from_rgb(0x4a, 0x35, 0x1f);
     v.widgets.active.weak_bg_fill = Color32::from_rgb(0x4a, 0x35, 0x1f);
@@ -364,7 +364,7 @@ fn apply_deep_sea_decoration(style: &mut Style, colors: &ThemeColors) {
 
 fn apply_frost_decoration(style: &mut Style, colors: &ThemeColors) {
     // Crisp, near-monochrome ice palette. Slightly larger corners, very thin
-    // borders, and almost no hover expansion — keep it pristine.
+    // borders, and almost no hover expansion - keep it pristine.
     let radius = CornerRadius::same(8);
     let rim = Stroke::new(0.8, colors.border);
     let chill = Stroke::new(1.5, colors.accent);
@@ -411,7 +411,7 @@ fn apply_frost_decoration(style: &mut Style, colors: &ThemeColors) {
 
 /// Paint the per-theme background decoration onto `painter` clipped to `rect`.
 /// Called by the central panel before rendering content, so widgets sit on
-/// top. Themes without a decoration are a no-op — this is the *only* place
+/// top. Themes without a decoration are a no-op - this is the *only* place
 /// background graphics live; it keeps the renderer thin and theme-aware.
 pub fn paint_background_decoration(painter: &egui::Painter, rect: egui::Rect, mode: ThemeMode) {
     match mode {
@@ -428,7 +428,7 @@ pub fn paint_background_decoration(painter: &egui::Painter, rect: egui::Rect, mo
 
 fn paint_manga_background(painter: &egui::Painter, rect: egui::Rect) {
     // Layer 1: halftone screentone. Triangular lattice (offset every other
-    // row) of small ink dots — classic manga screen-tone texture. Stronger
+    // row) of small ink dots - classic manga screen-tone texture. Stronger
     // than a wallpaper hint; still pales out behind text.
     const STEP: f32 = 16.0;
     const RADIUS: f32 = 1.4;
@@ -443,11 +443,11 @@ fn paint_manga_background(painter: &egui::Painter, rect: egui::Rect) {
             painter.circle_filled(egui::pos2(x, y), RADIUS, dot_color);
             x += STEP;
         }
-        y += STEP * 0.866; // sin(60°) — equilateral spacing.
+        y += STEP * 0.866; // sin(60°) - equilateral spacing.
         row_idx += 1;
     }
 
-    // Layer 2: speed-line burst from the top-right corner — the "action
+    // Layer 2: speed-line burst from the top-right corner - the "action
     // panel" cue. Lines fan into a quadrant pointing toward the bottom-left,
     // tapering off well before content density is hit. Very faint so it
     // reads as decoration, not noise.
@@ -463,7 +463,7 @@ fn paint_manga_background(painter: &egui::Painter, rect: egui::Rect) {
         let len_jitter = 0.55 + 0.45 * ((i * 7) % 10) as f32 / 10.0;
         let len = max_len * len_jitter;
         let end = origin + egui::vec2(angle.cos() * len, angle.sin() * len);
-        // Slightly thicker at the origin, thinner at the tip — emulate brush
+        // Slightly thicker at the origin, thinner at the tip - emulate brush
         // taper with a single straight segment by varying stroke width per
         // line index.
         let width = 0.6 + 0.4 * (1.0 - t);
@@ -472,7 +472,7 @@ fn paint_manga_background(painter: &egui::Painter, rect: egui::Rect) {
 }
 
 fn paint_nord_background(painter: &egui::Painter, rect: egui::Rect) {
-    // Aurora bands: three soft horizontal stripes at varying alpha — a nod to
+    // Aurora bands: three soft horizontal stripes at varying alpha - a nod to
     // Nord's polar inspiration without obscuring content. The bands fade in
     // and out via piecewise-linear alpha so the seam isn't a hard line.
     let bands = [
@@ -514,7 +514,7 @@ fn paint_nord_background(painter: &egui::Painter, rect: egui::Rect) {
 }
 
 fn paint_dracula_background(painter: &egui::Painter, rect: egui::Rect) {
-    // CRT scanlines + faint vertical neon glow on the right edge — a slightly
+    // CRT scanlines + faint vertical neon glow on the right edge - a slightly
     // cyberpunk vibe without becoming visual noise.
     let line_color = Color32::from_rgba_unmultiplied(0x0a, 0x06, 0x10, 120);
     let mut y = rect.top();
@@ -526,7 +526,7 @@ fn paint_dracula_background(painter: &egui::Painter, rect: egui::Rect) {
         y += 3.0;
     }
 
-    // Right-edge neon glow (purple → pink).
+    // Right-edge neon glow (purple -> pink).
     let glow_w = 60.0_f32.min(rect.width() * 0.25);
     let n = 30;
     for i in 0..n {
@@ -564,7 +564,7 @@ fn paint_gruvbox_background(painter: &egui::Painter, rect: egui::Rect) {
 }
 
 fn paint_gentleman_background(painter: &egui::Painter, rect: egui::Rect) {
-    // Diamond / lozenge lattice in faint champagne gold — old-world wallpaper
+    // Diamond / lozenge lattice in faint champagne gold - old-world wallpaper
     // without competing for the reader's attention. Diagonals only, drawn at
     // wide spacing so the eye reads "pattern" not "noise".
     let line_color = Color32::from_rgba_unmultiplied(0xc8, 0x9b, 0x3c, 14);
@@ -579,7 +579,7 @@ fn paint_gentleman_background(painter: &egui::Painter, rect: egui::Rect) {
         painter.line_segment([p1, p2], stroke);
         start += step;
     }
-    // Down-left diagonals — same spacing, opposite slope, completes the
+    // Down-left diagonals - same spacing, opposite slope, completes the
     // lozenge mesh.
     let mut start = rect.left() - rect.height();
     while start < end {
@@ -592,7 +592,7 @@ fn paint_gentleman_background(painter: &egui::Painter, rect: egui::Rect) {
 
 fn paint_deep_sea_background(painter: &egui::Painter, rect: egui::Rect) {
     // Slow caustic-style horizontal bands rising from the depths. Very faint
-    // — readability of dark text on dark navy beats decoration.
+    // - readability of dark text on dark navy beats decoration.
     let bands = [
         (
             0.20_f32,

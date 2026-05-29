@@ -262,7 +262,7 @@ pub enum ShortcutAction {
     OpenColumnInspector,
     /// Open the Excel-style Column Filter dialog for the active tab. The
     /// Search menu's entry deliberately omits this shortcut from its label
-    /// (the binding is discoverable via Settings → Shortcuts).
+    /// (the binding is discoverable via Settings -> Shortcuts).
     OpenColumnFilter,
     /// Cycle to the next available view mode for the active tab. The cycle
     /// order matches the View menu (Table, Raw, Markdown, Notebook,
@@ -272,7 +272,7 @@ pub enum ShortcutAction {
     CycleViewMode,
     /// Toggle session-only read-only mode. Disables every editing path
     /// (cell edits, structural changes, marks, undo/redo, cut/paste,
-    /// SQL DML). Persists for the current session only — every launch
+    /// SQL DML). Persists for the current session only - every launch
     /// starts editable.
     ToggleReadOnly,
     /// Resize every column in the active table to its best-fit width
@@ -280,7 +280,7 @@ pub enum ShortcutAction {
     /// by double-clicking the header seam between two columns, applied
     /// across the whole table.
     FitAllColumns,
-    /// Reopen the most-recently-closed tab. Stack-based — repeated
+    /// Reopen the most-recently-closed tab. Stack-based - repeated
     /// triggers walk back through close history (capacity 10). No-op
     /// when the close stack is empty.
     ReopenLastClosedTab,
@@ -290,26 +290,26 @@ pub enum ShortcutAction {
     /// Right side, and the active tab switches into `ViewMode::Compare`.
     CompareSelectedTabs,
     /// Open the Value Frequency dialog for the column of the currently
-    /// selected cell — `df.value_counts()` for the active column. Falls
+    /// selected cell - `df.value_counts()` for the active column. Falls
     /// back to the first column when no cell is selected. Also reachable
-    /// via the column-header right-click → "Value frequency…" entry.
+    /// via the column-header right-click -> "Value frequency..." entry.
     ColumnValueFrequency,
     /// Open the Find Duplicates dialog for the active tab. The dialog
     /// seeds its key from the currently selected column or cell. Also
-    /// reachable via **Search → Find duplicates…**.
+    /// reachable via **Search -> Find duplicates...**.
     FindDuplicates,
     /// Open the Schema Export dialog. The dialog itself lets the user
     /// pick which of the seven targets (Postgres / MySQL / SQLite /
     /// Pydantic v2 / TypeScript / JSON Schema / Rust) to render, so a
-    /// single key is enough. Also reachable via **File → Export schema…**.
+    /// single key is enough. Also reachable via **File -> Export schema...**.
     ExportSchema,
     /// Open the cross-tab + directory multi-search panel. The active-tab
-    /// search bar (`Ctrl+F`) is unchanged — multi-search adds scope =
+    /// search bar (`Ctrl+F`) is unchanged - multi-search adds scope =
     /// All Open Tabs or Directory and a results list. Reachable via
-    /// **Search → Multi-search…**.
+    /// **Search -> Multi-search...**.
     MultiSearch,
     /// Open a Chart tab for the active table. Equivalent to clicking
-    /// **Analyse → Chart** in the toolbar. The new tab is single-mode
+    /// **Analyse -> Chart** in the toolbar. The new tab is single-mode
     /// (`ViewMode::Chart`), holds a clone of the source table, and
     /// exposes the chart-kind / column / styling / export controls.
     OpenChart,
@@ -329,7 +329,7 @@ impl ShortcutAction {
             Self::NewFile => "New file",
             Self::OpenFile => "Open file",
             Self::SaveFile => "Save file",
-            Self::SaveFileAs => "Save file as…",
+            Self::SaveFileAs => "Save file as...",
             Self::ReloadFile => "Reload file from disk",
             Self::FocusSearch => "Focus search box",
             Self::ToggleFindReplace => "Toggle find & replace",
@@ -374,8 +374,8 @@ impl ShortcutAction {
             Self::ReopenLastClosedTab => "Reopen last closed tab",
             Self::CompareSelectedTabs => "Compare selected tabs",
             Self::ColumnValueFrequency => "Show column value frequency",
-            Self::FindDuplicates => "Find duplicate rows…",
-            Self::ExportSchema => "Export schema…",
+            Self::FindDuplicates => "Find duplicate rows...",
+            Self::ExportSchema => "Export schema...",
             Self::MultiSearch => "Open multi-search panel",
             Self::OpenChart => "Open chart tab",
             Self::ScrollPageUp => "Scroll up one page",
@@ -442,12 +442,12 @@ impl ShortcutAction {
             Self::ExportSchema => KeyCombo::plain(Key::F7),
             // F6 mirrors the feature ID (v3 batch). Ctrl+Shift+F is
             // already the column-filter shortcut and Ctrl+F is the
-            // active-tab search — both useful enough to keep.
+            // active-tab search - both useful enough to keep.
             Self::MultiSearch => KeyCombo::plain(Key::F6),
-            // F5 is the only free F-key in the (F4–F9) cluster after the
+            // F5 is the only free F-key in the (F4-F9) cluster after the
             // v3 batch; "refresh" semantics also map naturally to "re-plot".
             Self::OpenChart => KeyCombo::plain(Key::F5),
-            // Ctrl+PageUp / Ctrl+PageDown — the spreadsheet convention
+            // Ctrl+PageUp / Ctrl+PageDown - the spreadsheet convention
             // (Excel, LibreOffice) for paging through long tables.
             Self::ScrollPageUp => KeyCombo::ctrl(Key::PageUp),
             Self::ScrollPageDown => KeyCombo::ctrl(Key::PageDown),
@@ -455,7 +455,7 @@ impl ShortcutAction {
     }
 }
 
-/// Map of action → binding. Missing entries fall back to the default combo,
+/// Map of action -> binding. Missing entries fall back to the default combo,
 /// so older settings files continue to pick up new actions automatically.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Shortcuts {

@@ -16,6 +16,23 @@ by format family; this page covers what to expect for each.
 The status bar shows a `*` next to the tab name when a tab has
 unsaved changes.
 
+## Rounding on save
+
+[Per-column number formats](table-view.md#number-display-separators-and-rounding)
+are display-only: the in-memory table keeps full precision. If you set
+a rounding format (fixed decimals) on any column and then **Save** or
+**Save As**, Octa asks how the file should be written:
+
+- **Save rounded values** writes the rounded numbers shown
+  in the table.
+- **Save full precision** writes the original, un-rounded
+  numbers.
+- **Cancel** aborts the save.
+
+Either way the in-memory table stays at full precision, so the choice
+only affects the bytes on disk. Tabs without a rounding format save
+directly with no prompt.
+
 ## File-format families
 
 ### Text formats (CSV / TSV / JSON / JSONL / XML / TOML / YAML / Markdown / Plain Text)
@@ -52,9 +69,12 @@ Whole-workbook rewrite via `rust_xlsxwriter`. The current table
 becomes the first (and only) worksheet.
 
 Excel **read** supports `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.xlm`
-(via `calamine`). Excel **write** only emits `.xlsx` structure,
-since `rust_xlsxwriter` can't write the older formats. Save legacy
-workbooks as `.xlsx` to round-trip them through Octa.
+(via `calamine`) and opens **every sheet** of a multi-sheet workbook
+(see [Supported Formats](../getting-started/supported-formats.md#excel-multi-sheet-workbooks)).
+Excel **write** only emits `.xlsx` structure, since `rust_xlsxwriter`
+can't write the older formats, and writes the **active tab's single
+sheet**, since there's no multi-sheet write. Save legacy workbooks as
+`.xlsx` to round-trip them through Octa.
 
 ### OpenDocument Spreadsheet (`.ods`)
 

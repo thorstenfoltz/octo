@@ -107,7 +107,7 @@ impl OctaApp {
                 }
             }
         }
-        // Only select all table rows when no TextEdit has focus — otherwise
+        // Only select all table rows when no TextEdit has focus - otherwise
         // Ctrl+A should scope to the text editor (SQL, raw, search bars, etc.)
         // and leave the table alone.
         let text_edit_focused = ctx
@@ -129,7 +129,7 @@ impl OctaApp {
                     .insert(r);
             }
         }
-        // Copy / Cut / Paste — handled inside `render_central_panel` so SQL
+        // Copy / Cut / Paste - handled inside `render_central_panel` so SQL
         // editor, raw text editor, search bar, and any other earlier-rendered
         // TextEdits consume the clipboard events first. This avoids the
         // "Ctrl+V into the SQL editor also pastes into the table" bug.
@@ -143,7 +143,7 @@ impl OctaApp {
             self.export_sql_result();
         }
 
-        // ZoomIn also accepts Ctrl+Equals in addition to the user's binding —
+        // ZoomIn also accepts Ctrl+Equals in addition to the user's binding -
         // on US layouts Ctrl++ is typed as Ctrl+= by the keyboard driver.
         let zoom_equals_fallback = shortcuts.combo(SA::ZoomIn).key == Some(egui::Key::Plus)
             && ctx.input(|i| {
@@ -275,7 +275,7 @@ impl OctaApp {
             self.tabs[self.active_tab].sql_panel_open = !self.tabs[self.active_tab].sql_panel_open;
         }
 
-        // Undo / Redo / Mark / OpenSettings / OpenDocumentation — gated on no
+        // Undo / Redo / Mark / OpenSettings / OpenDocumentation - gated on no
         // TextEdit being focused so Ctrl+Z inside the SQL editor / raw editor
         // / search bar undoes *text*, not the table, and so the F-key dialog
         // shortcuts don't pop a window out from under the user mid-typing.
@@ -338,17 +338,21 @@ impl OctaApp {
             if action_fired(SA::ColumnValueFrequency) {
                 let tab = &mut self.tabs[self.active_tab];
                 if tab.table.col_count() > 0 {
-                    // Prefer the column of the selected cell; fall back to the
-                    // first column. Lets the shortcut be useful even without
-                    // a click, mirroring how Ctrl+I (inspector) works.
-                    let col = tab
+                    // Prefer the column of the selected cell. With no cell
+                    // selected we don't know which column the user means, so
+                    // open the column picker instead of guessing column 0.
+                    match tab
                         .table_state
                         .selected_cell
                         .map(|(_, c)| c)
                         .filter(|&c| c < tab.table.col_count())
-                        .unwrap_or(0);
-                    tab.value_frequency_col = Some(col);
-                    tab.value_frequency_size = octa::ui::settings::DialogSize::default();
+                    {
+                        Some(col) => {
+                            tab.value_frequency_col = Some(col);
+                            tab.value_frequency_size = octa::ui::settings::DialogSize::default();
+                        }
+                        None => tab.value_frequency_pick = true,
+                    }
                 }
             }
             if action_fired(SA::ExportSchema) {

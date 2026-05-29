@@ -16,7 +16,7 @@
 //! ## Extension
 //!
 //! The reader claims **only `.geojson`**. `.json` is intentionally left to
-//! `JsonReader` — auto-detecting "this `.json` is actually a
+//! `JsonReader` - auto-detecting "this `.json` is actually a
 //! FeatureCollection" would conflict with the registry's
 //! first-match-by-extension rule. A future enhancement could expose a
 //! "Reopen as GeoJSON" menu item for `.json` tabs whose root parses as a
@@ -52,7 +52,7 @@ pub struct GeoJsonExtras {
 #[derive(Debug, Clone)]
 pub struct MapFeature {
     /// `geo-types` geometry. `None` for features with a null/missing
-    /// geometry field — they still get a row in the table (with empty
+    /// geometry field - they still get a row in the table (with empty
     /// `__geometry`) so property filtering doesn't drop them.
     pub geometry: Option<GeoGeometry<f64>>,
 }
@@ -116,7 +116,7 @@ pub fn read_with_features(path: &Path) -> Result<(DataTable, GeoJsonExtras)> {
 
     // Build the column metadata. Leading `__geometry` (WKT) then all
     // property keys, all typed as `Utf8`. We don't try to infer numeric
-    // types from values — GeoJSON properties are heterogeneous and any
+    // types from values - GeoJSON properties are heterogeneous and any
     // inference would surprise users on mixed columns.
     let mut columns: Vec<ColumnInfo> = Vec::with_capacity(1 + property_columns.len());
     columns.push(ColumnInfo {
@@ -187,7 +187,7 @@ pub fn read_with_features(path: &Path) -> Result<(DataTable, GeoJsonExtras)> {
 }
 
 /// Convert a `GeometryValue` to its WKT serialisation. `GeometryCollection`
-/// values stringify each member separately and join with `; ` — strict WKT
+/// values stringify each member separately and join with `; ` - strict WKT
 /// has a `GEOMETRYCOLLECTION(...)` syntax for these but `wkt::ToWkt` only
 /// implements it for `geo_types::GeometryCollection`, which we don't build
 /// here. Returns `None` for empty/uninhabited geometries.
@@ -196,7 +196,7 @@ fn geometry_to_wkt(value: &GeometryValue) -> Option<String> {
         return Some(geo.wkt_string());
     }
     // `GeometryCollection` is the case `try_from` can fail on (the
-    // geojson → geo-types conversion bails when the collection nests).
+    // geojson -> geo-types conversion bails when the collection nests).
     if let GeometryValue::GeometryCollection { geometries } = value {
         let parts: Vec<String> = geometries
             .iter()

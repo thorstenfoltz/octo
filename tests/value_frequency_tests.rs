@@ -143,6 +143,47 @@ fn integer_column_with_sturges_bins_groups_into_ranges() {
 }
 
 #[test]
+fn integer_column_with_custom_bin_count() {
+    let cells: Vec<CellValue> = (1..=100).map(CellValue::Int).collect();
+    let t = table_with_column("Int64", cells);
+    let r = compute_value_frequency(&t, 0, None, BinningMode::Custom(5)).unwrap();
+    assert!(r.binned);
+    // Exactly 5 bins (all non-empty for a uniform 1..=100 spread).
+    assert_eq!(r.rows.len(), 5);
+    let total: usize = r.rows.iter().map(|r| r.count).sum();
+    assert_eq!(total, 100);
+}
+
+#[test]
+fn custom_bins_keep_empty_buckets_in_range_order() {
+    // Clustered data: two values at 0, one at 100. With 10 bins the result is
+    // 10 rows (one per range, most empty) in ascending range order - NOT a
+    // collapsed "only occupied buckets" list.
+    let cells = vec![CellValue::Int(0), CellValue::Int(0), CellValue::Int(100)];
+    let t = table_with_column("Int64", cells);
+    let r = compute_value_frequency(&t, 0, None, BinningMode::Custom(10)).unwrap();
+    assert!(r.binned);
+    assert_eq!(r.rows.len(), 10, "requesting 10 bins yields 10 rows");
+    // First bin holds the two zeros; last bin holds the 100; middle bins empty.
+    assert_eq!(r.rows[0].count, 2);
+    assert_eq!(r.rows[9].count, 1);
+    let middle_total: usize = r.rows[1..9].iter().map(|row| row.count).sum();
+    assert_eq!(middle_total, 0, "middle bins are empty but still present");
+    let total: usize = r.rows.iter().map(|row| row.count).sum();
+    assert_eq!(total, 3);
+}
+
+#[test]
+fn custom_bin_count_clamped_to_at_least_one() {
+    let cells: Vec<CellValue> = (1..=10).map(CellValue::Int).collect();
+    let t = table_with_column("Int64", cells);
+    let r = compute_value_frequency(&t, 0, None, BinningMode::Custom(0)).unwrap();
+    assert!(r.binned);
+    assert_eq!(r.rows.len(), 1);
+    assert_eq!(r.rows[0].count, 10);
+}
+
+#[test]
 fn binning_with_all_equal_values_collapses_to_one_bucket() {
     let cells: Vec<CellValue> = (0..20).map(|_| CellValue::Int(42)).collect();
     let t = table_with_column("Int64", cells);
