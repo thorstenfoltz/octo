@@ -22,7 +22,7 @@ const PANDAS_DEFAULT_INDEX_NAMES: &[&str] = &["__index_level_0__"];
 /// Inspect Arrow schema metadata for pandas' `index_columns` list and
 /// return the column names that should be hidden from the user. pandas
 /// writes a JSON blob under the key `pandas`; `index_columns` is the
-/// relevant array — entries are either strings (column names) or
+/// relevant array - entries are either strings (column names) or
 /// `{kind: "range"}` objects (auto-generated index, lives only in the
 /// metadata, no Arrow column). The defaults at
 /// [`PANDAS_DEFAULT_INDEX_NAMES`] are always included so missing /
@@ -46,7 +46,7 @@ fn pandas_index_columns(metadata: &HashMap<String, String>) -> HashSet<String> {
             out.insert(name.to_string());
         }
         // Object form (`{"kind": "range", ...}`) has no matching Arrow
-        // column on disk, so nothing to filter — pandas drops the data
+        // column on disk, so nothing to filter - pandas drops the data
         // for the range index entirely.
     }
     out
@@ -120,7 +120,7 @@ fn read_via_arrow(path: &Path) -> Result<DataTable> {
     // Pandas writes its row-index as a regular column (`__index_level_0__`
     // by default, or a named column listed under the schema's `pandas`
     // metadata key). Strip those columns from both the visible schema
-    // and the per-row data — they're an artefact of the writer, not user
+    // and the per-row data - they're an artefact of the writer, not user
     // data, and surfacing them would force the user to manually drop the
     // column before doing anything useful with the file.
     let drop_names = pandas_index_columns(schema.metadata());
@@ -230,7 +230,7 @@ fn read_via_duckdb(path: &Path) -> Result<DataTable> {
                 .collect();
             (cols, keep)
         } else {
-            // Empty result — fall back to a DESCRIBE for the column list.
+            // Empty result - fall back to a DESCRIBE for the column list.
             // No Arrow schema metadata available here, so the pandas filter
             // shrinks to the default-name list.
             let mut describe = conn.prepare(&format!(
@@ -278,7 +278,7 @@ fn read_via_duckdb(path: &Path) -> Result<DataTable> {
 
     // The DuckDB path uses LIMIT, so we can't know the full file row count
     // cheaply. Setting total_rows = None means the UI won't show a stale
-    // "+N more" — that's acceptable for the fallback path.
+    // "+N more" - that's acceptable for the fallback path.
     let loaded = rows.len();
     let truncated_marker = if max_rows != usize::MAX && loaded == max_rows {
         // Confirm there are more rows by running a fast count via DuckDB.
@@ -315,7 +315,7 @@ fn quote_sql_literal(s: &str) -> String {
     format!("'{}'", s.replace('\'', "''"))
 }
 
-/// Minimal DuckDB→Arrow type-name mapping for the rare empty-result case in
+/// Minimal DuckDB->Arrow type-name mapping for the rare empty-result case in
 /// the DuckDB fallback. The non-empty path gets full fidelity directly from
 /// the Arrow schema on the first RecordBatch.
 fn duckdb_type_to_arrow_name(ty: &str) -> String {

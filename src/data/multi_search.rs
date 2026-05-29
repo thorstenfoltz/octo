@@ -1,4 +1,4 @@
-//! Cross-tab and directory grep — pure functions that walk a `DataTable`
+//! Cross-tab and directory grep - pure functions that walk a `DataTable`
 //! (or any in-memory cell store) with a [`RowMatcher`] and emit per-cell
 //! hits.
 //!
@@ -37,7 +37,7 @@ impl MultiSearchScope {
 /// One match returned by a multi-search run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MultiSearchHit {
-    /// Human-readable label for the result source — tab title or file
+    /// Human-readable label for the result source - tab title or file
     /// name. The panel renders this first so users can spot which file
     /// each hit came from.
     pub source_label: String,
@@ -54,7 +54,7 @@ pub struct MultiSearchHit {
     pub row: usize,
     /// Zero-based column index.
     pub col: usize,
-    /// Column name as it appears in the table — handy for the panel so
+    /// Column name as it appears in the table - handy for the panel so
     /// the user sees `email` instead of just "col 4".
     pub column_name: String,
     /// Snippet of the matching cell, truncated to a sensible width. The
@@ -65,7 +65,7 @@ pub struct MultiSearchHit {
 
 /// Visit every cell in `table` and push a [`MultiSearchHit`] for each one
 /// the matcher accepts. The order is row-major, column-by-column inside
-/// each row — same order the table view paints them.
+/// each row - same order the table view paints them.
 ///
 /// `tab_idx` and `source_path` are passed through verbatim onto the
 /// resulting hits.
@@ -109,11 +109,11 @@ pub fn search_table(
 }
 
 /// Cap a long cell value for display. When we can locate the match
-/// inside `text` cheaply (Plain mode → case-insensitive `find`), the
+/// inside `text` cheaply (Plain mode -> case-insensitive `find`), the
 /// snippet starts a few chars before the match so the relevant context
 /// stays visible. Otherwise the head of the string is returned. The
 /// returned string is always at most `max_chars` graphemes long (chars,
-/// in practice — egui labels render fine).
+/// in practice - egui labels render fine).
 pub fn snippet(text: &str, matcher: &RowMatcher, max_chars: usize) -> String {
     if max_chars == 0 {
         return String::new();
@@ -143,10 +143,18 @@ pub fn snippet(text: &str, matcher: &RowMatcher, max_chars: usize) -> String {
         })
         .map(|c| c.saturating_sub(20))
         .unwrap_or(0);
-    let take = max_chars.saturating_sub(if start_char == 0 { 1 } else { 2 });
+    // Reserve room for the "..." ellipsis markers (3 chars each): one trailing
+    // when truncated at the start, plus a leading one when start_char > 0.
+    const ELLIPSIS_LEN: usize = 3;
+    let reserve = if start_char == 0 {
+        ELLIPSIS_LEN
+    } else {
+        ELLIPSIS_LEN * 2
+    };
+    let take = max_chars.saturating_sub(reserve);
     let mut out = String::new();
     if start_char > 0 {
-        out.push('…');
+        out.push_str("...");
     }
     for (i, ch) in text.chars().enumerate() {
         if i < start_char {
@@ -162,7 +170,7 @@ pub fn snippet(text: &str, matcher: &RowMatcher, max_chars: usize) -> String {
         out.push(ch);
     }
     if start_char + take < char_count {
-        out.push('…');
+        out.push_str("...");
     }
     out
 }
@@ -208,7 +216,7 @@ mod tests {
         );
         let matcher = RowMatcher::new("eng", SearchMode::Plain);
         let hits = search_table(&table, &matcher, "in-mem", None, None, 80);
-        // alice → ENG (col 1), Eve → eng (col 1).
+        // alice -> ENG (col 1), Eve -> eng (col 1).
         assert_eq!(hits.len(), 2, "got hits = {hits:?}");
         assert_eq!(hits[0].row, 0);
         assert_eq!(hits[0].col, 1);
@@ -221,8 +229,8 @@ mod tests {
         let matcher = RowMatcher::new("needle", SearchMode::Plain);
         let s = snippet(&long, &matcher, 40);
         assert!(s.contains("needle"));
-        assert!(s.starts_with('…') || s.starts_with('x'));
-        // 40-char cap (we allow ±1 for the leading/trailing ellipses).
-        assert!(s.chars().count() <= 41, "snippet too long: {s:?}");
+        assert!(s.starts_with("...") || s.starts_with('x'));
+        // 40-char cap, including the leading/trailing "..." markers.
+        assert!(s.chars().count() <= 40, "snippet too long: {s:?}");
     }
 }

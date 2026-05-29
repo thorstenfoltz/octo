@@ -122,7 +122,7 @@ struct CompoundRow(Vec<u8>);
 
 impl hdf5_reader::H5Type for CompoundRow {
     fn hdf5_type() -> hdf5_reader::Datatype {
-        // Placeholder — `read_array` never compares this against the
+        // Placeholder - `read_array` never compares this against the
         // dataset's datatype; it only uses our `from_bytes`/`element_size`.
         hdf5_reader::Datatype::Opaque {
             size: 0,
@@ -242,7 +242,7 @@ fn decode_compound_field(bytes: &[u8], dtype: &hdf5_reader::Datatype) -> CellVal
             CellValue::String(s)
         }
         // Variable-length strings inside a compound record contain a heap
-        // pointer that requires global-heap traversal — out of scope for
+        // pointer that requires global-heap traversal - out of scope for
         // the embedded compound decoder. Fall back to a placeholder so the
         // user knows the cell exists but isn't decoded.
         Datatype::String {

@@ -4,8 +4,8 @@ Octa lets you highlight cells, rows, and columns with colours,
 useful for flagging interesting values during exploration, marking
 rows that need attention, or grouping columns visually.
 
-<!-- SCREENSHOT: colour-marking-example.png — Table with a few cells marked Yellow, an entire row marked Red, and a column marked Blue. Show how the precedence works visually. -->
-![Colour marks in action](../assets/screenshots/colour-marking-example.png){ .screenshot-placeholder }
+<!-- SCREENSHOT: colour-marking-example.png: Table with a few cells marked Yellow, an entire row marked Red, and a column marked Blue. Show how the precedence works visually. -->
+![Colour marks in action](../assets/screenshots/colour-marking-example.png)
 
 ## Available colours
 
@@ -25,8 +25,8 @@ The fine-grained way, working on whatever you right-click:
 
 If the right-clicked target is **already part of the current
 selection** (multi-cell, multi-row, or multi-column), the chosen colour
-is applied to every selected item — the same precedence
-[**Ctrl+M**](#edit-menu-and-shortcut) follows. Click outside the selection
+is applied to every selected item, following the same precedence as
+[**Ctrl+M**](#edit-menu-and-shortcut). Click outside the selection
 first if you want to colour only the single right-clicked target.
 
 ### Edit menu and shortcut

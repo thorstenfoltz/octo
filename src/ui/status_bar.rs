@@ -20,11 +20,11 @@ pub fn format_number(n: usize) -> String {
 /// Result of the status bar: an optional navigation target.
 #[derive(Default)]
 pub struct StatusBarAction {
-    /// Navigate to this cell (row, col) — 0-indexed.
+    /// Navigate to this cell (row, col) - 0-indexed.
     pub navigate_to: Option<(usize, usize)>,
     /// User typed the secret "kraken" command into the nav input.
     pub kraken_summoned: bool,
-    /// User clicked the column-filter chip — open the Column Filter dialog
+    /// User clicked the column-filter chip - open the Column Filter dialog
     /// preselected on the first filtered column.
     pub open_column_filter: Option<usize>,
 }
@@ -139,7 +139,7 @@ pub fn draw_status_bar(
         }
 
         if readonly {
-            // Plain text instead of a lock emoji — many bundled fonts lack
+            // Plain text instead of a lock emoji - many bundled fonts lack
             // U+1F512 and render it as a tofu / replacement glyph.
             ui.label(
                 RichText::new("[Read-only]")
@@ -371,10 +371,10 @@ pub fn draw_status_bar(
 
 /// Parse navigation input into a (row, col) target.
 /// Supports:
-/// - "R5:C3" or "5:3" — row:col (1-indexed)
-/// - "R5" or "5" — row only (keeps current col or 0)
-/// - "C3" — column only (keeps current row or 0)
-/// - "colname" — jump to column by name (keeps current row or 0)
+/// - "R5:C3" or "5:3" - row:col (1-indexed)
+/// - "R5" or "5" - row only (keeps current col or 0)
+/// - "C3" - column only (keeps current row or 0)
+/// - "colname" - jump to column by name (keeps current row or 0)
 pub fn parse_nav_input(input: &str, table: &DataTable) -> Option<(usize, usize)> {
     let input = input.trim();
     if input.is_empty() {
@@ -388,7 +388,7 @@ pub fn parse_nav_input(input: &str, table: &DataTable) -> Option<(usize, usize)>
         return Some((row, col));
     }
 
-    // Try C<n> — column only
+    // Try C<n> - column only
     if let Some(stripped) = input.strip_prefix('C').or_else(|| input.strip_prefix('c'))
         && let Ok(n) = stripped.parse::<usize>()
         && n >= 1
@@ -397,7 +397,7 @@ pub fn parse_nav_input(input: &str, table: &DataTable) -> Option<(usize, usize)>
         return Some((0, n - 1));
     }
 
-    // Try R<n> — row only
+    // Try R<n> - row only
     if let Some(stripped) = input.strip_prefix('R').or_else(|| input.strip_prefix('r'))
         && let Ok(n) = stripped.parse::<usize>()
         && n >= 1
@@ -406,7 +406,7 @@ pub fn parse_nav_input(input: &str, table: &DataTable) -> Option<(usize, usize)>
         return Some((n - 1, 0));
     }
 
-    // Try pure number — row
+    // Try pure number - row
     if let Ok(n) = input.parse::<usize>()
         && n >= 1
         && n <= table.row_count()

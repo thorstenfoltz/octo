@@ -4,17 +4,32 @@ Run a DuckDB SQL query against a file and print the result.
 The file is loaded once, registered as a temp table called **`data`**,
 and the query runs against it.
 
+Extra tables can be loaded into the same query with `--sql-table` and
+whole DuckDB / SQLite databases can be `ATTACH`-ed with `--sql-attach`,
+so the same invocation can JOIN across formats. The SELECT result can
+also be written back to a DuckDB or SQLite file via `--sql-write-to`.
+
 ## Synopsis
 
 ```bash
 octa --sql FILE -q '<query>' [-f tsv|json|csv]
+     [--sql-table NAME=PATH ...]
+     [--sql-attach ALIAS=PATH ...]
+     [--sql-write-to PATH --sql-write-table TABLE
+        [--sql-write-schema SCHEMA] [--sql-write-mode create|append|replace]]
 ```
 
-| Flag                        | Required | Meaning                                                           |
-|-----------------------------|----------|-------------------------------------------------------------------|
-| `--sql FILE`                | yes      | The file to query.                                                |
-| `-q QUERY`, `--query QUERY` | yes      | The SQL query string. Always reference the file's data as `data`. |
-| `-f`, `--format`            | no       | Output format (default `tsv`).                                    |
+| Flag                        | Required              | Meaning                                                                                                                                                     |
+|-----------------------------|-----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--sql FILE`                | yes                   | The primary file to query, registered as `data`.                                                                                                            |
+| `-q QUERY`, `--query QUERY` | yes                   | The SQL query string. Always reference the primary file as `data`.                                                                                          |
+| `-f`, `--format`            | no                    | Output format (default `tsv`). Ignored when `--sql-write-to` is set.                                                                                        |
+| `--sql-table NAME=PATH`     | no                    | Register an extra table from any supported file under the SQL name `NAME`. Repeatable.                                                                      |
+| `--sql-attach ALIAS=PATH`   | no                    | `ATTACH` a DuckDB or SQLite database under `ALIAS`. Repeatable. Every inner table becomes queryable as `ALIAS.schema.tbl` (DuckDB) or `ALIAS.tbl` (SQLite). |
+| `--sql-write-to PATH`       | no                    | Persist the SELECT result to this DuckDB or SQLite file. Created if missing.                                                                                |
+| `--sql-write-table TABLE`   | with `--sql-write-to` | Target table name.                                                                                                                                          |
+| `--sql-write-schema SCHEMA` | no                    | Target schema (DuckDB only; defaults to `main`). Pass for SQLite only as `main` or leave unset.                                                             |
+| `--sql-write-mode MODE`     | no                    | `create` (default; errors if the table exists), `replace` (drop + recreate), or `append` (`INSERT` into existing).                                          |
 
 ## Examples
 
@@ -92,6 +107,121 @@ Piping into `jq` or another tool works seamlessly:
 octa --sql data.csv -q 'SELECT email FROM data WHERE active' -f json | jq -r '.[].email'
 ```
 
+## Multi-table JOIN
+
+`--sql-table NAME=PATH` registers an extra file into the same DuckDB
+connection that hosts `data`. The file is loaded via the standard
+format registry, so any supported format works (CSV, Parquet, JSON,
+Excel, SQLite, ...). The flag is repeatable; each pair gets its own
+entry in the workspace.
+
+```bash
+$ octa --sql sales.parquet \
+       --sql-table customers=customers.csv \
+       -q '
+  SELECT c.name, SUM(d.amount) AS total
+  FROM data d
+  JOIN customers c ON d.cid = c.cid
+  GROUP BY c.name
+  ORDER BY total DESC
+'
+name      total
+Carol     300
+Bob       200
+Alice     150
+```
+
+Several `--sql-table` flags can be combined:
+
+```bash
+octa --sql sales.parquet \
+     --sql-table customers=customers.csv \
+     --sql-table regions=regions.json \
+     -q '
+  SELECT r.region_name, c.name, SUM(d.amount) AS total
+  FROM data d
+  JOIN customers c ON d.cid = c.cid
+  JOIN regions   r ON d.region_id = r.id
+  GROUP BY r.region_name, c.name
+'
+```
+
+The chosen `NAME` is sanitised to a valid SQL identifier (lowercased,
+non-alphanumeric characters replaced with `_`). For multi-table sources
+prefer `--sql-attach` so every inner table is reachable.
+
+## Attaching whole databases
+
+`--sql-attach ALIAS=PATH` runs DuckDB's `ATTACH` against the target
+file. Every table inside is queryable as `ALIAS.schema.tbl` (DuckDB)
+or `ALIAS.tbl` (SQLite via the DuckDB sqlite extension when bundled;
+otherwise the workspace falls back to per-table loading under names
+like `ALIAS__table`).
+
+```bash
+$ octa --sql sales.parquet \
+       --sql-attach wh=warehouse.duckdb \
+       -q '
+  SELECT p.name, SUM(d.amount) AS total
+  FROM data d
+  JOIN wh.main.products p ON d.cid = p.cid
+  GROUP BY p.name
+'
+```
+
+The extension `.duckdb` / `.ddb` selects DuckDB; everything else
+(`.sqlite`, `.db`, `.sqlite3`) selects SQLite.
+
+## Write-back to DuckDB / SQLite
+
+`--sql-write-to PATH` persists the SELECT result instead of printing
+it. Pair it with `--sql-write-table`, optionally `--sql-write-schema`
+(DuckDB only), and `--sql-write-mode`. The target file is created if
+missing.
+
+```bash
+# Create a fresh table in a new schema.
+$ octa --sql sales.parquet -q '
+  SELECT region, SUM(amount) AS total
+  FROM data
+  GROUP BY region
+  ORDER BY region
+' --sql-write-to analytics.duckdb \
+  --sql-write-schema reports \
+  --sql-write-table q4_summary
+wrote 2 row(s) to analytics.duckdb | reports.q4_summary
+```
+
+Write modes:
+
+| Mode      | Behaviour                                                                            |
+|-----------|--------------------------------------------------------------------------------------|
+| `create`  | Default. Errors if the target table already exists.                                  |
+| `replace` | `DROP TABLE IF EXISTS` followed by `CREATE TABLE`.                                   |
+| `append`  | `INSERT INTO` an existing table. Column count and order must match the SELECT shape. |
+
+SQLite has no schemas, so `--sql-write-schema` must be omitted (or
+explicitly `main`). The write goes through `rusqlite` directly, so it
+works even on builds where the DuckDB sqlite extension isn't bundled.
+
+```bash
+# Append into an existing SQLite table.
+octa --sql data.csv -q 'SELECT * FROM data WHERE active=1' \
+     --sql-write-to users.sqlite \
+     --sql-write-table active_users \
+     --sql-write-mode append
+```
+
+The success line is printed to **stdout**:
+
+```
+wrote N row(s) to <path> | <schema>.<table>
+```
+
+For SQLite the `<schema>.` prefix is omitted. On success, nothing else
+is written to stdout, so CI pipelines can compare against an expected
+string. Errors print to stderr with a non-zero exit code.
+
 ## Mutations
 
 `INSERT` / `UPDATE` / `DELETE` are accepted but **do not persist
@@ -116,8 +246,11 @@ A "rows affected" count is written to **stderr** for mutations:
 
 Octa's standard reader produces a `DataTable`. The CLI registers
 that as a DuckDB temp table named **`data`** in a fresh in-memory
-connection, then runs your query. The connection is **single-use**;
-the next `octa --sql` invocation starts from scratch.
+connection, then runs your query. Extra `--sql-table` entries land
+as additional temp tables in the same connection, and `--sql-attach`
+runs `ATTACH` on it, so JOINs across all of them are plain DuckDB
+work. The connection is **single-use**; the next `octa --sql`
+invocation starts from scratch.
 
 This is the same execution path as the GUI's SQL view, so:
 
@@ -141,7 +274,7 @@ This is the same execution path as the GUI's SQL view, so:
   octa --sql huge.parquet -q 'SELECT count(*) FROM data' --rows all
   ```
 
-- Parquet files with very many row groups (> 32,767 — common with
+- Parquet files with very many row groups (> 32,767, common with
   Spark / streaming ingest) fall back to a DuckDB-backed reader
   automatically, so they open without manual recompaction.
 - DuckDB itself is highly optimised, so queries on millions of rows

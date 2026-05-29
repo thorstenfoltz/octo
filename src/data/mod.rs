@@ -1,12 +1,18 @@
 pub mod chart;
 pub mod chart_export;
+pub mod compare_schemas;
 pub mod date_infer;
+pub mod describe;
 pub mod duplicates;
 pub mod formulas;
 pub mod json_util;
 pub mod multi_search;
+pub mod num_format;
 pub mod schema_export;
 pub mod search;
+pub mod trim;
+pub mod unique_columns;
+pub mod validate_schema;
 pub mod value_frequency;
 
 pub use formulas::{
@@ -34,7 +40,7 @@ pub enum ViewMode {
     /// Collapsible YAML tree view (mirrors JsonTree, fed by the YAML parser).
     YamlTree,
     /// Side-by-side comparison of two files. The active tab provides the
-    /// left side; the right side is loaded via View → Compare with…
+    /// left side; the right side is loaded via View -> Compare with...
     /// Two sub-modes toggle within the view (Text Diff / Row Hash Diff).
     Compare,
     /// EPUB reading view. Renders the book chapter-by-chapter as Markdown
@@ -107,7 +113,7 @@ pub enum MarkdownLayout {
     /// TextEdit on the left, rendered preview on the right. Live updates.
     #[default]
     Split,
-    /// TextEdit only — no preview pane. Useful for full-width editing.
+    /// TextEdit only - no preview pane. Useful for full-width editing.
     Edit,
 }
 
@@ -164,7 +170,7 @@ pub fn wildcard_to_regex(pattern: &str) -> String {
     let mut i = 0;
     while i < chars.len() {
         if chars[i] == '\\' && i + 1 < chars.len() && (chars[i + 1] == '*' || chars[i + 1] == '?') {
-            // Escaped wildcard → literal
+            // Escaped wildcard -> literal
             regex.push_str(&regex_syntax::escape(&chars[i + 1].to_string()));
             i += 2;
         } else if chars[i] == '*' {
@@ -339,7 +345,7 @@ impl CellValue {
 /// Whether an Arrow-style column type string is numeric.
 ///
 /// Used to decide cell text alignment: numeric columns right-align every cell,
-/// non-numeric columns left-align — independent of an individual cell's runtime
+/// non-numeric columns left-align - independent of an individual cell's runtime
 /// `CellValue` variant. This way a stray number stored in a `Utf8` column still
 /// reads as text.
 pub fn is_numeric_data_type(s: &str) -> bool {
@@ -360,7 +366,7 @@ pub fn is_numeric_data_type(s: &str) -> bool {
 }
 
 /// Column metadata
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColumnInfo {
     pub name: String,
     pub data_type: String,
@@ -481,6 +487,12 @@ pub enum MarkKey {
 pub struct DbRowMeta {
     /// Name of the source table.
     pub table_name: String,
+    /// Source schema for DuckDB (e.g. `Some("analytics")`); `None` for SQLite
+    /// (no schema concept) and for DuckDB's default `main` schema. Read-time
+    /// readers and the diff-save writers both consult this so a table loaded
+    /// from `analytics.q4_sales` is written back to the same schema rather
+    /// than `main`.
+    pub schema: Option<String>,
     /// Per-row source identity, parallel to `DataTable.rows`.
     /// `None` = inserted by the user since load (becomes an INSERT on save).
     /// `Some(tag)` = original row from the DB (rowid for SQLite, sequential for DuckDB).
@@ -489,7 +501,7 @@ pub struct DbRowMeta {
     /// changes for UPDATE statements.
     pub original: HashMap<i64, Vec<CellValue>>,
     /// Original column names at load time. Save fails if columns no longer
-    /// match — schema-altering edits aren't supported on DB-backed tables.
+    /// match - schema-altering edits aren't supported on DB-backed tables.
     pub original_columns: Vec<String>,
 }
 
@@ -836,7 +848,7 @@ impl DataTable {
     }
 
     /// Reorder all columns according to a permutation.
-    /// `order[new_pos] = old_pos` — i.e. the column that was at `old_pos` moves to `new_pos`.
+    /// `order[new_pos] = old_pos` - i.e. the column that was at `old_pos` moves to `new_pos`.
     /// The `order` slice must be a valid permutation of `0..col_count`.
     pub fn reorder_columns(&mut self, order: &[usize]) {
         let n = self.columns.len();
@@ -1190,7 +1202,7 @@ impl DataTable {
 
     /// Remove every color mark on the table. Pushes one `SetMark` undo
     /// entry per cleared key so the operation is undoable one mark at a
-    /// time — that matches the granularity of the per-key clear path
+    /// time - that matches the granularity of the per-key clear path
     /// without bloating the `UndoAction` enum with a new variant.
     pub fn clear_all_marks(&mut self) {
         if self.marks.is_empty() {

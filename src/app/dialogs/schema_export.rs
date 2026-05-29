@@ -1,10 +1,10 @@
-//! Schema Export dialog. Opens from **View → Export schema as…** and
+//! Schema Export dialog. Opens from **View -> Export schema as...** and
 //! renders the active tab's column list in one of the targets defined
 //! in `octa::data::schema_export`. The user can switch target inside
 //! the dialog without reopening, then **Copy** the result to the
-//! clipboard or **Save as…** to disk.
+//! clipboard or **Save as...** to disk.
 //!
-//! The rendering itself is delegated to the pure library functions —
+//! The rendering itself is delegated to the pure library functions -
 //! this file only orchestrates the UI.
 
 use std::io::Write;
@@ -68,7 +68,7 @@ pub(crate) fn render_schema_export_dialog(app: &mut OctaApp, ctx: &egui::Context
             .show_inside(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new(format!("Schema Export — {}", target.label()))
+                        RichText::new(format!("Schema Export - {}", target.label()))
                             .strong()
                             .size(16.0),
                     );
@@ -94,7 +94,7 @@ pub(crate) fn render_schema_export_dialog(app: &mut OctaApp, ctx: &egui::Context
                     if ui.button("Copy to clipboard").clicked() {
                         copy_payload = Some(rendered.clone());
                     }
-                    if ui.button("Save as…").clicked() {
+                    if ui.button("Save as...").clicked() {
                         save_payload = Some((rendered.clone(), target.extension()));
                     }
                     ui.label(

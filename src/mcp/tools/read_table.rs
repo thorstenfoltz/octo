@@ -1,4 +1,4 @@
-//! MCP tool: `read_table` — load a file and return schema + rows.
+//! MCP tool: `read_table` - load a file and return schema + rows.
 
 use std::path::PathBuf;
 
@@ -20,7 +20,7 @@ pub struct Params {
     pub path: PathBuf,
 
     /// Maximum rows to return. Default is the server's configured limit (1000
-    /// unless changed via Octa's Settings → MCP). Pass 0 for unlimited.
+    /// unless changed via Octa's Settings -> MCP). Pass 0 for unlimited.
     /// Note: this only slices the *response*. The file is still read with
     /// the streaming initial-load cap (5 M rows by default). Set `unlimited`
     /// to lift the file-loader cap as well.

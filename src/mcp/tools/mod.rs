@@ -2,8 +2,10 @@
 //! submodule so adding one is a drop-in (write the file, add it to the
 //! `mod` list here, add a wrapper method to `OctaMcpServer`).
 
+pub mod compare_schemas;
 pub mod convert;
 pub mod count_rows;
+pub mod describe_file;
 pub mod export_schema;
 pub mod find_duplicates;
 pub mod list_tables;
@@ -12,6 +14,8 @@ pub mod read_table;
 pub mod run_sql;
 pub mod schema;
 pub mod search;
+pub mod unique_columns;
+pub mod validate_schema;
 pub mod value_frequency;
 
 use std::path::Path;

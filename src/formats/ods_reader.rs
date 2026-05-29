@@ -166,7 +166,7 @@ const MANIFEST_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 "#;
 
 fn write_content_xml<W: Write>(out: &mut W, table: &DataTable) -> Result<()> {
-    // No indentation/newlines inside <table:table-row> — calamine's parser
+    // No indentation/newlines inside <table:table-row> - calamine's parser
     // treats whitespace text nodes between cells as a structural error.
     out.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" office:version="1.2"><office:body><office:spreadsheet><table:table table:name="Sheet1">"#)?;

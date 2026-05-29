@@ -138,8 +138,8 @@ fn snippet_anchors_around_plain_match() {
     let s = snippet(&long, &matcher, 40);
     assert!(s.contains("needle"), "snippet should keep match: {s:?}");
     // Should have either a leading ellipsis (anchored) or start with x.
-    assert!(s.starts_with('…') || s.starts_with('x'));
-    assert!(s.chars().count() <= 41);
+    assert!(s.starts_with("...") || s.starts_with('x'));
+    assert!(s.chars().count() <= 40);
 }
 
 #[test]
@@ -147,10 +147,10 @@ fn snippet_falls_back_to_head_for_regex_mode() {
     let long = "AAAAAAAAAA".repeat(20); // 200 chars
     let matcher = RowMatcher::new("A+", SearchMode::Regex);
     let s = snippet(&long, &matcher, 30);
-    // For non-plain matchers we don't anchor — we just truncate from
+    // For non-plain matchers we don't anchor - we just truncate from
     // the start. Expect leading char to be 'A' and a trailing ellipsis.
     assert!(s.starts_with('A'));
-    assert!(s.ends_with('…'));
+    assert!(s.ends_with("..."));
     assert!(s.chars().count() <= 30);
 }
 

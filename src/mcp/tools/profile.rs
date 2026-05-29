@@ -1,11 +1,11 @@
-//! MCP tool: `profile` — per-column statistics via DuckDB `SUMMARIZE`.
+//! MCP tool: `profile` - per-column statistics via DuckDB `SUMMARIZE`.
 //!
 //! The file is registered as the DuckDB temp table `data` (types are
 //! preserved by `octa::sql::register_table`, so numeric columns get real
-//! numeric stats) and `SUMMARIZE data` is run. The result — one row per
-//! source column — is reshaped into an object keyed by SUMMARIZE's own
+//! numeric stats) and `SUMMARIZE data` is run. The result - one row per
+//! source column - is reshaped into an object keyed by SUMMARIZE's own
 //! column names (`min`, `max`, `avg`, `std`, `q25`/`q50`/`q75`,
-//! `approx_unique`, `count`, `null_percentage`, …).
+//! `approx_unique`, `count`, `null_percentage`, ...).
 
 use std::path::PathBuf;
 

@@ -1,12 +1,12 @@
 //! Schema export: render an octa `DataTable`'s column list into another
 //! language or DSL. Targets currently supported:
 //!
-//! * SQL DDL (Postgres, MySQL, SQLite, Databricks, Snowflake) —
-//!   `CREATE TABLE …` statements
-//! * Pydantic v2 — a `BaseModel` subclass with annotated fields
-//! * TypeScript — an `interface` declaration
+//! * SQL DDL (Postgres, MySQL, SQLite, Databricks, Snowflake) -
+//!   `CREATE TABLE ...` statements
+//! * Pydantic v2 - a `BaseModel` subclass with annotated fields
+//! * TypeScript - an `interface` declaration
 //! * JSON Schema (draft 2020-12)
-//! * Rust — a `struct` with serde derives
+//! * Rust - a `struct` with serde derives
 //!
 //! Each target's `export` function is a pure transformation
 //! `(&[ColumnInfo], &str) -> String`. UI lives separately in
@@ -20,7 +20,7 @@
 //!
 //! Type-name input is the same Arrow-style string we put in
 //! `ColumnInfo.data_type` ("Utf8", "Int64", "Timestamp(Microsecond,
-//! None)" …). Unknown types fall through to each target's TEXT-
+//! None)" ...). Unknown types fall through to each target's TEXT-
 //! equivalent with a `/* TODO: unknown Arrow type "<name>" */` (or
 //! the language's comment equivalent) so the output is never silently
 //! wrong.
@@ -33,7 +33,7 @@ pub mod typescript;
 
 use crate::data::ColumnInfo;
 
-/// Identifier the user picks in **View → Export schema as…**.
+/// Identifier the user picks in **View -> Export schema as...**.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SchemaTarget {
     PostgresSqlDdl,
@@ -48,7 +48,7 @@ pub enum SchemaTarget {
 }
 
 impl SchemaTarget {
-    /// Every target, ordered alphabetically by [`label`](Self::label) —
+    /// Every target, ordered alphabetically by [`label`](Self::label) -
     /// the order the Export Schema dialog's chip row shows them in.
     /// Adding a new variant flows through automatically; slot it into
     /// its alphabetical position.
@@ -150,7 +150,7 @@ pub(crate) fn sanitize_ident(s: &str) -> String {
 }
 
 /// Whether `s` is already a valid identifier per [`sanitize_ident`]'s
-/// rules — used to decide whether a generated alias / rename
+/// rules - used to decide whether a generated alias / rename
 /// annotation is needed.
 pub(crate) fn is_safe_ident(s: &str) -> bool {
     !s.is_empty()

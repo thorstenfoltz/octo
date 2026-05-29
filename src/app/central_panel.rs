@@ -24,7 +24,7 @@ impl OctaApp {
             // Painted before any content so widgets sit on top.
             ui::theme::paint_background_decoration(ui.painter(), ui.max_rect(), self.theme_mode);
 
-            // Status message — auto-fades after 10s.
+            // Status message - auto-fades after 10s.
             if let Some((ref msg, instant)) = self.status_message
                 && instant.elapsed().as_secs() < 10
             {
@@ -75,7 +75,7 @@ impl OctaApp {
                         dismiss_warning = true;
                     }
                     ui.label(
-                        egui::RichText::new("(disable in Settings → File-Specific)")
+                        egui::RichText::new("(disable in Settings -> File-Specific)")
                             .color(colors.text_muted)
                             .size(11.0),
                     );
@@ -84,6 +84,43 @@ impl OctaApp {
             }
             if dismiss_warning {
                 self.revert_promoted_date_columns();
+            }
+
+            // Whitespace-trim banner. Lists the columns whose string cells had
+            // leading/trailing whitespace stripped on load. Dismiss-only - the
+            // trimming itself already happened.
+            let mut dismiss_trim = false;
+            if let Some(warning) = self
+                .pending_trim_warning
+                .as_ref()
+                .filter(|w| w.tab_idx == self.active_tab && !w.columns.is_empty())
+            {
+                let colors = ui::theme::ThemeColors::for_mode(self.theme_mode);
+                let summary = warning.columns.join(", ");
+                ui.horizontal(|ui| {
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "Trimmed leading/trailing spaces in {} column(s): {}.",
+                            warning.columns.len(),
+                            summary
+                        ))
+                        .color(colors.warning)
+                        .size(12.0),
+                    );
+                    if ui.small_button("Dismiss").clicked() {
+                        dismiss_trim = true;
+                    }
+                    ui.label(
+                        egui::RichText::new("(disable in Settings -> File-Specific)")
+                            .color(colors.text_muted)
+                            .size(11.0),
+                    );
+                });
+                ui.add_space(4.0);
+            }
+            if dismiss_trim {
+                self.pending_trim_warning = None;
             }
 
             // Recompute filter before drawing (toolbar actions earlier in the
@@ -218,6 +255,7 @@ impl OctaApp {
             let filtered_cols: std::collections::HashSet<usize> =
                 tab.column_filters.keys().copied().collect();
             let hidden_cols = tab.hidden_columns.clone();
+            let col_number_formats = tab.column_number_formats.clone();
             let os_has_clip = tab.table_state.clipboard.is_some() || os_has_clipboard;
             let interaction = ui::table_view::draw_table(
                 ui,
@@ -238,6 +276,9 @@ impl OctaApp {
                 readonly,
                 &filtered_cols,
                 &hidden_cols,
+                self.settings.thousands_separators_in_cells,
+                self.settings.number_separator_style,
+                &col_number_formats,
             );
 
             let welcome_logo_clicked = interaction.welcome_logo_clicked;
@@ -259,7 +300,7 @@ impl OctaApp {
 
     /// Route `Event::Copy` / `Event::Cut` / `Event::Paste` and the remappable
     /// `ShortcutAction::Copy/Cut/Paste` triggers to the table-level clipboard
-    /// ops — but only when no TextEdit has keyboard focus.
+    /// ops - but only when no TextEdit has keyboard focus.
     ///
     /// Subtle invariant: egui's TextEdit reads `Event::Paste` etc. without
     /// removing them from `i.events`, AND `draw_table` later in the frame
@@ -574,7 +615,7 @@ impl OctaApp {
 
         // --- Parse in new tab (from cell right-click context menu) ---
         // Resolve scope into modal state *before* taking a `&mut tab`
-        // borrow for the mark dispatch below — `build_modal_state`
+        // borrow for the mark dispatch below - `build_modal_state`
         // reads the table immutably.
         if let Some(scope) = interaction.ctx_parse_in_new_tab {
             let tab_ref = &self.tabs[self.active_tab];
@@ -582,7 +623,7 @@ impl OctaApp {
                 super::dialogs::parse_in_new_tab::build_modal_state(tab_ref, scope);
         }
 
-        // --- Filter values… on a column header (right-click) ---
+        // --- Filter values... on a column header (right-click) ---
         if let Some(col_idx) = interaction.ctx_filter_column {
             self.open_column_filter_dialog(Some(col_idx));
         }
@@ -592,11 +633,16 @@ impl OctaApp {
             self.tabs[self.active_tab].hidden_columns.insert(col_idx);
         }
 
-        // --- Value frequency (right-click "Value frequency…") ---
+        // --- Value frequency (right-click "Value frequency...") ---
         if let Some(col_idx) = interaction.ctx_value_frequency {
             let tab = &mut self.tabs[self.active_tab];
             tab.value_frequency_col = Some(col_idx);
             tab.value_frequency_size = octa::ui::settings::DialogSize::default();
+        }
+
+        // --- Number format (right-click "Number format...") ---
+        if let Some(col_idx) = interaction.ctx_column_format {
+            self.tabs[self.active_tab].open_column_format(col_idx);
         }
 
         // --- Color marks ---

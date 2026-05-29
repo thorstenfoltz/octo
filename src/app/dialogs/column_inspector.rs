@@ -1,7 +1,7 @@
 //! Read-only Column Inspector modal: lists every column with its type plus
 //! a few quick stats (numeric min/max, not-null, all-unique). Has its own
-//! view-only A→Z / Z→A toggle that does **not** mutate the underlying
-//! column order — the destructive sort lives on the Edit menu.
+//! view-only A->Z / Z->A toggle that does **not** mutate the underlying
+//! column order - the destructive sort lives on the Edit menu.
 
 use std::collections::HashSet;
 
@@ -147,7 +147,7 @@ fn build_tsv(stats: &[ColumnStat], order: &[usize], selected: &HashSet<usize>) -
 
 /// Copy the values of one inspector column (`column_idx` ∈ 0..7) for every
 /// row, one value per line. The right-click action always returns the whole
-/// column — selection state is irrelevant here, since the common need is
+/// column - selection state is irrelevant here, since the common need is
 /// "give me every column name" / "give me every type". Returns `(payload,
 /// count)`.
 fn build_single_column_copy(
@@ -273,7 +273,7 @@ pub(crate) fn render_column_inspector_dialog(app: &mut OctaApp, ctx: &egui::Cont
     let mut copy_payload: Option<String> = None;
     let mut status_message: Option<String> = None;
     // Original column indices to select in the underlying table once the
-    // dialog finishes rendering. Filled by double-click only — the
+    // dialog finishes rendering. Filled by double-click only - the
     // right-click menu no longer reaches into the underlying table.
     let mut select_in_table: Option<Vec<usize>> = None;
     let mut double_clicked_outer: Option<usize> = None;
@@ -305,7 +305,7 @@ pub(crate) fn render_column_inspector_dialog(app: &mut OctaApp, ctx: &egui::Cont
                     }
                     ui.label(
                         RichText::new(format!(
-                            "{} columns · {} rows · {} selected",
+                            "{} columns | {} rows | {} selected",
                             stats.len(),
                             app.tabs[app.active_tab].table.row_count(),
                             selected.len()
@@ -326,13 +326,13 @@ pub(crate) fn render_column_inspector_dialog(app: &mut OctaApp, ctx: &egui::Cont
                     ui.selectable_value(&mut sort, ColumnInspectorSort::Asc, "A -> Z");
                     ui.selectable_value(&mut sort, ColumnInspectorSort::Desc, "Z -> A");
                     if sort != prev_sort {
-                        // Sort changed — prior display-position selections no
+                        // Sort changed - prior display-position selections no
                         // longer point at the same columns.
                         selected.clear();
                         anchor = None;
                     }
                     ui.label(
-                        RichText::new("(view-only — does not change the table)")
+                        RichText::new("(view-only - does not change the table)")
                             .size(10.0)
                             .color(ui.visuals().weak_text_color()),
                     );
@@ -349,7 +349,7 @@ pub(crate) fn render_column_inspector_dialog(app: &mut OctaApp, ctx: &egui::Cont
                     // Without an explicit click sense, every cell defaults to
                     // `Sense::hover()` (egui_extras 0.34 default), which makes
                     // `response.clicked()` / `secondary_clicked()` always
-                    // return false — selection, context menu and copy
+                    // return false - selection, context menu and copy
                     // therefore all silently no-op. Click-sense is scoped to
                     // this dialog's TableBuilder only.
                     .sense(egui::Sense::click())
@@ -404,7 +404,7 @@ pub(crate) fn render_column_inspector_dialog(app: &mut OctaApp, ctx: &egui::Cont
                                     }
                                     if response.double_clicked() {
                                         // Double-click jumps to the column in
-                                        // the underlying table — the only
+                                        // the underlying table - the only
                                         // remaining "reach into the main view"
                                         // gesture from the inspector.
                                         double_clicked_outer = Some(display_pos);

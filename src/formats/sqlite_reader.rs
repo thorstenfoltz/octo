@@ -173,6 +173,7 @@ impl FormatReader for SqliteReader {
             redo_stack: Vec::new(),
             db_meta: Some(DbRowMeta {
                 table_name: table.to_string(),
+                schema: None,
                 row_tags,
                 original,
                 original_columns,
@@ -204,6 +205,7 @@ fn list_user_tables(path: &Path) -> Result<Vec<TableInfo>> {
             .map(|n| n as usize);
         out.push(TableInfo {
             name,
+            schema: None,
             columns,
             row_count,
         });

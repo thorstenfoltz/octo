@@ -24,8 +24,8 @@ has not implemented Wayland drag-and-drop yet. On X11, macOS, and
 Windows the OS-level hook would land, but Octa does not subscribe to
 those drop events today either; use **File → Open** instead.
 
-<!-- SCREENSHOT: first-steps-file-menu.png — File menu open, showing Open / Open Directory / Recent Files / Save / Save As entries. -->
-![File menu](../assets/screenshots/first-steps-file-menu.png){ .screenshot-placeholder }
+<!-- SCREENSHOT: first-steps-file-menu.png: File menu open, showing Open / Open Directory / Recent Files / Save / Save As entries. -->
+![File menu](../assets/screenshots/first-steps-file-menu.png)
 
 ## Anatomy of the window
 
@@ -49,8 +49,8 @@ Once a file is open, the layout is:
   info, zoom level, a navigation field (jump to `R5:C3`), and a busy
   spinner during long operations.
 
-<!-- SCREENSHOT: first-steps-window-anatomy.png — Window with annotations or labels pointing at toolbar / tab strip / sidebar / table / status bar. If annotation isn't easy, just a clean shot of the full window with one file open. -->
-![Window anatomy](../assets/screenshots/first-steps-window-anatomy.png){ .screenshot-placeholder }
+<!-- SCREENSHOT: first-steps-window-anatomy.png: Window with annotations or labels pointing at toolbar / tab strip / sidebar / table / status bar. If annotation isn't easy, just a clean shot of the full window with one file open. -->
+![Window anatomy](../assets/screenshots/first-steps-window-anatomy.png)
 
 ## Getting around the table
 

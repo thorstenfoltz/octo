@@ -20,7 +20,10 @@ fn sql_font_family(font: SqlEditorFont, ui: &egui::Ui) -> egui::FontFamily {
     }
 }
 
-/// User actions emitted by the SQL view in a single frame.
+/// User actions emitted by the SQL view in a single frame. The fields beyond
+/// `run` / `clear` / `export` / `close` drive the per-tab SQL workspace:
+/// adding extra tables, ATTACHing databases, removing them, and writing
+/// query results back to a DuckDB or SQLite file.
 #[derive(Debug, Clone, Default)]
 pub struct SqlAction {
     pub run: bool,
@@ -28,8 +31,41 @@ pub struct SqlAction {
     pub export: bool,
     /// User clicked the × button in the panel header. The caller flips
     /// `tab.sql_panel_open` to false, hiding the panel until the user
-    /// reopens it from **Analyse → SQL**.
+    /// reopens it from **Analyse -> SQL**.
     pub close: bool,
+    /// User clicked **+ Add table...**. Opens a multi-file picker that
+    /// registers every chosen file under a sanitised, de-duplicated name.
+    pub add_tables: bool,
+    /// User clicked **Attach database...**. Opens a single-file picker
+    /// (DuckDB / SQLite) and ATTACHes the file under a default alias.
+    pub attach_db: bool,
+    /// User clicked **[refresh]** next to `data` (or wants the workspace
+    /// to re-register the active tab's table from the live edited state).
+    pub refresh_active: bool,
+    /// User clicked **[×]** next to a registered table.
+    pub remove_table: Option<String>,
+    /// User clicked **[detach]** next to an ATTACH-ed database.
+    pub detach_alias: Option<String>,
+    /// User clicked **Write result to DB...**. The panel opens the write-back
+    /// dialog which composes the actual `WriteTarget`.
+    pub open_write_back: bool,
+    /// User selected a new entry in the workspace tree (or cleared the
+    /// selection). The panel updates `tab.sql_inspector_selection` and
+    /// triggers a fresh introspection fetch (cached on `TabState` so the
+    /// next frame doesn't re-query).
+    pub select_inspector: Option<Option<crate::app::sql_panel::InspectorTarget>>,
+    /// User clicked **Insert** in the inspector. The panel appends a SELECT
+    /// statement (`SELECT * FROM <qualified> LIMIT 100;`) into the editor.
+    pub insert_qualified: Option<String>,
+    /// User clicked **Run** in the inspector. The panel replaces the editor
+    /// content with `SELECT * FROM <qualified> LIMIT N` and runs it.
+    pub run_qualified: Option<String>,
+    /// User clicked **Copy name**. The panel copies the qualified name to
+    /// the system clipboard.
+    pub copy_qualified: Option<String>,
+    /// User toggled the open/closed state of an attached schema group.
+    /// String is the tree key (`alias` or `alias::schema`).
+    pub toggle_tree_key: Option<String>,
 }
 
 /// Persistent id of the SQL editor TextEdit. Exposed so the global keyboard
@@ -143,18 +179,91 @@ pub fn collect_suggestions(prefix: &str, columns: &[String], max: usize) -> Vec<
     out
 }
 
+/// Lightweight view of one registered workspace table, passed to the SQL
+/// panel renderer so it can list the tab's current workspace without
+/// borrowing the `SqlWorkspace` directly (the workspace is consumed by
+/// the parent loop's match on the returned `SqlAction`).
+#[derive(Debug, Clone)]
+pub struct WorkspaceRow {
+    pub sql_name: String,
+    pub origin: String,
+    pub row_count: usize,
+    /// `true` for the conventional `data` table; the panel renders it
+    /// with a [refresh] affordance instead of a remove button.
+    pub is_active: bool,
+}
+
+/// Lightweight view of one ATTACH-ed database, passed alongside
+/// [`WorkspaceRow`]s for the workspace section.
+#[derive(Debug, Clone)]
+pub struct WorkspaceAttachment {
+    pub alias: String,
+    pub source: String,
+    pub kind_label: &'static str,
+    /// Native ATTACH versus fallback-loaded-as-tables.
+    pub native: bool,
+    pub table_count: usize,
+    /// Per-schema groupings of the attached tables. Empty for fallback
+    /// attachments. Pre-computed in `workspace_snapshot` so the renderer
+    /// doesn't talk to the workspace directly.
+    pub schemas: Vec<WorkspaceAttachmentSchema>,
+}
+
+/// Inner-table grouping inside a [`WorkspaceAttachment`].
+#[derive(Debug, Clone)]
+pub struct WorkspaceAttachmentSchema {
+    pub schema: String,
+    pub tables: Vec<WorkspaceAttachmentTable>,
+}
+
+/// Single attached-database table shown in the workspace tree.
+#[derive(Debug, Clone)]
+pub struct WorkspaceAttachmentTable {
+    pub schema: String,
+    pub table: String,
+    pub row_count: Option<usize>,
+}
+
+/// Bundle of every per-call parameter that doesn't fit on the renderer's
+/// natural argument list. Avoids the clippy lint on a 9-argument function
+/// without losing the GUI / library separation (the workspace itself
+/// stays in the panel, the renderer only sees this passive view).
+pub struct SqlViewContext<'a> {
+    pub autocomplete_enabled: bool,
+    pub default_row_limit: usize,
+    pub panel_position: SqlPanelPosition,
+    pub partial_rows: Option<(usize, usize)>,
+    pub editor_font: octa::ui::settings::SqlEditorFont,
+    pub workspace_tables: &'a [WorkspaceRow],
+    pub workspace_attachments: &'a [WorkspaceAttachment],
+    /// Currently selected inspector target. Drives both the highlight in the
+    /// workspace tree on the left and the detail pane on the right.
+    pub inspector_selection: Option<&'a crate::app::sql_panel::InspectorTarget>,
+    /// Cached introspection result for the current selection. `None` while
+    /// the panel waits for the first fetch; `Some(Ok)` or `Some(Err)`
+    /// otherwise.
+    pub inspector_entry: Option<&'a crate::app::state::InspectorCacheEntry>,
+}
+
 /// Render a split-pane SQL editor (top) and result table (bottom).
 /// The current tab's table is exposed in queries as `data`.
 /// `partial_rows` carries `(loaded, total)` when the table isn't fully loaded.
 pub fn render_sql_view(
     ui: &mut egui::Ui,
     tab: &mut TabState,
-    autocomplete_enabled: bool,
-    default_row_limit: usize,
-    panel_position: SqlPanelPosition,
-    partial_rows: Option<(usize, usize)>,
-    editor_font: octa::ui::settings::SqlEditorFont,
+    ctx_args: SqlViewContext<'_>,
 ) -> SqlAction {
+    let SqlViewContext {
+        autocomplete_enabled,
+        default_row_limit,
+        panel_position,
+        partial_rows,
+        editor_font,
+        workspace_tables,
+        workspace_attachments,
+        inspector_selection,
+        inspector_entry,
+    } = ctx_args;
     let mut action = SqlAction::default();
     let editor_id = editor_id();
 
@@ -174,11 +283,18 @@ pub fn render_sql_view(
         let has_result = tab.sql_result.as_ref().is_some_and(|t| t.col_count() > 0);
         ui.add_enabled_ui(has_result, |ui| {
             if ui
-                .button("Export…")
+                .button("Export...")
                 .on_hover_text("Save the result as CSV, Parquet, JSON, Excel, etc.")
                 .clicked()
             {
                 action.export = true;
+            }
+            if ui
+                .button("Write result to DB...")
+                .on_hover_text("Persist the result as a new table inside a DuckDB or SQLite file")
+                .clicked()
+            {
+                action.open_write_back = true;
             }
         });
         if let Some(rows) = tab.sql_result.as_ref().map(|t| t.row_count()) {
@@ -189,7 +305,7 @@ pub fn render_sql_view(
                 if rows == 1 { "" } else { "s" }
             ));
         }
-        // Close (×) button on the right — flips `sql_panel_open` to false.
+        // Close (×) button on the right - flips `sql_panel_open` to false.
         // The Analyse dropdown is two clicks away, so without an in-panel
         // close the user has to fiddle to dismiss it.
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -204,6 +320,17 @@ pub fn render_sql_view(
     });
     ui.add_space(4.0);
 
+    render_workspace_section(
+        ui,
+        tab,
+        workspace_tables,
+        workspace_attachments,
+        inspector_selection,
+        inspector_entry,
+        &mut action,
+    );
+    ui.add_space(4.0);
+
     // --- Compute autocomplete state BEFORE rendering the TextEdit so we can
     // intercept arrow / Enter / Tab / Escape keys while the popup is visible.
     let editor_focused = ui.ctx().memory(|m| m.focused() == Some(editor_id));
@@ -211,7 +338,20 @@ pub fn render_sql_view(
     let mut prefix_start = 0usize;
     let mut prefix_len = 0usize;
     if autocomplete_enabled && editor_focused {
-        let columns: Vec<String> = tab.table.columns.iter().map(|c| c.name.clone()).collect();
+        // Suggestions draw from every identifier the SQL workspace can see -
+        // not just the active `data` table's columns. The workspace's
+        // `information_schema` query covers registered table names,
+        // attachment aliases, attached-database tables, and every column of
+        // every visible table; we merge the active tab's column list on top
+        // so freshly-added columns surface even before the user clicks the
+        // workspace [refresh] button.
+        let mut idents: Vec<String> = tab.table.columns.iter().map(|c| c.name.clone()).collect();
+        if let Some(ws) = tab.sql_workspace.as_ref() {
+            idents.extend(ws.collect_autocomplete_identifiers());
+        }
+        idents.sort();
+        idents.dedup();
+        let columns = idents;
         let cursor_byte = egui::TextEdit::load_state(ui.ctx(), editor_id)
             .and_then(|s| s.cursor.char_range())
             .map(|r| {
@@ -240,26 +380,28 @@ pub fn render_sql_view(
         tab.sql_ac_selected = 0;
     }
 
-    // Consume navigation keys while the popup is showing so the TextEdit
-    // doesn't act on them (egui would otherwise move the caret on arrow keys
-    // and insert a newline on Enter or a tab on Tab).
+    // Consume only the popup-specific keys (Tab accepts, Escape dismisses,
+    // Alt+Up / Alt+Down navigate the suggestion list). Enter and bare arrow
+    // keys are deliberately *not* consumed so they keep their normal editor
+    // behaviour - Enter always inserts a newline, arrows always move the
+    // caret, regardless of whether the popup is visible. Without this, the
+    // popup grabbed Enter and arrows whenever the caret sat at the end of a
+    // word, which made the editor feel like it lost basic typing keys.
     let popup_active = editor_focused && tab.sql_ac_visible && !suggestions.is_empty();
     let mut apply_suggestion: Option<String> = None;
     if popup_active {
         ui.input_mut(|i| {
-            if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
+            if i.consume_key(egui::Modifiers::ALT, egui::Key::ArrowDown) {
                 tab.sql_ac_selected = (tab.sql_ac_selected + 1) % suggestions.len();
             }
-            if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
+            if i.consume_key(egui::Modifiers::ALT, egui::Key::ArrowUp) {
                 tab.sql_ac_selected = if tab.sql_ac_selected == 0 {
                     suggestions.len() - 1
                 } else {
                     tab.sql_ac_selected - 1
                 };
             }
-            if i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)
-                || i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)
-            {
+            if i.consume_key(egui::Modifiers::NONE, egui::Key::Tab) {
                 apply_suggestion = suggestions.get(tab.sql_ac_selected).cloned();
             }
             if i.consume_key(egui::Modifiers::NONE, egui::Key::Escape) {
@@ -269,7 +411,7 @@ pub fn render_sql_view(
     }
 
     // Editor vs. result split. For outer Bottom docking the outer panel's
-    // resize handle sits at its top edge — if the nested editor panel is also
+    // resize handle sits at its top edge - if the nested editor panel is also
     // docked at the top, its frame covers the outer resize strip and the user
     // can't drag the SQL panel taller from between the table and the box. To
     // avoid that collision, dock the *result* panel at the bottom in that
@@ -521,6 +663,492 @@ fn apply_suggestion_later(
             .set_char_range(Some(egui::text::CCursorRange::one(ccursor)));
         state.store(ctx, id);
     }
+}
+
+fn render_workspace_section(
+    ui: &mut egui::Ui,
+    tab: &mut TabState,
+    tables: &[WorkspaceRow],
+    attachments: &[WorkspaceAttachment],
+    inspector_selection: Option<&crate::app::sql_panel::InspectorTarget>,
+    inspector_entry: Option<&crate::app::state::InspectorCacheEntry>,
+    action: &mut SqlAction,
+) {
+    let extras = tables.iter().filter(|t| !t.is_active).count();
+    let attached = attachments.len();
+    let summary = if extras == 0 && attached == 0 {
+        "Workspace (only `data`)".to_string()
+    } else {
+        format!(
+            "Workspace ({} extra table{}, {} attached DB{})",
+            extras,
+            if extras == 1 { "" } else { "s" },
+            attached,
+            if attached == 1 { "" } else { "s" },
+        )
+    };
+    // `CollapsingHeader` paints its own triangle via egui's drawing primitives,
+    // so the glyph always renders even when the bundled font lacks the
+    // geometric-shapes block (where `\u{25be}` / `\u{25b8}` live).
+    let resp = egui::CollapsingHeader::new(egui::RichText::new(summary).strong())
+        .id_salt("sql_workspace_section")
+        .default_open(tab.sql_workspace_open)
+        .show(ui, |ui| {
+            // Two independent Resize widgets stacked vertically. Each gets its
+            // own bottom-edge handle, so the user can grow the tree without
+            // touching the inspector or the editor, and vice versa. The
+            // editor's existing top-split handle stays independent of both.
+            egui::Resize::default()
+                .id_salt("sql_workspace_tree_resize")
+                .resizable([false, true])
+                .min_height(80.0)
+                .default_height(140.0)
+                .show(ui, |ui| {
+                    render_workspace_list(
+                        ui,
+                        tab,
+                        tables,
+                        attachments,
+                        inspector_selection,
+                        action,
+                    );
+                });
+            ui.add_space(2.0);
+            ui.separator();
+            ui.add_space(2.0);
+            egui::Resize::default()
+                .id_salt("sql_workspace_inspector_resize")
+                .resizable([false, true])
+                .min_height(120.0)
+                .default_height(240.0)
+                .show(ui, |ui| {
+                    render_workspace_inspector(ui, inspector_selection, inspector_entry, action);
+                });
+        });
+    tab.sql_workspace_open = resp.openness > 0.5;
+    ui.add_space(2.0);
+    ui.separator();
+}
+
+fn render_workspace_list(
+    ui: &mut egui::Ui,
+    tab: &mut TabState,
+    tables: &[WorkspaceRow],
+    attachments: &[WorkspaceAttachment],
+    inspector_selection: Option<&crate::app::sql_panel::InspectorTarget>,
+    action: &mut SqlAction,
+) {
+    let weak = ui.visuals().weak_text_color();
+    egui::ScrollArea::vertical()
+        .id_salt("sql_workspace_list_scroll")
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for row in tables {
+                let target = crate::app::sql_panel::InspectorTarget::RegisteredTable {
+                    sql_name: row.sql_name.clone(),
+                };
+                let selected = inspector_selection == Some(&target);
+                ui.horizontal(|ui| {
+                    let label = egui::RichText::new(&row.sql_name).strong();
+                    if ui.selectable_label(selected, label).clicked() {
+                        action.select_inspector = Some(Some(target.clone()));
+                    }
+                    ui.label(
+                        egui::RichText::new(format!("({} rows)", row.row_count))
+                            .small()
+                            .color(weak),
+                    )
+                    .on_hover_text(row.origin.clone());
+                    if row.is_active {
+                        if ui
+                            .small_button("refresh")
+                            .on_hover_text(
+                                "Re-register the tab's table after edits so the next \
+                                 query sees the live values.",
+                            )
+                            .clicked()
+                        {
+                            action.refresh_active = true;
+                        }
+                    } else if ui
+                        .small_button("\u{00d7}")
+                        .on_hover_text("Remove this table from the workspace")
+                        .clicked()
+                    {
+                        action.remove_table = Some(row.sql_name.clone());
+                    }
+                });
+            }
+            for att in attachments {
+                let alias_key = att.alias.clone();
+                let alias_open = tab.sql_workspace_tree_expanded.contains(&alias_key);
+                ui.horizontal(|ui| {
+                    let tri_resp = collapsing_triangle(ui, alias_open)
+                        .on_hover_text("Show / hide tables in this attached database");
+                    let label_resp = ui.add(
+                        egui::Label::new(egui::RichText::new(&att.alias).strong())
+                            .sense(egui::Sense::click()),
+                    );
+                    if tri_resp.clicked() || label_resp.clicked() {
+                        action.toggle_tree_key = Some(alias_key.clone());
+                    }
+                    ui.label(
+                        egui::RichText::new(format!("[{}]", att.kind_label))
+                            .small()
+                            .color(weak),
+                    );
+                    if !att.native {
+                        ui.label(
+                            egui::RichText::new("(fallback)")
+                                .small()
+                                .color(weak)
+                                .italics(),
+                        )
+                        .on_hover_text(
+                            "DuckDB sqlite extension wasn't available; tables were \
+                             loaded individually instead of ATTACH-ed.",
+                        );
+                    }
+                    ui.label(
+                        egui::RichText::new(format!("| {} tbl", att.table_count))
+                            .small()
+                            .color(weak),
+                    )
+                    .on_hover_text(att.source.clone());
+                    if ui
+                        .small_button("detach")
+                        .on_hover_text("Detach this database from the workspace")
+                        .clicked()
+                    {
+                        action.detach_alias = Some(att.alias.clone());
+                    }
+                });
+                if alias_open {
+                    render_attached_tree(ui, tab, att, inspector_selection, action);
+                }
+            }
+            ui.add_space(2.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .button("+ Add table...")
+                    .on_hover_text("Pick one or more files to load into the SQL workspace.")
+                    .clicked()
+                {
+                    action.add_tables = true;
+                }
+                if ui
+                    .button("Attach database...")
+                    .on_hover_text(
+                        "Pick a DuckDB or SQLite file to ATTACH; every inner table \
+                         becomes queryable as `alias.schema.tbl`.",
+                    )
+                    .clicked()
+                {
+                    action.attach_db = true;
+                }
+            });
+        });
+}
+
+/// Paint a small collapsing triangle as a clickable widget. Replaces the
+/// unicode `\u{25b8}` / `\u{25be}` glyphs the workspace tree used to draw -
+/// the bundled font doesn't ship the geometric-shapes block, so users saw
+/// tofu squares instead of arrows. Drawing the triangle directly via
+/// `egui::Painter` is font-independent.
+fn collapsing_triangle(ui: &mut egui::Ui, open: bool) -> egui::Response {
+    let size = egui::vec2(12.0, ui.spacing().interact_size.y.min(16.0));
+    let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+    if ui.is_rect_visible(rect) {
+        let stroke = ui.style().interact(&resp).fg_stroke;
+        let center = rect.center();
+        let r = 4.0;
+        let points = if open {
+            // Down-pointing triangle (▾)
+            vec![
+                center + egui::vec2(-r, -r * 0.5),
+                center + egui::vec2(r, -r * 0.5),
+                center + egui::vec2(0.0, r * 0.8),
+            ]
+        } else {
+            // Right-pointing triangle (▸)
+            vec![
+                center + egui::vec2(-r * 0.5, -r),
+                center + egui::vec2(-r * 0.5, r),
+                center + egui::vec2(r * 0.8, 0.0),
+            ]
+        };
+        ui.painter()
+            .add(egui::Shape::convex_polygon(points, stroke.color, stroke));
+    }
+    resp
+}
+
+fn render_attached_tree(
+    ui: &mut egui::Ui,
+    tab: &mut TabState,
+    att: &WorkspaceAttachment,
+    inspector_selection: Option<&crate::app::sql_panel::InspectorTarget>,
+    action: &mut SqlAction,
+) {
+    let weak = ui.visuals().weak_text_color();
+    if att.schemas.is_empty() {
+        ui.horizontal(|ui| {
+            ui.add_space(18.0);
+            ui.label(
+                egui::RichText::new("(no tables visible - fallback attachment)")
+                    .small()
+                    .color(weak)
+                    .italics(),
+            );
+        });
+        return;
+    }
+    for schema in &att.schemas {
+        let schema_key = format!("{}::{}", att.alias, schema.schema);
+        let schema_open = tab.sql_workspace_tree_expanded.contains(&schema_key);
+        ui.horizontal(|ui| {
+            ui.add_space(14.0);
+            let tri_resp = collapsing_triangle(ui, schema_open);
+            let label_resp = ui.add(
+                egui::Label::new(format!("{} ({})", schema.schema, schema.tables.len()))
+                    .sense(egui::Sense::click()),
+            );
+            if tri_resp.clicked() || label_resp.clicked() {
+                action.toggle_tree_key = Some(schema_key.clone());
+            }
+        });
+        if schema_open {
+            for t in &schema.tables {
+                let target = crate::app::sql_panel::InspectorTarget::AttachedTable {
+                    alias: att.alias.clone(),
+                    schema: t.schema.clone(),
+                    table: t.table.clone(),
+                };
+                let selected = inspector_selection == Some(&target);
+                ui.horizontal(|ui| {
+                    ui.add_space(28.0);
+                    let label = egui::RichText::new(&t.table);
+                    if ui.selectable_label(selected, label).clicked() {
+                        action.select_inspector = Some(Some(target.clone()));
+                    }
+                    if let Some(n) = t.row_count {
+                        ui.label(
+                            egui::RichText::new(format!("({n} rows)"))
+                                .small()
+                                .color(weak),
+                        );
+                    }
+                });
+            }
+        }
+    }
+}
+
+fn render_workspace_inspector(
+    ui: &mut egui::Ui,
+    inspector_selection: Option<&crate::app::sql_panel::InspectorTarget>,
+    inspector_entry: Option<&crate::app::state::InspectorCacheEntry>,
+    action: &mut SqlAction,
+) {
+    let weak = ui.visuals().weak_text_color();
+    let strong = ui.visuals().strong_text_color();
+    let target = match inspector_selection {
+        Some(t) => t,
+        None => {
+            ui.label(egui::RichText::new("Inspector").strong().color(strong));
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new(
+                    "Select a workspace table or expand an attached database \
+                     on the left to see its columns and a sample of rows.",
+                )
+                .weak(),
+            );
+            return;
+        }
+    };
+    let qualified = target.qualified_sql();
+    // Top header bar - qualified name + clear-selection button. Docked so it
+    // stays visible no matter how short the inspector pane is.
+    egui::Panel::top("sql_inspector_header")
+        .frame(egui::Frame::NONE)
+        .show_inside(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(&qualified)
+                        .strong()
+                        .monospace()
+                        .color(strong),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .small_button("\u{00d7}")
+                        .on_hover_text("Clear inspector selection")
+                        .clicked()
+                    {
+                        action.select_inspector = Some(None);
+                    }
+                });
+            });
+            ui.separator();
+        });
+    // Bottom action bar - Copy / Insert / Run. Docked so it never scrolls
+    // out of view even when the column list is long.
+    egui::Panel::bottom("sql_inspector_actions")
+        .frame(egui::Frame::NONE)
+        .show_inside(ui, |ui| {
+            ui.add_space(4.0);
+            ui.separator();
+            ui.add_space(2.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .small_button("Copy name")
+                    .on_hover_text("Copy the qualified table name to the clipboard")
+                    .clicked()
+                {
+                    action.copy_qualified = Some(qualified.clone());
+                }
+                if ui
+                    .small_button("Insert")
+                    .on_hover_text(format!(
+                        "Append `SELECT * FROM {qualified} LIMIT 100;` to the editor"
+                    ))
+                    .clicked()
+                {
+                    action.insert_qualified = Some(qualified.clone());
+                }
+                if ui
+                    .small_button("Run")
+                    .on_hover_text(format!(
+                        "Replace the editor with `SELECT * FROM {qualified} LIMIT 100` \
+                         and run it"
+                    ))
+                    .clicked()
+                {
+                    action.run_qualified = Some(qualified.clone());
+                }
+            });
+            ui.add_space(2.0);
+        });
+    // Central body - columns grid + sample table inside a scroll area that
+    // fills whatever vertical room is between the header and the action bar.
+    egui::CentralPanel::default()
+        .frame(egui::Frame::NONE)
+        .show_inside(ui, |ui| {
+            let entry = match inspector_entry {
+                Some(e) => e,
+                None => {
+                    ui.label(egui::RichText::new("Loading...").weak());
+                    return;
+                }
+            };
+            let inspection = match &entry.result {
+                Ok(i) => i,
+                Err(msg) => {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(220, 80, 80),
+                        format!("Error: {msg}"),
+                    );
+                    return;
+                }
+            };
+            let row_count_str = inspection
+                .row_count
+                .map(format_number)
+                .unwrap_or_else(|| "?".to_string());
+            ui.label(
+                egui::RichText::new(format!(
+                    "{} column{} | {} row{}",
+                    inspection.columns.len(),
+                    if inspection.columns.len() == 1 {
+                        ""
+                    } else {
+                        "s"
+                    },
+                    row_count_str,
+                    if inspection.row_count == Some(1) {
+                        ""
+                    } else {
+                        "s"
+                    },
+                ))
+                .small()
+                .color(weak),
+            );
+            ui.add_space(4.0);
+
+            egui::ScrollArea::vertical()
+                .id_salt("sql_inspector_scroll")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    egui::Grid::new("sql_inspector_columns")
+                        .num_columns(2)
+                        .spacing(egui::vec2(10.0, 2.0))
+                        .show(ui, |ui| {
+                            for col in &inspection.columns {
+                                ui.label(egui::RichText::new(&col.name).monospace());
+                                ui.label(
+                                    egui::RichText::new(&col.data_type)
+                                        .monospace()
+                                        .small()
+                                        .color(weak),
+                                );
+                                ui.end_row();
+                            }
+                        });
+                    if !inspection.sample_rows.is_empty() {
+                        ui.add_space(6.0);
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "Sample (first {}):",
+                                inspection.sample_rows.len()
+                            ))
+                            .small()
+                            .color(weak),
+                        );
+                        ui.add_space(2.0);
+                        use egui_extras::{Column, TableBuilder};
+                        let mut builder = TableBuilder::new(ui)
+                            .striped(true)
+                            .resizable(true)
+                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center));
+                        for _ in &inspection.columns {
+                            builder = builder.column(Column::auto().at_least(60.0).resizable(true));
+                        }
+                        builder
+                            .header(18.0, |mut header| {
+                                for col in &inspection.columns {
+                                    header.col(|ui| {
+                                        ui.add(
+                                            egui::Label::new(
+                                                egui::RichText::new(&col.name).small().monospace(),
+                                            )
+                                            .wrap_mode(egui::TextWrapMode::Extend),
+                                        );
+                                    });
+                                }
+                            })
+                            .body(|mut body| {
+                                for row in &inspection.sample_rows {
+                                    body.row(16.0, |mut r| {
+                                        for cell in row {
+                                            r.col(|ui| {
+                                                ui.add(
+                                                    egui::Label::new(
+                                                        egui::RichText::new(cell)
+                                                            .small()
+                                                            .monospace(),
+                                                    )
+                                                    .wrap_mode(egui::TextWrapMode::Truncate),
+                                                );
+                                            });
+                                        }
+                                    });
+                                }
+                            });
+                    }
+                });
+        });
 }
 
 fn render_result_table(ui: &mut egui::Ui, table: &octa::data::DataTable) {

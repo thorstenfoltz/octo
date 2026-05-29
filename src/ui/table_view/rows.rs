@@ -38,6 +38,9 @@ pub(super) fn draw_data_row_direct(
     readonly: bool,
     hidden_columns: &HashSet<usize>,
     is_rainbow_theme: bool,
+    thousands_separators: bool,
+    separator_style: crate::data::num_format::SeparatorStyle,
+    column_number_formats: &std::collections::HashMap<usize, crate::data::num_format::NumberFormat>,
 ) {
     let is_multi_selected_row = state.selected_rows.contains(&actual_row);
 
@@ -161,7 +164,7 @@ pub(super) fn draw_data_row_direct(
                                     }
                                 }
                                 None => {
-                                    // Invalid formula — store as string
+                                    // Invalid formula - store as string
                                     crate::data::CellValue::String(new_text)
                                 }
                             }
@@ -179,7 +182,26 @@ pub(super) fn draw_data_row_direct(
                 }
             } else {
                 if let Some(value) = table.get(actual_row, col_idx) {
-                    let display_text = value.display_with_binary_mode(binary_display_mode);
+                    // Numeric columns honour the global thousand-separator
+                    // setting and any per-column rounding format (display
+                    // only). A number stored in a non-numeric column reads as
+                    // text and is left unformatted, matching the alignment /
+                    // colour logic below.
+                    let col_numeric = table
+                        .columns
+                        .get(col_idx)
+                        .is_some_and(|c| is_numeric_data_type(&c.data_type));
+                    let display_text = if col_numeric {
+                        crate::data::num_format::format_cell_number(
+                            value,
+                            column_number_formats.get(&col_idx).copied(),
+                            thousands_separators,
+                            separator_style,
+                        )
+                        .unwrap_or_else(|| value.display_with_binary_mode(binary_display_mode))
+                    } else {
+                        value.display_with_binary_mode(binary_display_mode)
+                    };
                     let is_negative = match value {
                         crate::data::CellValue::Int(n) => *n < 0,
                         crate::data::CellValue::Float(f) => *f < 0.0,
@@ -187,7 +209,7 @@ pub(super) fn draw_data_row_direct(
                     };
                     // Color picks both the cell variant *and* the column type: a
                     // numeric value sitting in a string column is conceptually
-                    // text — render it the same way as a real string so the
+                    // text - render it the same way as a real string so the
                     // column reads uniformly. The variant alone isn't enough.
                     let col_numeric_for_color = table
                         .columns
@@ -304,7 +326,7 @@ pub(super) fn draw_data_row_direct(
                         // recent click even when we just removed it.
                         state.selected_cell = Some(target);
                         // Disjoint cell selection lives separately from row /
-                        // column selection — drop those so the precedence is
+                        // column selection - drop those so the precedence is
                         // unambiguous.
                         state.selected_rows.clear();
                         state.selected_cols.clear();
@@ -353,7 +375,7 @@ pub(super) fn draw_data_row_direct(
                     // --- Mark ---
                     // Honour the current multi-selection: if the right-clicked
                     // cell is part of the active selection, colour the whole
-                    // selection (rows > columns > free cells > single cell —
+                    // selection (rows > columns > free cells > single cell -
                     // same precedence Ctrl+M uses). Outside the selection,
                     // mark only the clicked cell.
                     let cell_anchor = MarkKey::Cell(actual_row, col_idx);
@@ -436,7 +458,7 @@ pub(super) fn draw_data_row_direct(
                     }
 
                     ui.separator();
-                    // Parse-in-new-tab submenu — mirrors the Edit menu
+                    // Parse-in-new-tab submenu - mirrors the Edit menu
                     // entry so the user can launch the modal from
                     // wherever the cell they care about lives.
                     ui.menu_button("Parse in new tab", |ui| {

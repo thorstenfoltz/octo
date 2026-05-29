@@ -5,7 +5,7 @@ table is exposed to an in-memory **DuckDB** connection as a temp table
 called `data`. Press **Ctrl+Enter** in the editor and your query runs
 against the loaded rows.
 
-<!-- SCREENSHOT: sql-view.png — SQL panel docked at the bottom of the window. Editor on top with a multi-line SELECT query, result table below showing a few rows. Line numbers in the editor gutter, autocomplete chip row visible under the editor. -->
+<!-- SCREENSHOT: sql-view.png: SQL panel docked at the bottom of the window. Editor on top with a multi-line SELECT query, result table below showing a few rows. Line numbers in the editor gutter, autocomplete chip row visible under the editor. -->
 ![SQL panel](../assets/screenshots/sql-view.png){ .screenshot-placeholder }
 
 ## Opening the SQL panel

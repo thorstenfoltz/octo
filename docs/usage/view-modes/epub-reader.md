@@ -5,7 +5,7 @@ text, using the same Markdown renderer the Markdown view uses. Each
 chapter's XHTML is converted to Markdown once at load time and
 cached on the tab, so there's no per-frame conversion overhead.
 
-<!-- SCREENSHOT: epub-reader-view.png — EPUB Reader view of a chapter. Show the
+<!-- SCREENSHOT: epub-reader-view.png: EPUB Reader view of a chapter. Show the
 toolbar at top (book title, Previous / Next buttons, chapter combo with the
 current chapter highlighted, position N/M), and a chapter body rendered as
 paragraphs of flowing text. If possible, include an embedded image (e.g. a

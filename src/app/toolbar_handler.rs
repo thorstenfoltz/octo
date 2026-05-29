@@ -434,6 +434,15 @@ impl OctaApp {
         if action.open_chart_tab {
             self.open_chart_tab();
         }
+        if action.open_value_frequency {
+            let tab = &mut self.tabs[self.active_tab];
+            if tab.table.col_count() > 0 {
+                tab.value_frequency_pick = true;
+            }
+        }
+        if action.open_column_format {
+            self.open_column_format_for_selection();
+        }
         if action.show_find_duplicates {
             let tab = &mut self.tabs[self.active_tab];
             if tab.table.col_count() > 0 {

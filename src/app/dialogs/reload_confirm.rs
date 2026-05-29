@@ -31,7 +31,7 @@ pub(crate) fn render_unalign_confirm_dialog(app: &mut OctaApp, ctx: &egui::Conte
                 }
                 ui.add_space(12.0);
                 ui.label(
-                    RichText::new("(You can disable this warning in Settings → File-Specific.)")
+                    RichText::new("(You can disable this warning in Settings -> File-Specific.)")
                         .weak()
                         .size(11.0),
                 );

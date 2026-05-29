@@ -41,7 +41,7 @@ fn main() -> ExitCode {
                 );
             }
             // `--mcp` is handled here rather than in `cli::dispatch` because
-            // it needs a tokio runtime — the GUI path never builds one and
+            // it needs a tokio runtime - the GUI path never builds one and
             // we don't want to pay the cost there.
             if matches!(action, cli::Action::Mcp) {
                 return run_mcp();
@@ -69,7 +69,7 @@ fn main() -> ExitCode {
 
     // Windows: clean up leftovers from any previous self-update. Once this new
     // exe is running, the previous-version `.old.exe` is no longer locked, so
-    // it can be removed. Best-effort — the next update would surface a clear
+    // it can be removed. Best-effort - the next update would surface a clear
     // error if the file is still around.
     #[cfg(target_os = "windows")]
     if let Ok(current_exe) = std::env::current_exe() {
@@ -152,14 +152,14 @@ fn main() -> ExitCode {
 /// so a user who lowers them in the GUI sees the same defaults the next time
 /// they launch `octa --mcp`. Builds a single-thread tokio runtime so we don't
 /// drag the multi-thread scheduler in for what is fundamentally a one-client
-/// stdio loop. Logs to stderr — JSON-RPC traffic owns stdout.
+/// stdio loop. Logs to stderr - JSON-RPC traffic owns stdout.
 fn run_mcp() -> ExitCode {
     let settings = AppSettings::load();
     let row_limit = settings.mcp_default_row_limit;
     let cell_cap = settings.mcp_default_cell_bytes;
     // Push the user's GUI-configured file-loader cap into the streaming
     // readers' process-wide atomic so MCP tools without `unlimited` use the
-    // same default the GUI does. "Unlimited" in Settings → Performance
+    // same default the GUI does. "Unlimited" in Settings -> Performance
     // overrides the numeric value with usize::MAX.
     let initial_cap = if settings.initial_load_rows_unlimited {
         usize::MAX
@@ -168,7 +168,7 @@ fn run_mcp() -> ExitCode {
     };
     octa::formats::set_initial_load_rows(initial_cap);
     // Route rmcp's internal tracing output to stderr; the JSON-RPC channel
-    // owns stdout. Failing here is non-fatal — the server still works, we
+    // owns stdout. Failing here is non-fatal - the server still works, we
     // just lose structured logs.
     let _ = tracing_subscriber::fmt()
         .with_env_filter(

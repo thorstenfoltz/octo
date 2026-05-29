@@ -1,4 +1,4 @@
-//! MCP tool: `list_tables` — enumerate the tables in a multi-table source.
+//! MCP tool: `list_tables` - enumerate the tables in a multi-table source.
 
 use std::path::PathBuf;
 

@@ -1,6 +1,6 @@
 //! Settings dialog UI rendering. The full `impl SettingsDialog` lives here;
 //! the struct definition + supporting `AppSettings` plus enums stay in
-//! [`super`]. Split out purely for navigability — no behaviour change.
+//! [`super`]. Split out purely for navigability - no behaviour change.
 
 use egui;
 
@@ -42,6 +42,8 @@ impl SettingsDialog {
             crate::ui::status_bar::format_number(current.chart_max_categories);
         self.table_picker_visible_rows_buf =
             crate::ui::status_bar::format_number(current.table_picker_visible_rows);
+        self.excel_max_auto_sheets_buf =
+            crate::ui::status_bar::format_number(current.excel_max_auto_sheets);
         self.recording = None;
         self.shortcut_conflict = None;
         self.show_reset_confirm = false;
@@ -66,7 +68,7 @@ impl SettingsDialog {
         // window in the same frame.
         self.draw_reset_confirm(ctx);
 
-        // Custom title bar (egui's is disabled below) — we render Min /
+        // Custom title bar (egui's is disabled below) - we render Min /
         // Max / Close buttons inline next to the title, like a typical
         // desktop window. Dragging works because the title text is a
         // non-interactive area inside the window's drag region.
@@ -77,7 +79,7 @@ impl SettingsDialog {
             .collapsible(false);
         window = match self.size {
             DialogSize::Maximized => window.fixed_rect(ctx.content_rect().shrink(8.0)),
-            // Minimized: no min sizing — let egui auto-shrink to the header.
+            // Minimized: no min sizing - let egui auto-shrink to the header.
             DialogSize::Minimized => window.resizable(false).default_pos(default_pos),
             DialogSize::Normal => window
                 .resizable(true)
@@ -129,7 +131,7 @@ impl SettingsDialog {
                             if let Ok(n) = parse_comma_number(&self.syntax_highlight_max_bytes_buf)
                             {
                                 // 0 is a valid input meaning "disable highlighting"
-                                // — anything <= 0 trips the size guard immediately.
+                                // - anything <= 0 trips the size guard immediately.
                                 let unit_factor = self.syntax_highlight_size_unit.factor();
                                 self.draft.syntax_highlight_max_bytes =
                                     n.saturating_mul(unit_factor);
@@ -174,6 +176,9 @@ impl SettingsDialog {
                             if let Ok(n) = parse_comma_number(&self.table_picker_visible_rows_buf) {
                                 self.draft.table_picker_visible_rows = n.max(1);
                             }
+                            if let Ok(n) = parse_comma_number(&self.excel_max_auto_sheets_buf) {
+                                self.draft.excel_max_auto_sheets = n.max(1);
+                            }
                             applied = Some(self.draft.clone());
                             self.open = false;
                         }
@@ -207,7 +212,7 @@ impl SettingsDialog {
     /// Render the "Reset to defaults?" confirmation modal. On confirm, the
     /// draft is replaced with `AppSettings::default()` and the icon/font/theme
     /// changed flags are set so the existing Apply path re-applies them.
-    /// Nothing is written to disk and the Settings window stays open — the
+    /// Nothing is written to disk and the Settings window stays open - the
     /// user still has to click Apply (or Cancel) to commit / discard.
     fn draw_reset_confirm(&mut self, ctx: &egui::Context) {
         if !self.show_reset_confirm {
@@ -222,7 +227,7 @@ impl SettingsDialog {
             .show(ctx, |ui| {
                 ui.label(
                     "This replaces every value in the Settings dialog with its default.\n\
-                     Nothing is saved until you click Apply — Cancel still reverts.",
+                     Nothing is saved until you click Apply - Cancel still reverts.",
                 );
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
@@ -343,7 +348,7 @@ impl SettingsDialog {
                         ui.horizontal(|ui| {
                             ui.add(
                                 egui::TextEdit::singleline(&mut self.draft.custom_font_path)
-                                    .hint_text("(none — .ttf, .otf, or .ttc)")
+                                    .hint_text("(none - .ttf, .otf, or .ttc)")
                                     .desired_width(220.0),
                             );
                             if ui.button("Browse...").clicked()
@@ -423,6 +428,35 @@ impl SettingsDialog {
                         ui.label("Negative numbers in red:")
                             .on_hover_text("Highlight negative numeric values with red text");
                         ui.checkbox(&mut self.draft.negative_numbers_red, "");
+                        ui.end_row();
+
+                        ui.label("Thousand separators:").on_hover_text(
+                            "Show thousand separators in numeric cells\n\
+                             (e.g. 1,234,567.89). Display only - saved /\n\
+                             exported data is never changed.",
+                        );
+                        ui.checkbox(&mut self.draft.thousands_separators_in_cells, "");
+                        ui.end_row();
+
+                        ui.label("Number style:").on_hover_text(
+                            "Grouping and decimal marks for numeric cells.\n\
+                             English: 1,234.56   European: 1.234,56\n\
+                             The decimal mark follows this even with\n\
+                             thousand separators off.",
+                        );
+                        egui::ComboBox::from_id_salt("settings_number_separator_style")
+                            .selected_text(self.draft.number_separator_style.label())
+                            .show_ui(ui, |ui| {
+                                for style in
+                                    crate::data::num_format::SeparatorStyle::ALL.iter().copied()
+                                {
+                                    ui.selectable_value(
+                                        &mut self.draft.number_separator_style,
+                                        style,
+                                        style.label(),
+                                    );
+                                }
+                            });
                         ui.end_row();
 
                         ui.label("Highlight edited cells:")
@@ -547,7 +581,7 @@ impl SettingsDialog {
 
                         ui.label("Warn before un-aligning CSV:").on_hover_text(
                             "Confirm before turning 'Align Columns' off in the raw\n\
-                             CSV/TSV view — un-aligning reloads the file from disk\n\
+                             CSV/TSV view - un-aligning reloads the file from disk\n\
                              and discards in-buffer edits.",
                         );
                         ui.checkbox(&mut self.draft.warn_raw_align_reload, "");
@@ -559,6 +593,20 @@ impl SettingsDialog {
                              shown as 2026-05-02). Disable to silence the warning.",
                         );
                         ui.checkbox(&mut self.draft.warn_on_date_format_change, "");
+                        ui.end_row();
+
+                        ui.label("Trim whitespace on load:").on_hover_text(
+                            "Strip leading/trailing whitespace from string cells\n\
+                             when a file is opened. Interior spaces are kept.",
+                        );
+                        ui.checkbox(&mut self.draft.trim_whitespace_on_load, "");
+                        ui.end_row();
+
+                        ui.label("Warn on whitespace trim:").on_hover_text(
+                            "Show a banner listing which columns had whitespace\n\
+                             trimmed on load. Independent of the trim setting.",
+                        );
+                        ui.checkbox(&mut self.draft.warn_on_whitespace_trim, "");
                         ui.end_row();
 
                         ui.label("Read-only mode notice:").on_hover_text(
@@ -624,8 +672,8 @@ impl SettingsDialog {
 
                         ui.label("Default row limit:").on_hover_text(
                             "LIMIT used in the placeholder query when a tab is opened\n\
-                             (e.g. 100 → SELECT * FROM data LIMIT 100).\n\
-                             Type a number — applied on Apply.",
+                             (e.g. 100 -> SELECT * FROM data LIMIT 100).\n\
+                             Type a number - applied on Apply.",
                         );
                         ui.add(
                             egui::TextEdit::singleline(&mut self.sql_row_limit_buf)
@@ -645,8 +693,8 @@ impl SettingsDialog {
                             "Font face used by the SQL editor and its line-number\n\
                              gutter. JetBrains Mono is bundled with Octa.\n\
                              \n\
-                             Note: programming ligatures (e.g. != → ≠, -> → →)\n\
-                             are not applied — egui's text renderer does not\n\
+                             Note: programming ligatures (e.g. != -> ≠, -> -> ->)\n\
+                             are not applied - egui's text renderer does not\n\
                              process OpenType GSUB substitutions yet.",
                         );
                         egui::ComboBox::from_id_salt("sql_editor_font_combo")
@@ -688,7 +736,7 @@ impl SettingsDialog {
                              caller omits `limit`. The tool schema advertises this default \
                              to the model so it can ask for more (or unlimited) when needed.\n\
                              \n\
-                             Default: 1,000. Setting this high — or checking Unlimited — \
+                             Default: 1,000. Setting this high - or checking Unlimited - \
                              can push very large responses through stdio and slow down the \
                              MCP client.",
                         );
@@ -763,7 +811,7 @@ impl SettingsDialog {
                         ui.label("Tile URL template:").on_hover_text(
                             "URL pattern for raster tiles. `{z}/{x}/{y}` are substituted \
                              with the zoom level and tile coordinates. Default points at \
-                             the OSM tile server — for production / heavy use, point at \
+                             the OSM tile server - for production / heavy use, point at \
                              a self-hosted or commercial provider.",
                         );
                         ui.add(
@@ -840,7 +888,7 @@ impl SettingsDialog {
                              the background loader. Tick \"Unlimited\" to disable\n\
                              the cap entirely and load every row up front.\n\
                              \n\
-                             Type a number — applied on Apply.",
+                             Type a number - applied on Apply.",
                         );
                         ui.horizontal(|ui| {
                             ui.add_enabled(
@@ -852,7 +900,7 @@ impl SettingsDialog {
                             ui.checkbox(&mut self.draft.initial_load_rows_unlimited, "Unlimited")
                                 .on_hover_text(
                                     "Load every row in the file up front. Recommended only\n\
-                                 when you have RAM to spare — a 100 M-row parquet eats\n\
+                                 when you have RAM to spare - a 100 M-row parquet eats\n\
                                  several GB.",
                                 );
                         });
@@ -863,9 +911,9 @@ impl SettingsDialog {
                              the raw editor. Set to 0 to disable syntax highlighting\n\
                              entirely; set a very large number to opt out of the\n\
                              guard. JSON/YAML/XML/Markdown/TOML are never highlighted\n\
-                             — they use their dedicated tree/preview views.\n\
+                             - they use their dedicated tree/preview views.\n\
                              \n\
-                             Default: 1 MB. Type a number, pick a unit — applied on Apply.",
+                             Default: 1 MB. Type a number, pick a unit - applied on Apply.",
                         );
                         ui.horizontal(|ui| {
                             ui.add(
@@ -924,7 +972,7 @@ impl SettingsDialog {
                              downsampling kicks in (Histogram, Line, Scatter). Bar charts\n\
                              always aggregate the full input; Box plots compute the\n\
                              5-number summary over the full input. Set to 0 to disable\n\
-                             sampling — only safe for moderately-sized tables.\n\
+                             sampling - only safe for moderately-sized tables.\n\
                              \n\
                              Default: 100,000. Numeric input accepts comma separators.",
                         );
@@ -938,7 +986,7 @@ impl SettingsDialog {
                         ui.label("Chart max categories:").on_hover_text(
                             "Maximum distinct X categories a Bar chart will accept before\n\
                              refusing to draw. Above this the renderer surfaces an error\n\
-                             rather than producing an unreadable wall of bars — filter or\n\
+                             rather than producing an unreadable wall of bars - filter or\n\
                              aggregate the table first.\n\
                              \n\
                              Default: 200. Numeric input accepts comma separators.",
@@ -952,8 +1000,8 @@ impl SettingsDialog {
 
                         ui.label("Tables visible in picker:").on_hover_text(
                             "How many table rows the multi-table picker dialog (SQLite,\n\
-                             DuckDB, …) should fit vertically at its default size. The\n\
-                             dialog is still user-resizable — drag the corner to make\n\
+                             DuckDB, ...) should fit vertically at its default size. The\n\
+                             dialog is still user-resizable - drag the corner to make\n\
                              it bigger when a database has many tables.\n\
                              \n\
                              Default: 10. Minimum 1.",
@@ -962,6 +1010,21 @@ impl SettingsDialog {
                             egui::TextEdit::singleline(&mut self.table_picker_visible_rows_buf)
                                 .desired_width(120.0)
                                 .hint_text("10"),
+                        );
+                        ui.end_row();
+
+                        ui.label("Excel sheets to auto-open:").on_hover_text(
+                            "How many sheets of a multi-sheet Excel workbook to open\n\
+                             automatically (each in its own tab). Workbooks with more\n\
+                             sheets than this show a picker so you choose which to open\n\
+                             (you can still pick more than this number, or all).\n\
+                             \n\
+                             Default: 5. Minimum 1.",
+                        );
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.excel_max_auto_sheets_buf)
+                                .desired_width(120.0)
+                                .hint_text("5"),
                         );
                         ui.end_row();
                     });
@@ -1079,7 +1142,7 @@ impl SettingsDialog {
                     ui.label(action.label());
                     let combo = self.draft.shortcuts.combo(action);
                     let label_text = if self.recording == Some(action) {
-                        egui::RichText::new("Press any key…").italics()
+                        egui::RichText::new("Press any key...").italics()
                     } else {
                         egui::RichText::new(combo.label()).monospace()
                     };

@@ -11,7 +11,7 @@ format, but some files are better viewed in their native shape:
 Switch view modes via the **View** menu in the toolbar. Only modes
 applicable to the current file are enabled.
 
-<!-- SCREENSHOT: view-menu.png — View menu open in the toolbar, showing the radio buttons for Table / Raw Text / Markdown / Notebook / EPUB Reader / Map / JSON Tree / YAML Tree / Compare / Read-only mode. -->
+<!-- SCREENSHOT: view-menu.png: View menu open in the toolbar, showing the radio buttons for Table / Raw Text / Markdown / Notebook / EPUB Reader / Map / JSON Tree / YAML Tree / Compare / Read-only mode. -->
 ![View menu](../../assets/screenshots/view-menu.png){ .screenshot-placeholder }
 
 ## All view modes at a glance

@@ -75,7 +75,7 @@ pub(crate) fn render_add_column_dialog(app: &mut OctaApp, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.label("Insert at position:");
                 let col_count = app.tabs[app.active_tab].table.col_count();
-                // Plain text input instead of DragValue — DragValue draws
+                // Plain text input instead of DragValue - DragValue draws
                 // hover spinner arrows that look out of place in this dialog
                 // and the value range is small enough that typing it is
                 // easier than dragging. Empty buffer falls back to

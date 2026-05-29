@@ -1,5 +1,5 @@
-//! Implements `eframe::App::update`. This is the top-level frame orchestrator
-//! — it calls the individual render/handle methods in the same order the old
+//! Implements `eframe::App::update`. This is the top-level frame orchestrator:
+//! it calls the individual render/handle methods in the same order the old
 //! monolithic `update()` used.
 
 use eframe::egui;

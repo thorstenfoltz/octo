@@ -13,8 +13,8 @@ combo boxes that govern how the file is tokenised:
 This page is the reference for the three Quote modes and the three
 Escape modes.
 
-<!-- SCREENSHOT: csv-quote-escape-toolbar.png — Raw view of a CSV file with the Delimiter / Quote / Escape combos visible in the toolbar, all dropdowns showing their options. -->
-![CSV/TSV toolbar combos](../assets/screenshots/csv-quote-escape-toolbar.png){ .screenshot-placeholder }
+<!-- SCREENSHOT: csv-quote-escape-toolbar.png: Raw view of a CSV file with the Delimiter / Quote / Escape combos visible in the toolbar, all dropdowns showing their options. -->
+![CSV/TSV toolbar combos](../assets/screenshots/csv-quote-escape-toolbar.png)
 
 These settings only affect the
 [Raw view](../usage/view-modes/raw-text.md)'s tokenisation and

@@ -1,14 +1,14 @@
 //! Compare view: side-by-side comparison of two files. Two sub-modes that
 //! the user toggles in the view's toolbar:
 //!
-//! - **TextDiff** — line-by-line git-style diff of raw content (`similar` crate).
-//! - **RowHashDiff** — hash user-picked columns per row, set-difference rows
+//! - **TextDiff** - line-by-line git-style diff of raw content (`similar` crate).
+//! - **RowHashDiff** - hash user-picked columns per row, set-difference rows
 //!   between left and right (`blake3` crate). Order doesn't matter; only the
 //!   column content. Cross-format because hashing sees only cell text.
 //!
 //! The left side is the active tab; the right side lives on
 //! `TabState::compare_right_*` and is populated by the
-//! "View → Compare with…" menu entry.
+//! "View -> Compare with..." menu entry.
 
 use eframe::egui;
 use egui::RichText;
@@ -80,7 +80,7 @@ pub fn render_compare_view(
         ui.label(RichText::new(right_label).color(colors.text_secondary))
             .on_hover_text(&right_full);
         ui.add_space(16.0);
-        // Mode toggle. Each radio commits the new mode immediately —
+        // Mode toggle. Each radio commits the new mode immediately -
         // there's no Apply step, the renderers are cheap enough.
         for mode in [CompareMode::TextDiff, CompareMode::RowHashDiff] {
             if ui
@@ -106,7 +106,7 @@ pub fn render_compare_view(
     if tab.compare_right_path.is_none() {
         ui.centered_and_justified(|ui| {
             ui.label(
-                RichText::new("Pick a right-side file via View → Compare with…")
+                RichText::new("Pick a right-side file via View -> Compare with...")
                     .color(colors.text_muted),
             );
         });

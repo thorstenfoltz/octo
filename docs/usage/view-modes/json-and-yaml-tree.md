@@ -5,7 +5,7 @@ YAML documents. The same renderer handles both: the YAML tree is
 fed by `serde_yaml` converted to the same `serde_json::Value` shape
 that JSON uses.
 
-<!-- SCREENSHOT: json-tree-view.png — JSON Tree view with several levels expanded, showing keys, nested objects, arrays, mixed value types. -->
+<!-- SCREENSHOT: json-tree-view.png: JSON Tree view with several levels expanded, showing keys, nested objects, arrays, mixed value types. -->
 ![JSON Tree view](../../assets/screenshots/json-tree-view.png){ .screenshot-placeholder }
 
 ## When the tree view is available

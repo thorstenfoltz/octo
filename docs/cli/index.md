@@ -12,7 +12,13 @@ octa --schema data.parquet      # action: print schema
 octa --head data.csv -n 50      # action: first 50 rows
 octa --convert in.csv out.parquet
 octa --sql data.parquet -q 'SELECT count(*) FROM data'
+octa --sql sales.parquet --sql-table customers=customers.csv \
+     -q 'SELECT c.name, SUM(s.amount) FROM data s JOIN customers c ON s.cid=c.cid GROUP BY c.name'
 octa --export-schema data.parquet -t snowflake
+octa --compare-schemas v1.parquet v2.parquet
+octa --describe data.parquet
+octa --validate-schema data.parquet --expect-schema expected.json
+octa --unique-columns users.csv --max-combo 2
 octa --mcp                      # MCP server on stdio
 ```
 
@@ -20,16 +26,30 @@ The action flags are **mutually exclusive**, so pick one per
 invocation. Trailing file arguments are ignored (with a warning)
 when an action flag is set.
 
+The same flags work identically across every distribution channel:
+a plain binary off the releases page, an `install.sh` install, the
+AUR package, or an AppImage. The AppImage is just the binary in a
+self-contained bundle; invoke it directly:
+
+```bash
+./Octa-x86_64.AppImage --schema myfile.parquet
+./Octa-x86_64.AppImage --mcp
+```
+
 ## Available actions
 
-| Flag                          | Description                               | Reference                               |
-|-------------------------------|-------------------------------------------|-----------------------------------------|
-| `--schema FILE`               | Print column name + type as a table       | [→ `--schema`](schema.md)               |
-| `--head FILE [-n N]`          | Print the first N rows (default 20)       | [→ `--head`](head.md)                   |
-| `--convert IN OUT`            | Convert between formats                   | [→ `--convert`](convert.md)             |
-| `--sql FILE -q '<query>'`     | Run a SQL query against a file            | [→ `--sql`](sql.md)                     |
-| `--export-schema FILE [-t T]` | Render the schema as DDL / model / struct | [→ `--export-schema`](export-schema.md) |
-| `--mcp`                       | Start the MCP server                      | [→ MCP guide](../mcp/index.md)          |
+| Flag                                            | Description                                   | Reference                                   |
+|-------------------------------------------------|-----------------------------------------------|---------------------------------------------|
+| `--schema FILE`                                 | Print column name + type as a table           | [→ `--schema`](schema.md)                   |
+| `--head FILE [-n N]`                            | Print the first N rows (default 20)           | [→ `--head`](head.md)                       |
+| `--convert IN OUT`                              | Convert between formats                       | [→ `--convert`](convert.md)                 |
+| `--sql FILE -q '<query>'`                       | Run a SQL query against a file                | [→ `--sql`](sql.md)                         |
+| `--export-schema FILE [-t T]`                   | Render the schema as DDL / model / struct     | [→ `--export-schema`](export-schema.md)     |
+| `--compare-schemas A B`                         | Diff the schemas of two files                 | [→ `--compare-schemas`](compare-schemas.md) |
+| `--describe FILE`                               | One-shot snapshot: format + schema + sample   | [→ `--describe`](describe.md)               |
+| `--validate-schema FILE --expect-schema SCHEMA` | Validate against JSON Schema (exit 1 = drift) | [→ `--validate-schema`](validate-schema.md) |
+| `--unique-columns FILE`                         | Find PK candidates (singles + combos)         | [→ `--unique-columns`](unique-columns.md)   |
+| `--mcp`                                         | Start the MCP server                          | [→ MCP guide](../mcp/index.md)              |
 
 `--export-schema` also has the short alias `-e`.
 
@@ -37,15 +57,27 @@ when an action flag is set.
 
 These apply across actions (where they make sense):
 
-| Flag                      | Applies to                                 | Default     | Meaning                                                                                                                              |
-|---------------------------|--------------------------------------------|-------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `-f`, `--format` _FORMAT_ | `--schema`, `--head`, `--sql`              | `tsv`       | Output format: `tsv`, `json`, or `csv`. Ignored by `--convert`, `--export-schema`, and `--mcp`.                                      |
-| `-n`, `--lines` _N_       | `--head`                                   | `20`        | Number of rows to print.                                                                                                             |
-| `-q`, `--query` _QUERY_   | `--sql`                                    | (required)  | Required for `--sql`. The query string; reference the file as `data`.                                                                |
-| `-t`, `--target` _TARGET_ | `--export-schema`                          | `postgres`  | Schema-export target: `postgres`, `mysql`, `sqlite`, `databricks`, `snowflake`, `pydantic`, `typescript`, `json-schema`, `rust`.     |
-| `--rows` _N_\|`all`       | `--schema`, `--head`, `--convert`, `--sql` | `5,000,000` | Override the streaming initial-load row cap for this invocation. Pass a number (commas / underscores OK) or `all` to load every row. |
-| `-h`, `--help`            | always                                     | (no value)  | Print the full help text (with worked examples) and exit. `-h` and `--help` produce the **same long-form output**.                   |
-| `--version`               | always                                     | (no value)  | Print the Octa version and exit.                                                                                                     |
+| Flag                      | Applies to                                                                                                | Default     | Meaning                                                                                                                              |
+|---------------------------|-----------------------------------------------------------------------------------------------------------|-------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| `-f`, `--format` _FORMAT_ | `--schema`, `--head`, `--sql`, `--compare-schemas`, `--describe`, `--validate-schema`, `--unique-columns` | `tsv`       | Output format: `tsv`, `json`, or `csv`. Ignored by `--convert`, `--export-schema`, and `--mcp`.                                      |
+| `-n`, `--lines` _N_       | `--head`                                                                                                  | `20`        | Number of rows to print.                                                                                                             |
+| `-q`, `--query` _QUERY_   | `--sql`                                                                                                   | (required)  | Required for `--sql`. The query string; reference the file as `data`.                                                                |
+| `--sql-table NAME=PATH`   | `--sql`                                                                                                   | (none)      | Register an extra file as a workspace table named `NAME`. Repeatable. Any supported format.                                          |
+| `--sql-attach ALIAS=PATH` | `--sql`                                                                                                   | (none)      | `ATTACH` a DuckDB or SQLite database under `ALIAS`. Repeatable.                                                                      |
+| `--sql-write-to PATH`     | `--sql`                                                                                                   | (none)      | Persist the SELECT result to a DuckDB / SQLite file instead of printing it. Requires `--sql-write-table`.                            |
+| `--sql-write-table TABLE` | `--sql-write-to`                                                                                          | (required)  | Target table name for `--sql-write-to`.                                                                                              |
+| `--sql-write-schema NAME` | `--sql-write-to`                                                                                          | `main`      | Target schema (DuckDB only). Leave unset or `main` for SQLite.                                                                       |
+| `--sql-write-mode MODE`   | `--sql-write-to`                                                                                          | `create`    | `create`, `replace`, or `append`.                                                                                                    |
+| `-t`, `--target` _TARGET_ | `--export-schema`                                                                                         | `postgres`  | Schema-export target: `postgres`, `mysql`, `sqlite`, `databricks`, `snowflake`, `pydantic`, `typescript`, `json-schema`, `rust`.     |
+| `--table-a NAME`          | `--compare-schemas`                                                                                       | (no value)  | Specific table on FILE_A (multi-table sources only).                                                                                 |
+| `--table-b NAME`          | `--compare-schemas`                                                                                       | (no value)  | Specific table on FILE_B (multi-table sources only).                                                                                 |
+| `--table NAME`            | `--validate-schema`, `--describe`, `--unique-columns`                                                     | (no value)  | Specific table on FILE (multi-table sources).                                                                                        |
+| `--expect-schema FILE`    | `--validate-schema`                                                                                       | (required)  | Path to the expected JSON Schema. Required by `--validate-schema`.                                                                   |
+| `--sample-rows N`         | `--describe`                                                                                              | `5`         | Sample-row count for the preview. Clamped to `[0, 100]`.                                                                             |
+| `--max-combo N`           | `--unique-columns`                                                                                        | `1`         | Max combo size to test (clamped to `[1, 3]`).                                                                                        |
+| `--rows` _N_\|`all`       | `--schema`, `--head`, `--convert`, `--sql`                                                                | `5,000,000` | Override the streaming initial-load row cap for this invocation. Pass a number (commas / underscores OK) or `all` to load every row. |
+| `-h`, `--help`            | always                                                                                                    | (no value)  | Print the full help text (with worked examples) and exit. `-h` and `--help` produce the **same long-form output**.                   |
+| `--version`               | always                                                                                                    | (no value)  | Print the Octa version and exit.                                                                                                     |
 
 ## Output formatting
 
@@ -115,8 +147,12 @@ man ./octa.1                            # preview without installing
 ## See also
 
 - The dedicated [`--schema`](schema.md), [`--head`](head.md),
-  [`--convert`](convert.md), [`--sql`](sql.md), and
-  [`--export-schema`](export-schema.md) pages cover each action in
+  [`--convert`](convert.md), [`--sql`](sql.md),
+  [`--export-schema`](export-schema.md),
+  [`--compare-schemas`](compare-schemas.md),
+  [`--describe`](describe.md),
+  [`--validate-schema`](validate-schema.md), and
+  [`--unique-columns`](unique-columns.md) pages cover each action in
   detail.
 - [Man page reference](man-page.md) is a single-page, terminal-style
   reference matching `man octa`.

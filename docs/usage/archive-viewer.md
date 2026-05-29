@@ -1,25 +1,25 @@
 # Archive Viewer
 
 Open `.zip`, `.tar`, and `.tgz` archives to see their contents as a
-plain octa table. Read-only — extract one entry at a time into a
+plain octa table. The view is read-only, so you extract one entry at a time into a
 new tab for actual viewing.
 
-<!-- SCREENSHOT: archive-viewer-overview.png — Archive table showing path / size / mtime columns with a "Open selected entry" action bar above. -->
-![Archive Viewer](../assets/screenshots/archive-viewer-overview.png){ .screenshot-placeholder }
+<!-- SCREENSHOT: archive-viewer-overview.png: Archive table showing path / size / mtime columns with a "Open selected entry" action bar above. -->
+![Archive Viewer](../assets/screenshots/archive-viewer-overview.png)
 
 ## What gets shown
 
 Open the archive the usual way (**File → Open** or CLI arg) and the
 table renders one row per entry:
 
-| Column             | Meaning                                                                    |
-|--------------------|----------------------------------------------------------------------------|
-| `path`             | The entry's path inside the archive.                                       |
-| `size_bytes`       | Uncompressed size.                                                         |
-| `compressed_bytes` | Compressed size — `null` for plain tar (no per-entry compression).         |
-| `mtime`            | Last-modified timestamp from the entry header.                             |
-| `is_dir`           | Whether the entry is a directory.                                          |
-| `type`             | Coarse type hint — the entry's file extension (`csv`, `json`, …) or `dir`. |
+| Column             | Meaning                                                                   |
+|--------------------|---------------------------------------------------------------------------|
+| `path`             | The entry's path inside the archive.                                      |
+| `size_bytes`       | Uncompressed size.                                                        |
+| `compressed_bytes` | Compressed size, `null` for plain tar (no per-entry compression).         |
+| `mtime`            | Last-modified timestamp from the entry header.                            |
+| `is_dir`           | Whether the entry is a directory.                                         |
+| `type`             | Coarse type hint: the entry's file extension (`csv`, `json`, …) or `dir`. |
 
 You can sort, filter, search this table like any other.
 
@@ -43,7 +43,7 @@ If an entry can't be extracted or its format reader rejects the
 payload, an **orange warning banner** appears above the archive
 action bar describing the failure (`Failed to open '<entry>': …`).
 Click the **×** on the banner to dismiss it, or just pick a
-different entry — the banner clears automatically on the next
+different entry, since the banner clears automatically on the next
 successful open. The archive table itself stays interactive
 throughout, so no reload is needed.
 
@@ -72,7 +72,7 @@ supported yet.
 
 ## See also
 
-- [Supported Formats](../getting-started/supported-formats.md) — full
+- [Supported Formats](../getting-started/supported-formats.md): full
   list of file types Octa reads.
-- [Tabs & Folder Sidebar](tabs-and-sidebar.md) — every extracted
+- [Tabs & Folder Sidebar](tabs-and-sidebar.md): every extracted
   entry opens in its own tab.

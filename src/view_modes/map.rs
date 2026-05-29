@@ -15,13 +15,13 @@
 //! Implemented as a `walkers::Plugin` so the painter has access to the
 //! `Projector` and the map's clip rect. Each geometry type maps to a
 //! straightforward paint primitive:
-//!   - Point / MultiPoint → small filled circle.
-//!   - LineString / MultiLineString → connected line segments.
-//!   - Polygon / MultiPolygon → outer ring filled, outline stroked. Holes
-//!     are deliberately *not* cut out — egui's painter doesn't expose
+//!   - Point / MultiPoint -> small filled circle.
+//!   - LineString / MultiLineString -> connected line segments.
+//!   - Polygon / MultiPolygon -> outer ring filled, outline stroked. Holes
+//!     are deliberately *not* cut out - egui's painter doesn't expose
 //!     even-odd / winding fills natively, and the v1 visual is "good
 //!     enough" for the common case.
-//!   - GeometryCollection → recurse.
+//!   - GeometryCollection -> recurse.
 
 use eframe::egui;
 use geo_types::Geometry as GeoGeometry;

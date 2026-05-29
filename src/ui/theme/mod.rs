@@ -32,7 +32,7 @@ pub enum ThemeMode {
     /// Frost: cool, near-white backgrounds with pale ice-blue accents and
     /// dark slate text. The light counterpart to Deep Sea.
     Frost,
-    /// Hidden easter-egg theme — not listed in `ALL`, only reachable by
+    /// Hidden easter-egg theme - not listed in `ALL`, only reachable by
     /// clicking the toolbar logo seven times in quick succession. Cycles the
     /// accent hue every frame.
     Rainbow,
@@ -220,7 +220,7 @@ impl ThemeColors {
     }
 }
 
-/// HSV → RGB helper for the hidden Rainbow theme. `h` in 0..1, s/v in 0..1.
+/// HSV -> RGB helper for the hidden Rainbow theme. `h` in 0..1, s/v in 0..1.
 fn hsv_to_rgb(h: f32, s: f32, v: f32) -> Color32 {
     let h = (h.fract() + 1.0).fract() * 6.0;
     let i = h.floor() as i32;
@@ -246,7 +246,7 @@ pub fn apply_theme(ctx: &egui::Context, mode: ThemeMode, font: FontSettings) {
         // Hidden easter-egg theme: cycle ten palette slots through HSV at
         // staggered phase offsets so accents, text, borders, row stripes and
         // selection all glide through the spectrum simultaneously. ~10s per
-        // full hue cycle — fast enough to read as motion, slow enough to not
+        // full hue cycle - fast enough to read as motion, slow enough to not
         // induce a headache. Background fills stay near-black (low saturation)
         // so the table remains readable.
         let t = ctx.input(|i| i.time) as f32 * 0.10;
@@ -299,7 +299,7 @@ pub fn apply_theme(ctx: &egui::Context, mode: ThemeMode, font: FontSettings) {
 
     // Hover highlighting needs to read clearly on small icon-style widgets
     // such as the window close-X. We pair a tinted accent fill with a thicker
-    // accent stroke so the whole hit-target lights up — the previous bg_hover
+    // accent stroke so the whole hit-target lights up - the previous bg_hover
     // fill alone was too subtle to spot on the close button.
     visuals.widgets.hovered.bg_fill = colors.accent.linear_multiply(0.28);
     visuals.widgets.hovered.fg_stroke = Stroke::new(2.0, colors.accent);
@@ -322,7 +322,7 @@ pub fn apply_theme(ctx: &egui::Context, mode: ThemeMode, font: FontSettings) {
     // egui's `interact_selectable` aliases the selected widget's *fg_stroke*
     // (the text color) to `selection.stroke`. The accent color reads cleanly
     // on light themes but turns into mid-saturation-on-mid-saturation in
-    // dark themes — selected radio/menu/list entries become unreadable.
+    // dark themes - selected radio/menu/list entries become unreadable.
     // Use a high-contrast color in dark mode and slate in light mode.
     let selection_stroke_color = if is_dark {
         Color32::WHITE
@@ -372,7 +372,7 @@ pub fn apply_theme(ctx: &egui::Context, mode: ThemeMode, font: FontSettings) {
     // Per-theme structural overrides. These tweak shape/padding/stroke beyond
     // the color subset, so a theme can have a distinctively different *feel*
     // (e.g. chunky rounded "manga sticker" buttons) instead of just a palette
-    // swap. Keep edits minimal — anything done here ripples across every view.
+    // swap. Keep edits minimal - anything done here ripples across every view.
     visuals::apply_theme_decoration(&mut style, mode, &colors);
 
     ctx.set_global_style(style);
@@ -404,7 +404,7 @@ fn apply_fonts(ctx: &egui::Context, font: &FontSettings) {
     }
     // Bundled bold face used by the markdown preview renderer for `**text**`.
     // egui's default fonts don't include a bold variant, so `RichText::strong()`
-    // only tweaks color — the markdown renderer needs a real bold glyph set
+    // only tweaks color - the markdown renderer needs a real bold glyph set
     // to show weight contrast.
     static BOLD_BYTES: &[u8] = include_bytes!("../../../assets/Roboto-Bold.ttf");
     defs.font_data
@@ -412,7 +412,7 @@ fn apply_fonts(ctx: &egui::Context, font: &FontSettings) {
     defs.families
         .insert(FontFamily::Name(Arc::from("bold")), vec!["bold".into()]);
 
-    // Bundled Roboto Medium becomes the **default proportional** face — it sits
+    // Bundled Roboto Medium becomes the **default proportional** face - it sits
     // between the upstream Ubuntu-Light (too thin for readability on bars / tabs
     // / column headers / docs) and Roboto-Bold (which reads as too heavy for
     // body prose). Apache-2.0, attributed in `licenses/Apache-2.0.txt`.
@@ -428,7 +428,7 @@ fn apply_fonts(ctx: &egui::Context, font: &FontSettings) {
             .insert(FontFamily::Proportional, vec!["medium".into()]);
     }
 
-    // Bundled JetBrains Mono Regular — opt-in family for the SQL editor and
+    // Bundled JetBrains Mono Regular - opt-in family for the SQL editor and
     // any other monospace-heavy view that the user can switch on in Settings.
     // OFL-1.1, attributed in `licenses/OFL-1.1.txt`.
     static SQL_MONO_BYTES: &[u8] = include_bytes!("../../../assets/JetBrainsMono-Regular.ttf");

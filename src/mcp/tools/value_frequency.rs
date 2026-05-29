@@ -1,4 +1,4 @@
-//! MCP tool: `value_frequency` — per-column value counts (`value_counts`).
+//! MCP tool: `value_frequency` - per-column value counts (`value_counts`).
 
 use std::path::PathBuf;
 

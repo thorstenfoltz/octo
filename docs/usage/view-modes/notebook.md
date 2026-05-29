@@ -5,7 +5,7 @@ code cells with syntect syntax highlighting, Markdown cells through
 the Markdown renderer, and outputs (stdout, stderr, plots, HTML)
 underneath each code cell.
 
-<!-- SCREENSHOT: notebook-view.png — A notebook view with code cells (Python), a Markdown heading + paragraph, output text below a cell, and a small image output. -->
+<!-- SCREENSHOT: notebook-view.png: A notebook view with code cells (Python), a Markdown heading + paragraph, output text below a cell, and a small image output. -->
 ![Notebook view](../../assets/screenshots/notebook-view.png){ .screenshot-placeholder }
 
 ## What gets rendered

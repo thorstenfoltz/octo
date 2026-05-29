@@ -1,77 +1,96 @@
-# Release notes — `fix/several-bugs`
+# Release notes: `feature/mcp-extensions`
 
-A small bug-fix batch plus a structural refactor of the five largest source
-files. No public API or user-visible behaviour change from the refactor;
-the bug fixes are user-facing.
+A feature batch that expands SQL across the whole app, the CLI, and
+the MCP server, adds four new schema and profiling actions on both the CLI
+and MCP surfaces, introduces per-column number formatting with save-time
+rounding, and improves several file-loading and analysis workflows.
 
-## Fixes
+## SQL workspace (GUI, CLI, and MCP)
 
-- **Archive viewer: "Open selected entry" always opens a new tab.**
-  Selecting an entry inside a `.zip` / `.tar` / `.tgz` and clicking
-  **Open selected entry** sometimes replaced the archive listing tab with
-  the extracted file's data — the tab title became "Untitled" and the
-  button stayed disabled because the tab was no longer recognised as an
-  archive. The extraction path now routes through a new
-  `OctaApp::load_file_in_new_tab` helper that pushes an empty placeholder
-  tab before calling `load_file`, so `apply_loaded_table`'s tab-reuse
-  heuristic fills the placeholder rather than reusing the archive tab.
-  The archive listing keeps its title, columns, and selection; the
-  action bar's button stays clickable.
+SQL is no longer a single-table, print-only feature. Each surface now
+shares the same workspace engine (`src/sql/workspace.rs`, `engine.rs`).
 
-- **Multi-table picker: smaller default, configurable, no auto-grow.**
-  The SQLite / DuckDB / GeoPackage table picker used to open at a fixed
-  640×600 box. It now opens at a fit-to-content height capped by a new
-  setting, **Settings → Performance → Tables visible in picker** (default
-  **10**, TOML key `table_picker_visible_rows`). The dialog stays
-  user-resizable — drag the bottom-right corner to grow it for databases
-  with many tables. An auto-grow loop that previously expanded the
-  window each frame until it filled the screen (the hand-computed footer
-  height was a few pixels short of the actual chrome; `Resize`'s
-  `desired_size = max(desired_size, last_content_size)` then ratcheted
-  the window taller every frame) was fixed by restructuring with
-  `egui::Panel::bottom` + `CentralPanel::show_inside` so egui — not us —
-  computes the body / footer split.
+- **Multi-table queries and JOINs.** A query can reference more than the
+  active file. Extra files are registered as named workspace tables and a
+  single query can JOIN across formats (CSV, Parquet, JSON, Excel, SQLite,
+  and so on).
+- **Database attachments.** Whole DuckDB or SQLite databases can be
+  `ATTACH`-ed so every inner table is reachable. DuckDB tables appear as
+  `alias.schema.tbl`; SQLite tables as `alias.tbl` (via the bundled sqlite
+  extension when present, otherwise a per-table fallback).
+- **Write-back.** A SELECT result can be persisted to a DuckDB or SQLite
+  file instead of being printed, with create / replace / append modes and
+  an optional target schema for DuckDB.
+- **GUI panel.** The SQL panel gained a Workspace section that lists
+  registered tables and attached databases with per-row add / remove /
+  detach controls, a refresh button for the active table, and a
+  "Write result to DB..." dialog (`src/app/dialogs/sql_write_back.rs`).
+  Each tab owns its own session-scoped workspace.
+- **CLI flags.** `octa --sql` grew `--sql-table NAME=PATH` (repeatable),
+  `--sql-attach ALIAS=PATH` (repeatable), and `--sql-write-to PATH` with
+  `--sql-write-table`, `--sql-write-schema`, and `--sql-write-mode`.
+- **MCP `run_sql`.** Mirrors the CLI: `extra_tables`, `attach`, and
+  `write_to` parameters. A write-back returns a `write_back` response
+  shape instead of rows. Each call builds and tears down a fresh
+  workspace so state never leaks between calls.
 
-## Code organization (no behaviour change)
+## New schema and profiling tooling
 
-Five files that had grown past 900 lines were split into subdirectory
-modules. Every external import path (`use octa::ui::theme::ThemeColors`,
-`use octa::data::FormulaOutcome`, …) resolves identically — re-exports
-from each new `mod.rs` preserve the public surface.
+Four new actions are exposed identically on the CLI and over MCP, all
+built on pure library functions in `src/data/`.
 
-| Before | After | Sizes (lines) |
-|---|---|---|
-| `src/ui/theme.rs` (1,462) | `ui/theme/{mod, palettes, visuals}.rs` | 444 / 389 / 656 |
-| `src/ui/settings.rs` (2,109) | `ui/settings/{mod, dialog}.rs` | 984 / 1,140 |
-| `src/ui/table_view.rs` (2,310) | `ui/table_view/{mod, state, header, rows}.rs` | 1,045 / 91 / 621 / 595 |
-| `src/data/mod.rs` (1,996) | `data/mod.rs` + new `data/formulas.rs` | 1,693 / 316 |
-| `src/app/dialogs/documentation.rs` (912) | `dialogs/documentation/{mod, content}.rs` | 135 / 785 |
+- **`octa --compare-schemas A B`** / MCP `compare_schemas`. Diffs two
+  files' column schemas (`common`, `only_in_a`, `only_in_b`,
+  `type_mismatch`), with `--table-a` / `--table-b` for multi-table
+  sources.
+- **`octa --validate-schema FILE --expect-schema SCHEMA_FILE`** / MCP
+  `validate_against_schema`. Checks a file's columns against an expected
+  JSON Schema. Exit code is `0` on a clean match and `1` on any drift, so
+  it slots straight into a CI pipeline.
+- **`octa --describe FILE`** / MCP `describe_file`. A one-shot orientation
+  snapshot (format, file size, row count, schema, sample rows) that
+  replaces the usual `--schema` then `--head` two-step. `--sample-rows N`
+  controls the sample size.
+- **`octa --unique-columns FILE`** / MCP `unique_columns`. Finds columns,
+  and optional small combinations, whose values are unique across a file,
+  useful for spotting primary-key candidates. `--max-combo N` controls the
+  combination size.
 
-- `theme/palettes.rs` holds the eleven `ThemeColors` palette builders
-  (Dark / Light / Nord / Dracula / Gruvbox Dark / High Contrast / Manga /
-  Gentleman / Deep Sea / Frost / Rainbow). `theme/visuals.rs` holds the
-  matching per-theme `Style` decoration builders and background painters.
-- `settings/dialog.rs` holds the `impl SettingsDialog` UI rendering block
-  plus the private shortcut-capture helpers. The enums (`IconVariant`,
-  `WindowSize`, etc.), `AppSettings` struct + serde defaults + load/save,
-  and the TOML round-trip tests stay in `settings/mod.rs`.
-- `table_view/state.rs` holds `impl TableViewState`. `header.rs` holds
-  the column-header render path (sort arrows, drag-reorder, resize,
-  right-click menu). `rows.rs` holds data-row rendering, inline-edit
-  TextEdit, and the row context menu.
-- `data/formulas.rs` extracts `FormulaBadCell`, `FormulaOutcome`, the
-  recursive-descent parser, and the cell-coercion helper; re-exported
-  from `data/mod.rs` so existing call sites (`add_column.rs`, the table
-  view's formula display, the formula tests) are untouched.
-- `dialogs/documentation/content.rs` holds the ~50 `const &str` Markdown
-  section bodies that the F1 documentation dialog renders. The dialog
-  rendering itself shrinks to ~130 lines in `mod.rs`.
+## Number formatting and save-time rounding
 
-## Documentation
+- **Per-column number format.** A new dialog
+  (`src/app/dialogs/column_format.rs`, `src/data/num_format.rs`) sets
+  decimal places and rounding per numeric column, opened from a column
+  header right-click or Edit -> Number format. Edits apply live.
+- **Thousands separators.** Numeric cells can be grouped, with an English
+  or European separator style (the European decimal comma applies even
+  with grouping off). This is display-only and never touches saved,
+  exported, CLI, or MCP output.
+- **Rounding is display-only.** The in-memory table keeps full precision.
+  If any column rounds values, Save prompts with Save rounded values /
+  Save full precision / Cancel (`src/app/dialogs/round_save_prompt.rs`),
+  so the choice only affects the bytes on disk.
 
-- **`docs/reference/settings.md`** — new Performance row for
-  *Tables visible in picker* (default 10, TOML key
-  `table_picker_visible_rows`).
-- **`docs/usage/tabs-and-sidebar.md`** — under "Multi-table databases", a
-  paragraph explaining the fit-to-content sizing, the bottom-right
-  resize, and the link back to the new setting.
+## File-loading and analysis improvements
+
+- **Whitespace trim on load.** String cells and column titles are trimmed
+  of leading and trailing whitespace on load (`src/data/trim.rs`), with a
+  dismissible warning banner and two settings to control the behaviour.
+  For database-backed tables the trim is reconciled so it is not seen as
+  an edit or schema change on save.
+- **Excel multi-sheet selection.** Workbooks open every sheet in its own
+  tab up to a configurable cap; above it, a multi-select sheet picker
+  appears (`src/app/dialogs/sheet_picker.rs`).
+- **Value Frequency column picker.** Opening the dialog without a column
+  context now raises a column picker
+  (`src/app/dialogs/value_frequency_picker.rs`), and numeric columns
+  support custom bin counts.
+
+## Settings
+
+New settings back the above features: the multi-table picker default
+height (`table_picker_visible_rows`), the Excel auto-open cap
+(`excel_max_auto_sheets`), whitespace-trim toggles
+(`trim_whitespace_on_load`, `warn_on_whitespace_trim`), the thousands
+separator toggle and style, and the MCP response caps.
+

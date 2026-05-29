@@ -1,4 +1,4 @@
-//! `octa --head <FILE> [-n N]` — print the first N rows of a file.
+//! `octa --head <FILE> [-n N]` - print the first N rows of a file.
 //!
 //! For streaming readers (Parquet/CSV/TSV) the file loads with the standard
 //! `initial_load_rows` cap; `--head -n` then slices the head off that. So

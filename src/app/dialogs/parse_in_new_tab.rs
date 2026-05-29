@@ -1,10 +1,10 @@
 //! "Parse in new tab" modal.
 //!
-//! Triggered from Edit → "Parse in new tab" or the cell right-click
+//! Triggered from Edit -> "Parse in new tab" or the cell right-click
 //! context menu. Lets the user pick a parser format and (for CSV/TSV) a
 //! delimiter, then opens the parsed result in a new tab via the existing
 //! reader infrastructure. The whole flow runs through a temporary file
-//! so it touches the same code path as a normal file open — no parallel
+//! so it touches the same code path as a normal file open - no parallel
 //! "in-memory reader" universe to maintain.
 
 use std::io::Write;
@@ -20,7 +20,7 @@ use super::super::state::{OctaApp, TabState};
 /// we name the tempfile so `FormatRegistry::reader_for_path` picks the
 /// right reader. Order is the order the dropdown shows them in.
 ///
-/// Limited to text-style formats — parsing arbitrary cell content as
+/// Limited to text-style formats - parsing arbitrary cell content as
 /// Parquet/Excel/HDF5/etc. would need binary bytes and produce noise.
 const PARSE_FORMATS: &[(&str, &str)] = &[
     ("JSON", "json"),
@@ -45,7 +45,7 @@ pub(crate) struct ParseModalState {
     /// Display label, e.g. `"Cell R5:C2"` or `"Column 'addr'"`. Computed
     /// when the modal opens.
     pub source_label: String,
-    /// Cell strings captured at modal-open time. `None` for Table scope —
+    /// Cell strings captured at modal-open time. `None` for Table scope -
     /// those go through a format-writer instead of cell concatenation.
     pub cells: Option<Vec<String>>,
     /// Source-column headers captured at modal-open time, used to keep
@@ -74,7 +74,7 @@ impl ParseModalState {
             source_label,
             cells,
             headers,
-            // Default to JSON — the original motivation for this feature
+            // Default to JSON - the original motivation for this feature
             // was un-flattening JSON-shaped cell payloads.
             format_idx: 0,
             csv_delimiter: ",".to_string(),
@@ -252,7 +252,7 @@ fn execute_parse(app: &mut OctaApp, state: ParseModalState) {
         return;
     }
     let path = tmp.path().to_path_buf();
-    // Hold the temp file alive past load by leaking the handle — the
+    // Hold the temp file alive past load by leaking the handle - the
     // reader may stream from disk, and dropping the handle before the
     // read finishes would delete the file out from under it. The OS
     // cleans `/tmp` on reboot.
@@ -292,7 +292,7 @@ fn scope_friendly_name(scope: &ParseScope, _fallback: &str) -> String {
 /// scope uses, so headers are preserved consistently across all
 /// formats (CSV / TSV: written as the first data row; JSON / JSONL /
 /// YAML / TOML / Markdown: written as the object keys / table
-/// columns). Plain Text is short-circuited by the caller — it has no
+/// columns). Plain Text is short-circuited by the caller - it has no
 /// schema concept.
 ///
 /// Shapes:
@@ -387,7 +387,7 @@ fn serialize_active_table(app: &mut OctaApp, ext: &str) -> Result<Vec<u8>, Strin
 /// Helper: given a [`ParseScope`] picked from a menu, build the
 /// [`ParseModalState`] by extracting the relevant cells out of the
 /// active tab. Returns `None` if the scope's coordinates are out of
-/// bounds (defensive — shouldn't happen in practice).
+/// bounds (defensive - shouldn't happen in practice).
 pub(crate) fn build_modal_state(tab: &TabState, scope: ParseScope) -> Option<ParseModalState> {
     let table = &tab.table;
     let bdm = octa::data::BinaryDisplayMode::default();

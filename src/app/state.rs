@@ -19,11 +19,11 @@ pub(crate) const MAX_CLOSED_TAB_HISTORY: usize = 10;
 /// Snapshot of a tab that was just closed, used to power the
 /// `ReopenLastClosedTab` (Ctrl+Shift+T) shortcut.
 ///
-/// For tabs backed by a file on disk, the path is retained — reopening
+/// For tabs backed by a file on disk, the path is retained - reopening
 /// rereads the file, which is cheaper than holding a full `TabState` clone
 /// and keeps any concurrent edits visible. For scratch tabs (no source
 /// path: parsed-in-new-tab, raw edits, empty welcome tab) only the textual
-/// payload (`raw_content` + view mode + format label) is kept — enough to
+/// payload (`raw_content` + view mode + format label) is kept - enough to
 /// recreate the visible state without trying to deep-clone egui textures,
 /// commonmark caches, etc. Truly empty tabs are not snapshotted.
 pub(crate) enum ClosedTabSnapshot {
@@ -35,7 +35,7 @@ pub(crate) enum ClosedTabSnapshot {
     },
 }
 
-/// Sort order for the Column Inspector dialog. View-only — does not mutate
+/// Sort order for the Column Inspector dialog. View-only - does not mutate
 /// the underlying column order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum ColumnInspectorSort {
@@ -56,9 +56,18 @@ pub(crate) enum FindDuplicatesMode {
     NewTab,
 }
 
+/// Cache entry for the SQL workspace inspector. Stores either the
+/// successful introspection or the error message returned by the workspace
+/// so the inspector can render the error inline instead of refetching every
+/// frame.
+#[derive(Debug, Clone)]
+pub(crate) struct InspectorCacheEntry {
+    pub(crate) result: Result<octa::sql::TableInspection, String>,
+}
+
 /// Open Schema Export dialog state. Carries the currently-shown
 /// target so the user can switch between renderings (Postgres ↔
-/// MySQL ↔ Pydantic ↔ …) without closing the dialog, plus the
+/// MySQL ↔ Pydantic ↔ ...) without closing the dialog, plus the
 /// window-size mode. Held on `OctaApp` rather than `TabState`
 /// because the dialog operates on the active tab's column list
 /// rather than per-tab persistent state.
@@ -71,7 +80,7 @@ pub(crate) struct SchemaExportState {
 /// likely to make column coloring or column alignment laggy. The user can
 /// either keep the slow features on (we honor their choice and don't ask
 /// again for this tab) or disable them just for the current file. Choice is
-/// transient — never written back to `AppSettings`.
+/// transient - never written back to `AppSettings`.
 pub(crate) struct RawPerfPrompt {
     pub(crate) tab_idx: usize,
     pub(crate) file_size: u64,
@@ -101,6 +110,35 @@ pub(crate) struct DateWarning {
     pub(crate) entries: Vec<DatePromotionInfo>,
 }
 
+/// Pending whitespace-trim notice surfaced as a dismissible banner above the
+/// table. Lists the columns where leading/trailing whitespace was stripped on
+/// load. Set by `apply_loaded_table` when `trim_whitespace_on_load` and
+/// `warn_on_whitespace_trim` are both on and at least one column changed.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct TrimWarning {
+    pub(crate) tab_idx: usize,
+    pub(crate) columns: Vec<String>,
+}
+
+/// State for the multi-select Excel sheet picker. `selected[i]` tracks
+/// whether `sheet_names[i]` is ticked; the first `excel_max_auto_sheets` are
+/// pre-checked when the picker opens.
+pub(crate) struct SheetPickerState {
+    pub(crate) path: std::path::PathBuf,
+    pub(crate) sheet_names: Vec<String>,
+    pub(crate) selected: Vec<bool>,
+}
+
+/// A deferred save request waiting on the user's "round on save?" decision.
+/// Carries everything `do_save_tab` needs to resume once the user picks an
+/// option in `round_save_prompt`.
+#[derive(Debug, Clone)]
+pub(crate) struct RoundSavePrompt {
+    pub(crate) tab_idx: usize,
+    pub(crate) path: std::path::PathBuf,
+    pub(crate) save_filtered_view: bool,
+}
+
 /// One pending date-format ambiguity dialog request: a column whose values
 /// are consistent with more than one date layout (e.g. DD/MM/YYYY and
 /// MM/DD/YYYY). The user picks one, or chooses to leave the column as
@@ -119,14 +157,14 @@ pub(crate) struct DateAmbiguity {
 /// quoted field doesn't split the cell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum RawCsvQuote {
-    /// RFC 4180 default — fields may be wrapped in `"`.
+    /// RFC 4180 default - fields may be wrapped in `"`.
     #[default]
     Double,
     /// Fields may be wrapped in `'` (some dialects).
     Single,
     /// Either `"` or `'` opens a quoted span; whichever opens it must close it.
     Both,
-    /// Quote characters carry no meaning — split purely on the delimiter.
+    /// Quote characters carry no meaning - split purely on the delimiter.
     None,
 }
 
@@ -135,12 +173,12 @@ pub(crate) enum RawCsvQuote {
 /// matching quote always closes the span.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum RawCsvEscape {
-    /// RFC 4180 default — `""` inside a `"..."` span is a literal quote.
+    /// RFC 4180 default - `""` inside a `"..."` span is a literal quote.
     #[default]
     Doubled,
     /// C-style `\"` (and `\\`) escape inside the quoted span.
     Backslash,
-    /// No escapes — the first matching quote closes the span.
+    /// No escapes - the first matching quote closes the span.
     None,
 }
 
@@ -189,7 +227,7 @@ pub(crate) struct TabState {
     pub(crate) raw_content_original: Option<String>,
     /// Per-tab gate for raw-view column coloring. Defaults to `true`; flipped
     /// off by the slow-file prompt when the user enters the raw view of a
-    /// large CSV/TSV. Not persisted — only governs this tab.
+    /// large CSV/TSV. Not persisted - only governs this tab.
     pub(crate) raw_color_enabled: bool,
     /// Source-file size in bytes captured at load time. Used by the
     /// slow-file prompt that appears the first time the user enters raw view
@@ -209,7 +247,7 @@ pub(crate) struct TabState {
     pub(crate) bg_loading_done: Arc<std::sync::atomic::AtomicBool>,
     pub(crate) bg_can_load_more: bool,
     pub(crate) bg_file_exhausted: Arc<std::sync::atomic::AtomicBool>,
-    /// Pending vertical scroll offset for the markdown view's ScrollArea —
+    /// Pending vertical scroll offset for the markdown view's ScrollArea -
     /// set when the user clicks a `#fragment` link, applied next frame.
     pub(crate) markdown_scroll_target: Option<f32>,
     /// Layout mode for the Markdown view (Preview / Split / Edit). Default
@@ -270,6 +308,37 @@ pub(crate) struct TabState {
     /// Autocomplete popup: set to `false` by Escape to hide the popup until
     /// the user types again. Reset to `true` on any text change.
     pub(crate) sql_ac_visible: bool,
+    /// Per-tab multi-table SQL workspace. Lazily constructed on the first
+    /// SQL action (panel open or query run). Carries the tab's `data`
+    /// table plus any extras the user has added and any ATTACH-ed DBs.
+    /// `None` until then so opening a tab doesn't pay the DuckDB
+    /// connection cost up front.
+    pub(crate) sql_workspace: Option<octa::sql::SqlWorkspace>,
+    /// Last successfully executed SELECT, kept verbatim so the write-back
+    /// dialog has a source query to compose `CREATE TABLE AS ...` from.
+    pub(crate) sql_last_query: String,
+    /// Toggle for the collapsible Workspace section at the top of the SQL
+    /// panel. Off by default to keep the panel compact for users who only
+    /// query `data`.
+    pub(crate) sql_workspace_open: bool,
+    /// Currently selected entry in the workspace tree; drives the inspector
+    /// pane on the right side of the workspace section. `None` shows the
+    /// inspector's empty-state hint.
+    pub(crate) sql_inspector_selection: Option<crate::app::sql_panel::InspectorTarget>,
+    /// Cache of [`SqlWorkspace`] introspection results keyed by the same
+    /// `InspectorTarget` shape. Populated on demand when the user selects an
+    /// entry; reset by `clear_inspector_cache` on workspace mutations
+    /// (refresh, add, remove, attach, detach).
+    pub(crate) sql_inspector_cache:
+        std::collections::HashMap<crate::app::sql_panel::InspectorTarget, InspectorCacheEntry>,
+    /// Per-attachment expansion state for the workspace tree (alias ->
+    /// expanded?). Schemas inside an attachment use the keys `(alias,
+    /// schema)`; we use a single map and synthesise the key.
+    pub(crate) sql_workspace_tree_expanded: std::collections::HashSet<String>,
+    /// State for the SQL write-back dialog. `None` when the dialog is
+    /// closed. Lives on the tab so write-back state survives toggling
+    /// between tabs.
+    pub(crate) sql_write_back: Option<super::dialogs::sql_write_back::SqlWriteBackState>,
     /// Whether the first data row in the file is being treated as column
     /// headers (the default for most readers). When toggled off, the headers
     /// are pushed back into row 0 and column names become `column_1..N`.
@@ -288,7 +357,7 @@ pub(crate) struct TabState {
     pub(crate) column_inspector_anchor: Option<usize>,
     /// Column index whose value-frequency dialog is currently open for this
     /// tab. `None` = dialog closed. Set by Ctrl+Shift+I, column-header
-    /// right-click → "Value frequency…", or the Edit menu.
+    /// right-click -> "Value frequency...", or the Edit menu.
     pub(crate) value_frequency_col: Option<usize>,
     /// Top-N cap shown in the value-frequency dialog. `None` means "all
     /// distinct values". Defaults to `Some(50)` per the F3 plan.
@@ -296,9 +365,30 @@ pub(crate) struct TabState {
     /// Whether numeric columns are auto-binned (Sturges) in the value-
     /// frequency dialog. Ignored for non-numeric columns.
     pub(crate) value_frequency_bin_numeric: bool,
+    /// Custom bin count for numeric value-frequency binning. `None` =
+    /// Sturges (the default). `Some(n)` overrides with exactly `n` bins.
+    pub(crate) value_frequency_bins: Option<usize>,
+    /// Text buffer backing the "Bins:" input in the value-frequency dialog.
+    pub(crate) value_frequency_bins_buf: String,
     /// Window-size mode for the Value Frequency dialog.
     pub(crate) value_frequency_size: ui::settings::DialogSize,
-    /// Whether the "Find duplicates…" dialog is open on this tab.
+    /// When `true`, the value-frequency *column picker* is open - used when
+    /// the feature is launched with no column context (Analyse menu, or the
+    /// shortcut with no cell selected). On confirm it sets
+    /// `value_frequency_col`.
+    pub(crate) value_frequency_pick: bool,
+    /// Per-column number-display format (decimals + rounding). Keys are
+    /// column indices into `table.columns`, same index-keyed precedent as
+    /// `column_filters` / `hidden_columns`. Display-only: Save asks the user
+    /// before applying rounding to the written values.
+    pub(crate) column_number_formats:
+        std::collections::HashMap<usize, octa::data::num_format::NumberFormat>,
+    /// Column index whose Number-format dialog is open. `None` = closed.
+    pub(crate) column_format_col: Option<usize>,
+    /// Text buffer backing the decimals input in the Number-format dialog.
+    /// Seeded when the dialog opens; parsed live into `column_number_formats`.
+    pub(crate) column_format_decimals_buf: String,
+    /// Whether the "Find duplicates..." dialog is open on this tab.
     pub(crate) show_find_duplicates: bool,
     /// Column indices selected as the dedupe key in the Find Duplicates
     /// dialog. Re-seeded from the active selection when the dialog opens;
@@ -310,7 +400,7 @@ pub(crate) struct TabState {
     /// Columns hidden from the table view. Indices map into
     /// `table.columns`. Hidden columns keep their data intact (Save still
     /// writes them); the renderer just zeroes their visible width so they
-    /// disappear from view. Transient — not persisted across sessions, same
+    /// disappear from view. Transient - not persisted across sessions, same
     /// precedent as `column_filters`.
     pub(crate) hidden_columns: std::collections::HashSet<usize>,
     /// Whether this tab is pinned. Pinned tabs render with a 📌 prefix,
@@ -319,14 +409,14 @@ pub(crate) struct TabState {
     /// restarts via `AppSettings.pinned_tabs` (scratch tabs cannot be
     /// pinned).
     pub(crate) pinned: bool,
-    /// Whether this tab is a *chart tab* — created via the **Analyse →
+    /// Whether this tab is a *chart tab* - created via the **Analyse ->
     /// Chart** toolbar button rather than loaded from a file. Chart tabs
     /// hold a snapshot of the source table, render only the Chart view,
     /// don't appear in the file-save / pin paths, and their title is
     /// derived from the source filename.
     pub(crate) is_chart_tab: bool,
     /// Display label for a chart tab. Set when the tab is opened so the
-    /// tab strip can show e.g. "Chart \u{2014} sales.parquet". Ignored on
+    /// tab strip can show e.g. "Chart - sales.parquet". Ignored on
     /// non-chart tabs.
     pub(crate) chart_tab_label: Option<String>,
     /// Excel-style per-column value-set filters. Keys are column indices;
@@ -340,7 +430,7 @@ pub(crate) struct TabState {
     /// Window-size mode for the Column Filter dialog.
     pub(crate) column_filter_size: ui::settings::DialogSize,
     /// Which column the dialog is currently editing. `None` means no column
-    /// is selectable (table has zero columns) — the dialog won't open in that
+    /// is selectable (table has zero columns) - the dialog won't open in that
     /// case.
     pub(crate) column_filter_picker_col: Option<usize>,
     /// Type-to-filter buffer for the value list inside the dialog.
@@ -364,11 +454,11 @@ pub(crate) struct TabState {
     /// when no banner is active.
     pub(crate) parse_error_banner: Option<String>,
     /// Right-side path for the Compare view. `None` means the user hasn't
-    /// picked a comparison target yet — the menu entry "View → Compare
-    /// with…" sets this and the active `view_mode` to `Compare`.
+    /// picked a comparison target yet - the menu entry "View -> Compare
+    /// with..." sets this and the active `view_mode` to `Compare`.
     pub(crate) compare_right_path: Option<std::path::PathBuf>,
     /// Right-side raw text content for the Compare view's TextDiff mode.
-    /// Loaded eagerly when "Compare with…" is invoked.
+    /// Loaded eagerly when "Compare with..." is invoked.
     pub(crate) compare_right_raw: Option<String>,
     /// Right-side `DataTable` for the Compare view's RowHashDiff mode.
     /// Boxed so the inline size of `TabState` doesn't grow noticeably
@@ -423,13 +513,13 @@ pub(crate) struct TabState {
     /// `None` until the Map view renders.
     pub(crate) map_memory: Option<Box<walkers::MapMemory>>,
     /// Per-tab Chart view config (kind, X/Y columns, aggregation). Transient
-    /// — not persisted, so the chart doesn't reappear on the wrong file next
+    /// (not persisted), so the chart doesn't reappear on the wrong file next
     /// session. Seeded on first entry to the Chart view by
     /// `render_chart_view::seed_defaults`.
     pub(crate) chart_config: octa::data::chart::ChartConfig,
     /// Staging buffers for the Customise numeric inputs. egui's `DragValue`
     /// always flashes the horizontal-resize cursor on hover, which reads as
-    /// "drag to adjust" — confusing here. We render each input as a plain
+    /// "drag to adjust" - confusing here. We render each input as a plain
     /// `TextEdit` instead and parse the string back into `chart_config` on
     /// every change. Each buffer is empty when the corresponding `Option`
     /// is `None`, otherwise holds the f64 / usize formatted for display.
@@ -509,7 +599,11 @@ pub(crate) struct OctaApp {
     pub(crate) show_reload_confirm: bool,
     /// Pending modal table picker (DB sources containing multiple tables).
     pub(crate) pending_table_picker: Option<ui::table_picker::TablePickerState>,
-    /// Files queued for batch open (e.g. from a multi-select File→Open dialog
+    /// Pending multi-select sheet picker, shown when an Excel workbook has
+    /// more sheets than `excel_max_auto_sheets`. The user ticks which sheets
+    /// to open (each in its own tab).
+    pub(crate) pending_sheet_picker: Option<SheetPickerState>,
+    /// Files queued for batch open (e.g. from a multi-select File->Open dialog
     /// or multiple paths on the command line). Drained one per frame so that
     /// any modal picker that surfaces during a load (e.g. multi-table DB)
     /// pauses the queue naturally until the user resolves it.
@@ -517,10 +611,10 @@ pub(crate) struct OctaApp {
     /// Stack of recently-closed tabs for the `ReopenLastClosedTab` shortcut
     /// (default Ctrl+Shift+T). Most recent close is at the back; capped at
     /// `MAX_CLOSED_TAB_HISTORY`. Each snapshot carries enough state to
-    /// reopen — path-backed tabs reload from disk, scratch tabs restore
+    /// reopen - path-backed tabs reload from disk, scratch tabs restore
     /// the full `TabState` clone verbatim.
     pub(crate) recently_closed_tabs: std::collections::VecDeque<ClosedTabSnapshot>,
-    /// Tab indices the user marked via Ctrl-click on the tab bar — used to
+    /// Tab indices the user marked via Ctrl-click on the tab bar - used to
     /// drive tab-vs-tab compare (right-click menu / `CompareSelectedTabs`
     /// shortcut). Cleared on any plain (non-Ctrl) tab click. Does not
     /// include the active tab; the active tab is always treated as one
@@ -539,6 +633,13 @@ pub(crate) struct OctaApp {
     /// Set by `run_date_inference_pass` whenever one or more columns are
     /// promoted with a non-ISO source layout. `None` once dismissed.
     pub(crate) pending_date_warning: Option<DateWarning>,
+    /// Pending whitespace-trim banner: the columns that had leading/trailing
+    /// whitespace stripped on load. `None` once dismissed.
+    pub(crate) pending_trim_warning: Option<TrimWarning>,
+    /// Pending "round on save?" prompt. Set when a save is requested on a tab
+    /// that has per-column rounding formats; resolved by
+    /// `round_save_prompt::render_round_save_prompt_dialog`.
+    pub(crate) pending_round_save: Option<RoundSavePrompt>,
     /// Pending "Parse in new tab" modal. Set when the user picks a scope
     /// from the Edit menu or right-click; cleared when the modal is
     /// dismissed (Cancel) or the parse succeeds (Open).
@@ -575,7 +676,7 @@ pub(crate) struct OctaApp {
     /// Session-only read-only mode. When `true`, every editing path
     /// (cell edits, structural changes, marks, undo/redo, cut/paste,
     /// raw-text editor, SQL DML) short-circuits. Toggled via the
-    /// `ToggleReadOnly` shortcut (default F8). NOT persisted — every
+    /// `ToggleReadOnly` shortcut (default F8). NOT persisted - every
     /// launch starts editable.
     pub(crate) readonly_mode: bool,
     /// Pending modal that announces the current read-only state
@@ -586,8 +687,8 @@ pub(crate) struct OctaApp {
     /// pinned-tab restore set. Without it the pin-load block would re-run
     /// every frame (since `initial_files` empties on first frame anyway).
     pub(crate) startup_pin_load_done: bool,
-    /// Multi-search panel state — query, scope, results, background
-    /// worker. Initialised hidden; opened via **Search → Multi-search…**
+    /// Multi-search panel state - query, scope, results, background
+    /// worker. Initialised hidden; opened via **Search -> Multi-search...**
     /// or the `MultiSearch` keyboard shortcut.
     pub(crate) multi_search: super::multi_search::MultiSearchState,
 }

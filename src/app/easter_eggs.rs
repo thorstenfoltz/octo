@@ -13,7 +13,7 @@ use octa::ui::theme::{FontSettings, ThemeMode, apply_theme};
 use super::state::OctaApp;
 
 /// The Konami code. Egui's logical Key names diverge from the historical
-/// "↑↑↓↓←→←→BA" — match by `Key`, not by character.
+/// "↑↑↓↓←->←->BA" - match by `Key`, not by character.
 const KONAMI: &[egui::Key] = &[
     egui::Key::ArrowUp,
     egui::Key::ArrowUp,
@@ -53,7 +53,7 @@ impl OctaApp {
     /// Walk this frame's keyboard events and advance the Konami matcher.
     /// Triggers a confetti animation on full match. Safe to call every frame.
     pub(crate) fn update_easter_egg_inputs(&mut self, ctx: &egui::Context) {
-        // Don't intercept arrow keys when a TextEdit is focused — the user is
+        // Don't intercept arrow keys when a TextEdit is focused - the user is
         // navigating text, not entering a code.
         let text_focused = ctx
             .memory(|m| m.focused())
@@ -253,7 +253,7 @@ fn paint_arrow(
     ));
 }
 
-/// Paint the "↑↑↓↓←→←→BA" banner inside the same overlay area as the confetti.
+/// Paint the "↑↑↓↓←->←->BA" banner inside the same overlay area as the confetti.
 /// Uses vector triangles for the arrows so the glyphs always render, regardless
 /// of the active font's coverage.
 fn paint_konami_banner(painter: &egui::Painter, screen: egui::Rect, t: f32) {
@@ -407,7 +407,7 @@ impl OctaApp {
 
     /// Paint the passive Christmas overlay if today is Dec 24-26.
     /// Renders large corner snowflakes plus a slow continuous low-density
-    /// snowfall across the whole viewport — subtle, always on top, never
+    /// snowfall across the whole viewport - subtle, always on top, never
     /// blocks clicks. Independent of the click-triggered snowfall burst.
     pub(crate) fn render_christmas_overlay(&mut self, ctx: &egui::Context) {
         if !is_christmas_window() {
@@ -460,7 +460,7 @@ fn paint_snowfall(painter: &egui::Painter, screen: egui::Rect, t: f32, is_dark: 
         let speed = 90.0 + ((seed & 0xff) as f32) * 0.6;
         let sway = (t * 2.0 + phase * std::f32::consts::TAU).sin() * 20.0;
         // Particles spawn at staggered start times so the sky isn't filled
-        // instantly — looks like real snow gathering.
+        // instantly - looks like real snow gathering.
         let delay = phase * 0.8;
         let local_t = (t - delay).max(0.0);
         let y = -16.0 + speed * local_t;
@@ -576,7 +576,7 @@ fn paint_christmas_decorations(painter: &egui::Painter, screen: egui::Rect, is_d
 
     // --- Continuous, low-density drifting snow ---
     //
-    // Deterministic per-flake seed → no per-frame allocation, and the
+    // Deterministic per-flake seed -> no per-frame allocation, and the
     // pattern is reproducible across runs. Density is intentionally low
     // (~40 flakes) so text on the welcome screen / table headers stays
     // perfectly readable. Each flake wraps from bottom back to top by
@@ -592,7 +592,7 @@ fn paint_christmas_decorations(painter: &egui::Painter, screen: egui::Rect, is_d
         let seed = (i as u32).wrapping_mul(2654435761) ^ 0xc1ee_ce11;
         let x_seed = ((seed >> 8) & 0xffff) as f32 / 65535.0;
         let phase = ((seed >> 3) & 0xff) as f32 / 255.0;
-        // Range ~18-46 px/s — slow and snow-like, not a blizzard.
+        // Range ~18-46 px/s - slow and snow-like, not a blizzard.
         let speed = 18.0 + ((seed & 0xff) as f32) * 0.11;
         let sway = (t * 0.6 + phase * std::f32::consts::TAU).sin() * 14.0;
         let raw_y = phase * height + t * speed;
@@ -657,9 +657,9 @@ pub(crate) fn paint_santa_hat_overlay(ctx: &egui::Context, logo_rect: egui::Rect
     });
 }
 
-/// Draw a classic Santa hat — red triangular cone tilted slightly to the
+/// Draw a classic Santa hat - red triangular cone tilted slightly to the
 /// right, white fluffy band at the base, white pompom dangling off the
-/// tip — over the top-right portion of `logo_rect`. Drawn from primitives;
+/// tip - over the top-right portion of `logo_rect`. Drawn from primitives;
 /// no SVG asset.
 fn paint_santa_hat(painter: &egui::Painter, logo_rect: egui::Rect) {
     // Scale every dimension off the logo size so the hat looks proportional

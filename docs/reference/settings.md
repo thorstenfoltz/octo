@@ -16,8 +16,8 @@ it by hand if you prefer; Octa picks up changes on next launch.
 Unknown / removed fields are tolerated (new versions add defaults
 for missing keys; old versions ignore unknown keys).
 
-<!-- SCREENSHOT: settings-dialog.png — Settings dialog open showing the section headers (Appearance, Table View, Search & Editor, etc.) with one section expanded. -->
-![Settings dialog](../assets/screenshots/settings-dialog.png){ .screenshot-placeholder }
+<!-- SCREENSHOT: settings-dialog.png: Settings dialog open showing the section headers (Appearance, Table View, Search & Editor, etc.) with one section expanded. -->
+![Settings dialog](../assets/screenshots/settings-dialog.png)
 
 ## Appearance
 
@@ -32,15 +32,17 @@ for missing keys; old versions ignore unknown keys).
 
 ## Table View
 
-| Setting                     | Default | Notes                                                                                                             |
-|-----------------------------|---------|-------------------------------------------------------------------------------------------------------------------|
-| **Show row numbers**        | on      | Hide the grey row-number gutter on the left.                                                                      |
-| **Alternating row colours** | on      | Subtle zebra striping.                                                                                            |
-| **Negative numbers in red** | on      | Colour negative numeric cells red.                                                                                |
-| **Highlight edited cells**  | off     | Background colour for cells with unsaved edits.                                                                   |
-| **Cell line breaks**        | off     | Render `\n` inside cells as actual line breaks. Rows have variable height when on.                                |
-| **Binary display mode**     | Binary  | How `Binary` columns render: `Binary` (010101…), `Hex` (`0xab`), or `Text` (UTF-8 if printable, fallback to hex). |
-| **Default mark colour**     | Green   | Colour used by the `Mark` shortcut (Ctrl+M).                                                                      |
+| Setting                     | Default | Notes                                                                                                                                                                                  |
+|-----------------------------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Show row numbers**        | on      | Hide the grey row-number gutter on the left.                                                                                                                                           |
+| **Alternating row colours** | on      | Subtle zebra striping.                                                                                                                                                                 |
+| **Negative numbers in red** | on      | Colour negative numeric cells red.                                                                                                                                                     |
+| **Thousand separators**     | on      | Render numeric cells with thousand separators (e.g. `1,234,567.89`). Display only, saved data is unchanged. TOML key: `thousands_separators_in_cells`.                                 |
+| **Number style**            | English | Grouping + decimal marks for numeric cells: English (`1,234.56`) or European (`1.234,56`). The decimal mark follows this even with separators off. TOML key: `number_separator_style`. |
+| **Highlight edited cells**  | off     | Background colour for cells with unsaved edits.                                                                                                                                        |
+| **Cell line breaks**        | off     | Render `\n` inside cells as actual line breaks. Rows have variable height when on.                                                                                                     |
+| **Binary display mode**     | Binary  | How `Binary` columns render: `Binary` (010101…), `Hex` (`0xab`), or `Text` (UTF-8 if printable, fallback to hex).                                                                      |
+| **Default mark colour**     | Green   | Colour used by the `Mark` shortcut (Ctrl+M).                                                                                                                                           |
 
 ## Search & Editor
 
@@ -51,13 +53,15 @@ for missing keys; old versions ignore unknown keys).
 
 ## File-Specific
 
-| Setting                        | Default | Notes                                                                                                       |
-|--------------------------------|---------|-------------------------------------------------------------------------------------------------------------|
-| **Colour aligned columns**     | on      | In [Raw view](../usage/view-modes/raw-text.md) of CSV/TSV files, tint each column with a subtle background. |
-| **Warn on un-align reload**    | on      | Confirmation dialog when toggling **Align Columns** off (the buffer is re-loaded).                          |
-| **Warn on date format change** | on      | One-shot banner when date inference promotes a non-ISO column.                                              |
-| **Read-only mode notice**      | on      | Show the read-only intro modal on **F8** the first time per session.                                        |
-| **Notebook output layout**     | Beneath | Where notebook output cells render: `Below cell` or `Side-by-side`.                                         |
+| Setting                        | Default | Notes                                                                                                                                                    |
+|--------------------------------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Colour aligned columns**     | on      | In [Raw view](../usage/view-modes/raw-text.md) of CSV/TSV files, tint each column with a subtle background.                                              |
+| **Warn on un-align reload**    | on      | Confirmation dialog when toggling **Align Columns** off (the buffer is re-loaded).                                                                       |
+| **Warn on date format change** | on      | One-shot banner when date inference promotes a non-ISO column.                                                                                           |
+| **Trim whitespace on load**    | on      | Strip leading/trailing whitespace from string cells and column titles when a file is opened (interior spaces kept). TOML key: `trim_whitespace_on_load`. |
+| **Warn on whitespace trim**    | on      | Banner listing which columns had whitespace trimmed on load. Independent of the trim setting. TOML key: `warn_on_whitespace_trim`.                       |
+| **Read-only mode notice**      | on      | Show the read-only intro modal on **F8** the first time per session.                                                                                     |
+| **Notebook output layout**     | Beneath | Where notebook output cells render: `Below cell` or `Side-by-side`.                                                                                      |
 
 ## SQL
 
@@ -113,15 +117,16 @@ The full list of actions lives on the
 
 ## Performance
 
-| Setting                        | Default   | Notes                                                                                                                                                                                                                                                                              |
-|--------------------------------|-----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Initial-load row cap**       | 5,000,000 | Max rows loaded into memory on first open for streaming readers (Parquet, CSV, TSV). Additional rows stream in the background. Numeric input accepts comma separators (`5,000,000`).                                                                                               |
-| **Syntax-highlight size cap**  | 1 MB      | Files larger than this fall back to plain monospace in the [Raw view](../usage/view-modes/raw-text.md) (syntect tokenisation gets laggy on huge files). Unit picker: Bytes / KB / MB. `0` disables highlighting entirely.                                                          |
-| **Open as text**               | *(empty)* | Comma- or space-separated list of file extensions that should always open as plain text. Useful for unusual config or log extensions Octa doesn't ship a dedicated reader for.                                                                                                     |
-| **Multi-search file cap (MB)** | 50        | Per-file size cap for the directory scope of the [Multi-search panel](../usage/search-and-filter.md#multi-search). Files larger than this are skipped silently during the scan. `0` disables the cap. TOML key: `grep_max_file_size_mb`.                                           |
-| **Chart max points**           | 100,000   | Maximum rows the [Chart tab](../usage/chart.md) will plot before evenly-spaced downsampling kicks in (Histogram, Line, Scatter). Bar always aggregates the full input; Box computes the 5-number summary over the full input. `0` disables sampling. TOML key: `chart_max_points`. |
-| **Chart max categories**       | 250       | Maximum distinct X categories a [Bar chart](../usage/chart.md#categorical-x-axes) will accept before refusing to draw. Filter or aggregate the table before charting if you exceed this. TOML key: `chart_max_categories`.                                                         |
-| **Tables visible in picker**   | 10        | How many table rows the multi-table picker dialog (SQLite, DuckDB, …) fits vertically at its default size. The dialog stays user-resizable — drag the corner to grow it when a database has more tables. Minimum 1. TOML key: `table_picker_visible_rows`.                         |
+| Setting                        | Default   | Notes                                                                                                                                                                                                                                                                                |
+|--------------------------------|-----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Initial-load row cap**       | 5,000,000 | Max rows loaded into memory on first open for streaming readers (Parquet, CSV, TSV). Additional rows stream in the background. Numeric input accepts comma separators (`5,000,000`).                                                                                                 |
+| **Syntax-highlight size cap**  | 1 MB      | Files larger than this fall back to plain monospace in the [Raw view](../usage/view-modes/raw-text.md) (syntect tokenisation gets laggy on huge files). Unit picker: Bytes / KB / MB. `0` disables highlighting entirely.                                                            |
+| **Open as text**               | *(empty)* | Comma- or space-separated list of file extensions that should always open as plain text. Useful for unusual config or log extensions Octa doesn't ship a dedicated reader for.                                                                                                       |
+| **Multi-search file cap (MB)** | 50        | Per-file size cap for the directory scope of the [Multi-search panel](../usage/search-and-filter.md#multi-search). Files larger than this are skipped silently during the scan. `0` disables the cap. TOML key: `grep_max_file_size_mb`.                                             |
+| **Chart max points**           | 100,000   | Maximum rows the [Chart tab](../usage/chart.md) will plot before evenly-spaced downsampling kicks in (Histogram, Line, Scatter). Bar always aggregates the full input; Box computes the 5-number summary over the full input. `0` disables sampling. TOML key: `chart_max_points`.   |
+| **Chart max categories**       | 250       | Maximum distinct X categories a [Bar chart](../usage/chart.md#categorical-x-axes) will accept before refusing to draw. Filter or aggregate the table before charting if you exceed this. TOML key: `chart_max_categories`.                                                           |
+| **Tables visible in picker**   | 10        | How many table rows the multi-table picker dialog (SQLite, DuckDB, …) fits vertically at its default size. The dialog stays user-resizable, so drag the corner to grow it when a database has more tables. Minimum 1. TOML key: `table_picker_visible_rows`.                         |
+| **Excel sheets to auto-open**  | 5         | How many sheets of a multi-sheet [Excel workbook](../getting-started/supported-formats.md#excel-multi-sheet-workbooks) open automatically (each in its own tab). Workbooks with more sheets show a picker so you choose which to open. Minimum 1. TOML key: `excel_max_auto_sheets`. |
 
 ## Files
 

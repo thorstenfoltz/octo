@@ -18,9 +18,17 @@ octa - multi-format tabular data viewer, editor, CLI tool, and MCP server
 
 *octa* *--convert* _IN_ _OUT_ [*--rows* _N_|all]
 
-*octa* *--sql* _FILE_ *-q* _QUERY_ [*-f* _FORMAT_] [*--rows* _N_|all]
+*octa* *--sql* _FILE_ *-q* _QUERY_ [*-f* _FORMAT_] [*--rows* _N_|all] [*--sql-table* _NAME_=_PATH_ ...] [*--sql-attach* _ALIAS_=_PATH_ ...] [*--sql-write-to* _PATH_ *--sql-write-table* _TABLE_ [*--sql-write-schema* _SCHEMA_] [*--sql-write-mode* _MODE_]]
 
 *octa* *--export-schema* _FILE_ [*-t* _TARGET_]
+
+*octa* *--compare-schemas* _FILE_A_ _FILE_B_ [*--table-a* _NAME_] [*--table-b* _NAME_] [*-f* _FORMAT_]
+
+*octa* *--describe* _FILE_ [*--table* _NAME_] [*--sample-rows* _N_] [*-f* _FORMAT_]
+
+*octa* *--validate-schema* _FILE_ *--expect-schema* _SCHEMA_FILE_ [*--table* _NAME_] [*-f* _FORMAT_]
+
+*octa* *--unique-columns* _FILE_ [*--table* _NAME_] [*--max-combo* _N_] [*-f* _FORMAT_]
 
 *octa* *--mcp*
 
@@ -34,7 +42,9 @@ full-text search, inline editing, SQL queries, and file comparison.
 When invoked with no flags, it launches the graphical interface,
 optionally opening the supplied _FILE_(s) in tabs. When invoked with
 one of the action flags (*--schema*, *--head*, *--convert*, *--sql*,
-*--export-schema*, *--mcp*), it performs that action and exits.
+*--export-schema*, *--compare-schemas*, *--describe*,
+*--validate-schema*, *--unique-columns*, *--mcp*), it performs that
+action and exits.
 
 Action flags are mutually exclusive. Trailing _FILE_ arguments are
 ignored (with a warning) when an action flag is set.
@@ -43,7 +53,7 @@ ignored (with a warning) when an action flag is set.
 
 *--schema* _FILE_::
   Print the column schema of _FILE_ as a two-column table (column
-  name, data type). Cheap for streaming formats — only the header
+  name, data type). Cheap for streaming formats, since only the header
   is read.
 
 *--head* _FILE_::
@@ -60,25 +70,57 @@ ignored (with a warning) when an action flag is set.
 *--sql* _FILE_::
   Run a SQL query against _FILE_. The query is supplied via
   *-q* / *--query*. _FILE_ is exposed to DuckDB as a temporary table
-  called *data*. Mutations (INSERT / UPDATE / DELETE) do **not**
-  persist back to _FILE_ — the in-memory DuckDB connection is
-  discarded at exit. Use *--convert* on the post-mutation output if
-  you need to persist.
+  called *data*. Extra tables can be registered with *--sql-table*
+  _NAME_=_PATH_ and whole DuckDB / SQLite databases attached with
+  *--sql-attach* _ALIAS_=_PATH_, so a single invocation can JOIN
+  across formats. The SELECT result can be persisted to a DuckDB or
+  SQLite file via *--sql-write-to*. Mutations (INSERT / UPDATE /
+  DELETE) on *data* itself do *not* persist back to _FILE_, since the
+  in-memory DuckDB connection is discarded at exit. Use *--convert*
+  on the post-mutation output if you need to persist.
 
 *--export-schema* _FILE_::
   Render _FILE_'s column schema as SQL DDL, a Pydantic model, a
   TypeScript interface, a JSON Schema document, or a Rust struct, and
   print it to standard output. The target is chosen with *-t* /
-  *--target* (default *postgres*). Only the column list is read — no
+  *--target* (default *postgres*). Only the column list is read and no
   rows are serialised.
+
+*--compare-schemas* _FILE_A_ _FILE_B_::
+  Diff the column schemas of two files. Prints a four-column table
+  (*status* / *column* / *type_a* / *type_b*). *status* is one of
+  *common*, *only_in_a*, *only_in_b*, *type_mismatch*. Matching is by
+  exact, case-sensitive column name. For multi-table sources, the
+  table to read from each side is selected via *--table-a* /
+  *--table-b*.
+
+*--describe* _FILE_::
+  Print a one-shot orientation snapshot of _FILE_: format, file
+  size, row count, column schema, and a small sample of rows. Use
+  *--sample-rows* to change the preview size (default *5*, max
+  *100*). The *--table* flag picks a specific table on multi-table
+  sources.
+
+*--validate-schema* _FILE_::
+  Check _FILE_'s column schema against the JSON Schema given by
+  *--expect-schema*. Exit code is *0* on a clean match, *1*
+  otherwise, which is CI-pipeable. Schemas produced by *--export-schema -t
+  json-schema* round-trip through this command.
+
+*--unique-columns* _FILE_::
+  Find columns (and optional small combinations) whose values are
+  unique across _FILE_. Useful for primary-key reconnaissance on
+  undocumented data. Use *--max-combo* _N_ (clamped to *[1, 3]*) to
+  also test column pairs / triples.
 
 *--mcp*::
   Start a Model Context Protocol (MCP) server on standard input /
-  output. Eleven tools are exposed: *read_table*, *schema*,
+  output. Fifteen tools are exposed: *read_table*, *schema*,
   *list_tables*, *count_rows*, *run_sql*, *convert*, *export_schema*,
-  *profile*, *find_duplicates*, *value_frequency*, *search*. Defaults
-  for the row limit and per-cell byte cap come from the user's Octa
-  settings (Settings → MCP).
+  *profile*, *find_duplicates*, *value_frequency*, *search*,
+  *compare_schemas*, *describe_file*, *validate_against_schema*,
+  *unique_columns*. Defaults for the row limit and per-cell byte cap
+  come from the user's Octa settings (Settings → MCP).
 
 == Options
 
@@ -89,10 +131,59 @@ ignored (with a warning) when an action flag is set.
   SQL query string for *--sql*. Always reference the file's data as
   the table *data*.
 
+*--sql-table* _NAME_=_PATH_::
+  For *--sql* only. Register an extra file as a workspace table
+  named _NAME_. Any supported format. Repeatable.
+
+*--sql-attach* _ALIAS_=_PATH_::
+  For *--sql* only. ATTACH a DuckDB or SQLite database under
+  _ALIAS_. Repeatable. After attachment every inner table is
+  queryable as *alias.schema.tbl* (DuckDB) or *alias.tbl* (SQLite
+  when the DuckDB sqlite extension is bundled, otherwise per-table
+  fallback registration under *alias__table*).
+
+*--sql-write-to* _PATH_::
+  For *--sql* only. Persist the SELECT result to _PATH_ instead of
+  printing it. The extension picks DuckDB (*.duckdb*, *.ddb*) or
+  SQLite (everything else). Created if missing. Requires
+  *--sql-write-table*.
+
+*--sql-write-table* _TABLE_::
+  Target table name for *--sql-write-to*.
+
+*--sql-write-schema* _SCHEMA_::
+  Target schema for *--sql-write-to*. DuckDB only; defaults to
+  *main*. SQLite has no schemas; pass *main* or leave unset.
+
+*--sql-write-mode* _MODE_::
+  *create* (default; errors if the table already exists),
+  *replace* (drop + recreate), or *append* (INSERT into the
+  existing table; column count and order must match).
+
 *-t* _TARGET_, *--target* _TARGET_::
   Output target for *--export-schema*. _TARGET_ is one of *postgres*
   (default), *mysql*, *sqlite*, *databricks*, *snowflake*, *pydantic*,
   *typescript*, *json-schema*, or *rust*.
+
+*--table-a* _NAME_, *--table-b* _NAME_::
+  For *--compare-schemas* only: the table to read from each side when
+  the source is multi-table (SQLite, DuckDB, GeoPackage).
+
+*--table* _NAME_::
+  For *--describe*, *--validate-schema*, *--unique-columns*: the
+  table to read from _FILE_ when the source is multi-table.
+
+*--expect-schema* _SCHEMA_FILE_::
+  Path to the expected JSON Schema for *--validate-schema*.
+  Required by that action.
+
+*--sample-rows* _N_::
+  Number of preview rows for *--describe* (default *5*, clamped
+  to *100*).
+
+*--max-combo* _N_::
+  Max combo size for *--unique-columns* (default *1*, clamped to
+  *[1, 3]*).
 
 *--rows* _N_|*all*::
   Override the initial-load row cap for this invocation. Streaming
@@ -102,7 +193,9 @@ ignored (with a warning) when an action flag is set.
   *--schema*, *--head*, *--convert*, and *--sql*.
 
 *-f* _FORMAT_, *--format* _FORMAT_::
-  Output format for actions that print a table. It has no effect for
+  Output format for actions that print a table (*--schema*,
+  *--head*, *--sql*, *--compare-schemas*, *--describe*,
+  *--validate-schema*, *--unique-columns*). It has no effect for
   *--convert* (whose output format comes from the output path's
   extension), *--export-schema* (which emits source code chosen by
   *-t*), or *--mcp*. _FORMAT_ is one of:
@@ -120,7 +213,7 @@ ignored (with a warning) when an action flag is set.
 
 *-h*, *--help*::
   Print the full help text (worked examples for every action) and
-  exit. *-h* and *--help* produce the same long-form output — Octa
+  exit. *-h* and *--help* produce the same long-form output, since Octa
   intentionally wires both flags to the same help text rather than
   using clap's default short/long split.
 
@@ -132,10 +225,12 @@ ignored (with a warning) when an action flag is set.
 Tabular data is written to *standard output*. Status messages,
 warnings, and errors are written to *standard error*. This means
 *octa --sql FILE -q QUERY -f json | jq ...* is safe even when an
-error occurs — the data stream stays clean.
+error occurs, since the data stream stays clean.
 
 Exit code is *0* on success and *1* on any error (invalid arguments,
 file-not-found, parse failure, write rejection, etc.).
+*--validate-schema* also exits *1* on a successful read where the
+schemas differ, so CI pipelines can gate on the schema directly.
 
 == Examples
 
@@ -190,12 +285,74 @@ Pipe a SQL result through *jq*::
 octa --sql users.parquet -q 'SELECT email FROM data WHERE active' -f json | jq -r '.[].email'
 ----
 
+JOIN across formats::
++
+[source,sh]
+----
+octa --sql sales.parquet \
+     --sql-table customers=customers.csv \
+     -q 'SELECT c.name, SUM(d.amount) FROM data d
+         JOIN customers c ON d.cid = c.cid GROUP BY c.name'
+----
+
+ATTACH a DuckDB warehouse and JOIN against it::
++
+[source,sh]
+----
+octa --sql sales.parquet \
+     --sql-attach wh=warehouse.duckdb \
+     -q 'SELECT count(*) FROM data d
+         JOIN wh.main.products p ON d.cid = p.cid'
+----
+
+Write a SQL result back to a DuckDB schema::
++
+[source,sh]
+----
+octa --sql sales.parquet -q 'SELECT region, SUM(amount) AS total
+                             FROM data GROUP BY region' \
+     --sql-write-to analytics.duckdb \
+     --sql-write-schema reports --sql-write-table q4_summary
+----
+
 Export a schema as Snowflake DDL::
 +
 [source,sh]
 ----
 octa --export-schema sales.parquet -t snowflake
 octa -e users.parquet -t pydantic > users_model.py
+----
+
+Diff two schemas::
++
+[source,sh]
+----
+octa --compare-schemas v1.parquet v2.parquet
+octa --compare-schemas a.sqlite b.sqlite --table-a users --table-b users -f json
+----
+
+One-shot file snapshot::
++
+[source,sh]
+----
+octa --describe data.parquet --sample-rows 3
+octa --describe users.sqlite --table customers -f json
+----
+
+Validate a file against a JSON Schema in CI::
++
+[source,sh]
+----
+octa --export-schema sales.parquet -t json-schema > sales.schema.json
+octa --validate-schema sales.parquet --expect-schema sales.schema.json
+----
+
+Find primary-key candidates::
++
+[source,sh]
+----
+octa --unique-columns users.csv
+octa --unique-columns orders.parquet --max-combo 2 -f json
 ----
 
 Start the MCP server::
@@ -219,30 +376,38 @@ octa --mcp
 == MCP server
 
 When invoked with *--mcp*, Octa speaks the Model Context Protocol
-over JSON-RPC on stdin/stdout. Eleven tools are exposed:
+over JSON-RPC on stdin/stdout. Fifteen tools are exposed:
 
-* *read_table(path, limit?, unlimited?, table?)* — schema + rows JSON.
-* *schema(path, table?)* — column schema only.
-* *list_tables(path)* — for multi-table sources (SQLite / DuckDB /
+* *read_table(path, limit?, unlimited?, table?)*: schema + rows JSON.
+* *schema(path, table?)*: column schema only.
+* *list_tables(path)*: for multi-table sources (SQLite / DuckDB /
   GeoPackage).
 * *count_rows(path, unlimited?, table?)*.
-* *run_sql(path, query, limit?, unlimited?, table?)* — DuckDB against
+* *run_sql(path, query, limit?, unlimited?, table?)*: DuckDB against
   the file as table *data*.
-* *convert(input, output, unlimited?, table?)* — same surface as
+* *convert(input, output, unlimited?, table?)*: same surface as
   *--convert*.
-* *export_schema(path, target, table?)* — same surface as
+* *export_schema(path, target, table?)*: same surface as
   *--export-schema*.
-* *profile(path, unlimited?, table?)* — per-column statistics via
+* *profile(path, unlimited?, table?)*: per-column statistics via
   SUMMARIZE.
-* *find_duplicates(path, key_columns, table?, limit?, unlimited?)* —
+* *find_duplicates(path, key_columns, table?, limit?, unlimited?)*:
   duplicate rows by key columns.
-* *value_frequency(path, column, table?, top_n?, bin?, unlimited?)* —
+* *value_frequency(path, column, table?, top_n?, bin?, unlimited?)*:
   per-column value counts.
-* *search(path, query, mode?, table?, limit?, unlimited?)* — match
+* *search(path, query, mode?, table?, limit?, unlimited?)*: match
   cells across all columns.
+* *compare_schemas(path_a, path_b, table_a?, table_b?)*: diff two
+  files' schemas.
+* *describe_file(path, table?, sample_rows?, unlimited?)*: one-shot
+  orientation snapshot.
+* *validate_against_schema(path, table?, schema_path?, schema_inline?)*:
+  check a file against a JSON Schema.
+* *unique_columns(path, table?, max_combo_size?, unlimited?)*: find
+  PK candidates.
 
-Defaults — response row cap (1000 rows), per-cell byte cap (64 KiB),
-and file-loader cap (5,000,000 rows) — are configurable under Octa's
+The defaults (response row cap of 1000 rows, per-cell byte cap of 64 KiB,
+and file-loader cap of 5,000,000 rows) are configurable under Octa's
 Settings → MCP and Settings → Performance. They are read once at
 server startup; changes require a restart. Per-call, pass *limit: 0*
 to lift the response cap and *unlimited: true* to lift the file-loader

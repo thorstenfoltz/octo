@@ -39,7 +39,7 @@ pub fn render_chart_view(
     if !has_numeric_column(&tab.table) {
         ui.centered_and_justified(|ui| {
             ui.label(
-                egui::RichText::new("This table has no numeric columns — nothing to plot.").weak(),
+                egui::RichText::new("This table has no numeric columns - nothing to plot.").weak(),
             );
         });
         return;
@@ -80,7 +80,7 @@ pub fn render_chart_view(
                     )
                     .on_hover_text(
                         "Plot evenly-spaces samples above 'Chart max points'. \
-                         Filter the table or raise the cap in Settings \u{2192} \
+                         Filter the table or raise the cap in Settings -> \
                          Performance to plot every row.",
                     );
                 } else {
@@ -105,11 +105,11 @@ pub fn render_chart_view(
             let plot_id = format!("chart_plot_{:?}", cfg.kind);
 
             // X-axis tick formatter selection:
-            //  - Categorical → look up the category name at the integer
+            //  - Categorical -> look up the category name at the integer
             //    tick position.
-            //  - Date → days since 1970-01-01 → YYYY-MM-DD.
-            //  - DateTime → seconds since the Unix epoch → YYYY-MM-DD HH:MM:SS.
-            //  - Numeric → leave egui_plot's default formatter alone.
+            //  - Date -> days since 1970-01-01 -> YYYY-MM-DD.
+            //  - DateTime -> seconds since the Unix epoch -> YYYY-MM-DD HH:MM:SS.
+            //  - Numeric -> leave egui_plot's default formatter alone.
             let categories = prep.data.x_axis_categories().unwrap_or_default();
             let x_axis_kind = prep.x_axis_kind;
             let mut plot = Plot::new(plot_id)
@@ -150,8 +150,8 @@ pub fn render_chart_view(
             }
             // X-axis bounds: same half-set semantics as the Y axis. For
             // categorical Bar / Box charts the user-facing values are
-            // category indices (0, 1, 2, …), so the bound numbers there
-            // are just visible-range slices — still useful when you want
+            // category indices (0, 1, 2, ...), so the bound numbers there
+            // are just visible-range slices - still useful when you want
             // to zoom into a slice of bars.
             if let (Some(x_min), Some(x_max)) = (cfg.x_min, cfg.x_max)
                 && x_min < x_max
@@ -182,7 +182,7 @@ pub fn render_chart_view(
                 });
             }
             // Y-axis bounds: when both min and max are set we force them as
-            // the default bounds. Half-set is ignored — partial bounds make
+            // the default bounds. Half-set is ignored - partial bounds make
             // the bounding box meaningless. Log-scale projects the user
             // values into log10 space.
             if let (Some(mut y_min), Some(mut y_max)) = (cfg.y_min, cfg.y_max)
@@ -219,7 +219,7 @@ pub fn render_chart_view(
                     marks
                 });
             }
-            // Y axis tick formatter — integer rounding when `y_integer_only`,
+            // Y axis tick formatter - integer rounding when `y_integer_only`,
             // or 10^N notation when log-scaled (the formatter takes log10
             // values and converts back to the original magnitude).
             let log = cfg.y_log_scale;
@@ -332,7 +332,7 @@ fn pick_label(override_: &str, fallback: &str) -> String {
 /// into `Option<f64>`. An empty buffer (or one that fails to parse) maps
 /// to `None`, which the renderer reads as "auto-fit".
 ///
-/// `positive_only` filters values `<= 0` — used for the Y step where zero /
+/// `positive_only` filters values `<= 0` - used for the Y step where zero /
 /// negative either no-ops or upsets the grid spacer.
 fn optional_f64_input(
     ui: &mut egui::Ui,
@@ -358,7 +358,7 @@ fn optional_f64_input(
                 *value = Some(v);
             }
         } else {
-            // Leave value unchanged — the user's typing transient bytes
+            // Leave value unchanged - the user's typing transient bytes
             // ("1.2e", "-", etc.) that aren't yet parseable. They'll
             // finish typing and the next changed event lands.
         }
@@ -417,7 +417,7 @@ fn draw_controls(ui: &mut egui::Ui, tab: &mut TabState, colors: &ThemeColors) {
                 ui.separator();
                 ui.label("Bins:").on_hover_text(
                     "A histogram counts how many values fall into each \
-                     range. \"Bins\" is the number of those ranges — fewer \
+                     range. \"Bins\" is the number of those ranges - fewer \
                      bins make a coarser shape, more bins reveal detail \
                      but get noisy. \"Auto (Sturges)\" picks a count from \
                      row count via ceil(1 + log2(n)) clamped to [5, 50].",
@@ -445,7 +445,7 @@ fn draw_controls(ui: &mut egui::Ui, tab: &mut TabState, colors: &ThemeColors) {
                             tab.chart_config.hist_bins = Some(n.clamp(1, MAX_HIST_BINS));
                         }
                         // Mid-typing transients (empty / "0" / non-digits)
-                        // leave hist_bins unchanged — the user'll finish
+                        // leave hist_bins unchanged - the user'll finish
                         // typing and the next change lands a valid value.
                     }
                 }
@@ -463,7 +463,7 @@ fn draw_controls(ui: &mut egui::Ui, tab: &mut TabState, colors: &ThemeColors) {
         .id_salt("chart_customize_collapsible")
         .default_open(false)
         .show(ui, |ui| {
-            // Group A — Labels + legend + grid toggle. One row.
+            // Group A - Labels + legend + grid toggle. One row.
             ui.horizontal_wrapped(|ui| {
                 ui.label("Title:");
                 ui.add(
@@ -498,7 +498,7 @@ fn draw_controls(ui: &mut egui::Ui, tab: &mut TabState, colors: &ThemeColors) {
                 ui.checkbox(&mut tab.chart_config.show_grid, "Show grid");
             });
 
-            // Group B — X axis. One row, mirrors the Y axis controls below
+            // Group B - X axis. One row, mirrors the Y axis controls below
             // so users can clamp either dimension. For categorical Bar / Box
             // charts the bounds are interpreted as category indices.
             ui.add_space(2.0);
@@ -507,7 +507,7 @@ fn draw_controls(ui: &mut egui::Ui, tab: &mut TabState, colors: &ThemeColors) {
                 ui.label("Min:").on_hover_text(
                     "Lower bound on the X axis (original-data units). \
                      Both Min and Max must be set for the bounds to take \
-                     effect — half-set is ignored. Leave blank for auto. \
+                     effect - half-set is ignored. Leave blank for auto. \
                      For Date / DateTime X axes the bound is in days / \
                      seconds since the Unix epoch.",
                 );
@@ -539,14 +539,14 @@ fn draw_controls(ui: &mut egui::Ui, tab: &mut TabState, colors: &ThemeColors) {
                 );
             });
 
-            // Group C — Y axis. One row.
+            // Group C - Y axis. One row.
             ui.add_space(2.0);
             ui.horizontal_wrapped(|ui| {
                 ui.label(egui::RichText::new("Y axis:").strong());
                 ui.label("Min:").on_hover_text(
                     "Lower bound on the Y axis (original-data units). \
                      Both Min and Max must be set for the bounds to take \
-                     effect — half-set is ignored. Leave blank for auto.",
+                     effect - half-set is ignored. Leave blank for auto.",
                 );
                 optional_f64_input(
                     ui,
@@ -577,7 +577,7 @@ fn draw_controls(ui: &mut egui::Ui, tab: &mut TabState, colors: &ThemeColors) {
                 ui.separator();
                 ui.checkbox(&mut tab.chart_config.y_integer_only, "Integers only")
                     .on_hover_text(
-                        "Format Y-axis ticks as whole numbers — useful for \
+                        "Format Y-axis ticks as whole numbers - useful for \
                          counts where the default 1.0 / 2.0 reads oddly.",
                     );
                 ui.checkbox(&mut tab.chart_config.y_log_scale, "Log scale")
@@ -587,8 +587,8 @@ fn draw_controls(ui: &mut egui::Ui, tab: &mut TabState, colors: &ThemeColors) {
                          The Y axis label gets a '(log10)' suffix.",
                     );
             });
-            // Group D — Series. Each Y-column gets a single horizontal
-            // row (column name → label override → color picker). Wrapped
+            // Group D - Series. Each Y-column gets a single horizontal
+            // row (column name -> label override -> color picker). Wrapped
             // so multi-Y charts still fit a narrow window.
             if tab.chart_config.kind.needs_y() && !tab.chart_config.y_cols.is_empty() {
                 ui.add_space(2.0);
@@ -661,7 +661,7 @@ fn draw_export_buttons(
     prep: &octa::data::chart::ChartPrep,
     cfg: &octa::data::chart::ChartConfig,
 ) {
-    // Build options once — the three buttons all reuse the same SVG.
+    // Build options once - the three buttons all reuse the same SVG.
     let opts = ExportOptions::from_prep(
         prep,
         cfg.title.clone(),
@@ -733,7 +733,7 @@ fn col_picker(
 ) {
     let current_label = selected
         .and_then(|i| column_names.get(i).cloned())
-        .unwrap_or_else(|| "(pick…)".to_string());
+        .unwrap_or_else(|| "(pick...)".to_string());
     egui::ComboBox::from_id_salt(id_salt)
         .selected_text(current_label)
         .show_ui(ui, |ui| {
@@ -745,7 +745,7 @@ fn col_picker(
 
 fn y_picker(ui: &mut egui::Ui, y_cols: &mut Vec<usize>, column_names: &[String]) {
     let label = match y_cols.len() {
-        0 => "(pick…)".to_string(),
+        0 => "(pick...)".to_string(),
         1 => column_names.get(y_cols[0]).cloned().unwrap_or_default(),
         n => format!("{n} columns"),
     };

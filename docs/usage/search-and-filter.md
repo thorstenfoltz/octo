@@ -4,7 +4,7 @@ Octa's search filters the table in real time, so only rows containing
 a match stay visible. The same field doubles as the entry point for
 **Find & Replace**.
 
-<!-- SCREENSHOT: search-toolbar.png — Toolbar with the search box focused, a few characters typed, mode dropdown visible (Plain/Wildcard/Regex), table below showing filtered results. -->
+<!-- SCREENSHOT: search-toolbar.png: Toolbar with the search box focused, a few characters typed, mode dropdown visible (Plain/Wildcard/Regex), table below showing filtered results. -->
 ![Search toolbar](../assets/screenshots/search-toolbar.png)
 
 ## Quick start
@@ -137,7 +137,7 @@ unique values as checkboxes, uncheck the ones to hide. Multiple
 columns can be filtered at once; column filters AND with each other
 and with the text search above.
 
-<!-- SCREENSHOT: column-filter-dialog.png — Column Filter dialog open over a table. Column combo, "Find" textbox, scrollable checkbox list with a few values unchecked, "Apply" / "Cancel" / "Clear filter on this column" buttons. -->
+<!-- SCREENSHOT: column-filter-dialog.png: Column Filter dialog open over a table. Column combo, "Find" textbox, scrollable checkbox list with a few values unchecked, "Apply" / "Cancel" / "Clear filter on this column" buttons. -->
 ![Column Filter dialog](../assets/screenshots/column-filter-dialog.png)
 
 ### Three ways to open it
@@ -197,24 +197,24 @@ from accidental data loss while you have filters on.
 ## Multi-search
 
 The toolbar **Search** field is per-tab. Sometimes you want the
-opposite — find the same string everywhere at once. **Search →
+opposite, to find the same string everywhere at once. **Search →
 Multi-search…** (default <kbd>F6</kbd>, remappable) opens a docked
 panel at the bottom of the window with its own query box, mode
 picker, and a scope selector:
 
-| Scope             | What gets searched                                                         |
-|-------------------|----------------------------------------------------------------------------|
-| **All Open Tabs** | Every loaded tab — synchronously, no background thread. Cheap and instant. |
-| **Directory**     | Every readable file in a picked directory (top level only, not recursive). |
+| Scope             | What gets searched                                                                     |
+|-------------------|----------------------------------------------------------------------------------------|
+| **All Open Tabs** | Every loaded tab, searched synchronously with no background thread. Cheap and instant. |
+| **Directory**     | Every readable file in a picked directory (top level only, not recursive).             |
 
-<!-- SCREENSHOT: multi-search-panel.png — Multi-search panel docked at the bottom showing scope=Directory, a query, a "Scanning 12/47 files" progress label, and a few result rows. -->
+<!-- SCREENSHOT: multi-search-panel.png : Multi-search panel docked at the bottom showing scope=Directory, a query, a "Scanning 12/47 files" progress label, and a few result rows. -->
 ![Multi-search panel](../assets/screenshots/multi-search-panel.png){ .screenshot-placeholder }
 
 ### Running a search
 
 1. Open the panel (**Search → Multi-search…** or <kbd>F6</kbd>).
 2. Pick a scope. Directory scope also asks for a folder via the
-   **Pick directory…** button — the path you pick is remembered for
+   **Pick directory…** button. The path you pick is remembered for
    subsequent searches in the same session.
 3. Type a query. Plain / Wildcard / Regex modes are the same as the
    main search bar.
@@ -223,11 +223,11 @@ picker, and a scope selector:
 The result list shows one entry per matching cell, formatted as:
 
 ```
-<source> · row N · <column name> — <snippet>
+<source> | row N | <column name> - <snippet>
 ```
 
 `<source>` is the tab title for open-tab hits, the file name for
-directory hits. Clicking any result jumps straight to that cell — if
+directory hits. Clicking any result jumps straight to that cell. If
 a directory result points at a file that isn't open yet, Octa opens
 it as a fresh tab first.
 
@@ -259,7 +259,7 @@ it as a fresh tab first.
 
 ### Reviewing skipped files
 
-The **N file(s) skipped — click to expand** chip appears above the
+The **N file(s) skipped - click to expand** chip appears above the
 result list whenever any file in the directory scope was skipped.
 Expanding it lists every skipped file with its reason, either
 *"X MB exceeds Y MB cap"* or the parser's error message, and the

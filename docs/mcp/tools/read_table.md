@@ -105,7 +105,7 @@ There are two caps to lift, in two different places:
 - `unlimited: true` controls how many rows the *file loader* reads
   off disk (default 5,000,000 for streaming formats). Without it,
   the response can never contain more rows than the file loader
-  actually loaded — `limit: 0` alone tops out at 5 Million.
+  actually loaded, so `limit: 0` alone tops out at 5 Million.
 
 Combine both to truly read every row, after checking the file isn't
 multi-GB:

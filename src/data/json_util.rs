@@ -333,7 +333,7 @@ mod tests {
     #[test]
     fn rename_array_path_errors_clearly() {
         let mut v = json!({ "arr": [1, 2, 3] });
-        // The synthesized "key" of an array element is its index — not
+        // The synthesized "key" of an array element is its index - not
         // renamable. The path navigator stops short and reports the type
         // mismatch.
         let err = rename_object_key_at_path(&mut v, "arr", "0", "first").unwrap_err();

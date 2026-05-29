@@ -332,7 +332,7 @@ fn dta_value_to_cell(value: &DtaValue<'_>) -> CellValue {
             .unwrap_or(CellValue::Null),
         DtaValue::Double(v) => v.present().map(CellValue::Float).unwrap_or(CellValue::Null),
         DtaValue::String(s) => CellValue::String(s.as_ref().to_string()),
-        // Resolved by the caller — should never reach here.
+        // Resolved by the caller - should never reach here.
         DtaValue::LongStringRef(_) => CellValue::Null,
     }
 }

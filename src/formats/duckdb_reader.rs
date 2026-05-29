@@ -26,7 +26,7 @@ impl FormatReader for DuckDbReader {
         let first = tables
             .first()
             .ok_or_else(|| anyhow!("No tables found in DuckDB database"))?;
-        self.read_table(path, &first.name)
+        self.read_table(path, &first.qualified_name())
     }
 
     fn supports_write(&self) -> bool {
@@ -50,9 +50,10 @@ impl FormatReader for DuckDbReader {
 
         let mut conn = Connection::open(path)
             .with_context(|| format!("opening DuckDB at {}", path.display()))?;
-        ensure_row_id_column(&conn, &meta.table_name)?;
+        let schema = meta.schema.as_deref().unwrap_or("main");
+        ensure_row_id_column(&conn, schema, &meta.table_name)?;
 
-        let table_name = quote_ident(&meta.table_name);
+        let table_name = qualified_quote(schema, &meta.table_name);
         let col_idents: Vec<String> = table.columns.iter().map(|c| quote_ident(&c.name)).collect();
 
         let tx = conn.transaction()?;
@@ -132,11 +133,24 @@ impl FormatReader for DuckDbReader {
     }
 
     fn read_table(&self, path: &Path, table: &str) -> Result<DataTable> {
+        // Accept either a bare table name (defaults to `main`) or a
+        // schema-qualified `schema.table` produced by `TableInfo::qualified_name`.
+        // Split only on the first `.`; that keeps DuckDB's "tables with a dot
+        // in the name" edge case workable as long as the caller passes the
+        // bare name directly. The picker never produces such names (its source
+        // is `information_schema`, which already gives us schema + name
+        // separately).
+        let (schema_owned, table_name): (Option<String>, String) = match table.split_once('.') {
+            Some((s, t)) => (Some(s.to_string()), t.to_string()),
+            None => (None, table.to_string()),
+        };
+        let schema_str = schema_owned.as_deref().unwrap_or("main");
+
         let conn = Connection::open(path)
             .with_context(|| format!("opening DuckDB at {}", path.display()))?;
-        ensure_row_id_column(&conn, table)?;
+        ensure_row_id_column(&conn, schema_str, &table_name)?;
 
-        let columns = read_table_columns(&conn, table)?
+        let columns = read_table_columns(&conn, schema_str, &table_name)?
             .into_iter()
             .filter(|c| c.name != ROW_ID_COL)
             .collect::<Vec<_>>();
@@ -151,7 +165,7 @@ impl FormatReader for DuckDbReader {
             .join(", ");
         let sql = format!(
             "SELECT {ROW_ID_COL}, {select_cols} FROM {} ORDER BY {ROW_ID_COL}",
-            quote_ident(table)
+            qualified_quote(schema_str, &table_name)
         );
         let mut stmt = conn.prepare(&sql)?;
         let col_count = columns.len();
@@ -188,7 +202,8 @@ impl FormatReader for DuckDbReader {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             db_meta: Some(DbRowMeta {
-                table_name: table.to_string(),
+                table_name: table_name.clone(),
+                schema: schema_owned,
                 row_tags,
                 original,
                 original_columns,
@@ -200,23 +215,29 @@ impl FormatReader for DuckDbReader {
 fn list_user_tables(path: &Path) -> Result<Vec<TableInfo>> {
     let conn =
         Connection::open(path).with_context(|| format!("opening DuckDB at {}", path.display()))?;
+    // Enumerate every user schema, not just `main`. System schemas
+    // (`information_schema`, `pg_catalog`) are excluded explicitly; the
+    // bundled DuckDB build also ships a `temp` schema for the connection's
+    // session-scoped tables which we hide for the same reason.
     let mut stmt = conn.prepare(
-        "SELECT table_name FROM information_schema.tables \
-         WHERE table_schema = 'main' AND table_type = 'BASE TABLE' ORDER BY table_name",
+        "SELECT table_schema, table_name FROM information_schema.tables \
+         WHERE table_type = 'BASE TABLE' \
+           AND table_schema NOT IN ('information_schema', 'pg_catalog', 'temp') \
+         ORDER BY (table_schema = 'main') DESC, table_schema, table_name",
     )?;
-    let names: Vec<String> = stmt
-        .query_map([], |r| r.get::<_, String>(0))?
+    let rows: Vec<(String, String)> = stmt
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
         .collect::<Result<_, _>>()?;
-    let mut out = Vec::with_capacity(names.len());
-    for name in names {
-        let columns = read_table_columns(&conn, &name)
+    let mut out = Vec::with_capacity(rows.len());
+    for (schema, name) in rows {
+        let columns = read_table_columns(&conn, &schema, &name)
             .unwrap_or_default()
             .into_iter()
             .filter(|c| c.name != ROW_ID_COL)
             .collect();
         let row_count: Option<usize> = conn
             .query_row(
-                &format!("SELECT COUNT(*) FROM {}", quote_ident(&name)),
+                &format!("SELECT COUNT(*) FROM {}", qualified_quote(&schema, &name)),
                 [],
                 |r| r.get::<_, i64>(0),
             )
@@ -224,6 +245,7 @@ fn list_user_tables(path: &Path) -> Result<Vec<TableInfo>> {
             .map(|n| n as usize);
         out.push(TableInfo {
             name,
+            schema: Some(schema),
             columns,
             row_count,
         });
@@ -231,13 +253,13 @@ fn list_user_tables(path: &Path) -> Result<Vec<TableInfo>> {
     Ok(out)
 }
 
-fn read_table_columns(conn: &Connection, table: &str) -> Result<Vec<ColumnInfo>> {
+fn read_table_columns(conn: &Connection, schema: &str, table: &str) -> Result<Vec<ColumnInfo>> {
     let mut stmt = conn.prepare(
         "SELECT column_name, data_type FROM information_schema.columns \
-         WHERE table_schema = 'main' AND table_name = ? ORDER BY ordinal_position",
+         WHERE table_schema = ? AND table_name = ? ORDER BY ordinal_position",
     )?;
     let cols = stmt
-        .query_map([table], |r| {
+        .query_map([schema, table], |r| {
             let name: String = r.get(0)?;
             let ty: String = r.get(1)?;
             Ok(ColumnInfo {
@@ -252,13 +274,13 @@ fn read_table_columns(conn: &Connection, table: &str) -> Result<Vec<ColumnInfo>>
 /// Add a stable per-row id column if missing. Each existing row gets a unique
 /// sequential value. Subsequent INSERTs assign `MAX+1`. This sidesteps the
 /// fact that DuckDB has no stable rowid for arbitrary tables.
-fn ensure_row_id_column(conn: &Connection, table: &str) -> Result<()> {
-    let table_q = quote_ident(table);
+fn ensure_row_id_column(conn: &Connection, schema: &str, table: &str) -> Result<()> {
+    let table_q = qualified_quote(schema, table);
     let exists: Option<String> = conn
         .query_row(
             "SELECT column_name FROM information_schema.columns \
-             WHERE table_schema = 'main' AND table_name = ? AND column_name = ?",
-            [table, ROW_ID_COL],
+             WHERE table_schema = ? AND table_name = ? AND column_name = ?",
+            [schema, table, ROW_ID_COL],
             |r| r.get(0),
         )
         .ok();
@@ -364,6 +386,14 @@ fn cell_to_duckdb_value(v: &CellValue) -> duckdb::types::Value {
         | CellValue::Nested(s) => Value::Text(s.clone()),
         CellValue::Binary(b) => Value::Blob(b.clone()),
     }
+}
+
+/// Quote a `schema.table` pair so each half is safe as an identifier. Quoting
+/// both halves independently is critical: emitting `"schema.table"` as a
+/// single quoted token would address a table named literally `schema.table`
+/// inside the default schema, not the table `table` inside `schema`.
+fn qualified_quote(schema: &str, table: &str) -> String {
+    format!("{}.{}", quote_ident(schema), quote_ident(table))
 }
 
 fn quote_ident(name: &str) -> String {

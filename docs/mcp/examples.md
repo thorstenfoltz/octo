@@ -12,17 +12,23 @@ rhythm of an MCP-backed conversation.
 
 > **User**: What's in `~/data/quarterly-sales.parquet`?
 
-Typical tool flow:
-
-1. **`schema`**: what columns?
-2. **`count_rows`**: how big?
-3. *(optionally)* **`read_table`** with `limit: 10`: sample values.
+The fastest path is a single [`describe_file`](tools/describe_file.md)
+call, which collapses `schema`, `count_rows`, and `read_table` into one
+trip.
 
 ```json
-// schema
-{ "path": "~/data/quarterly-sales.parquet" }
+// describe_file
+{
+  "path": "~/data/quarterly-sales.parquet",
+  "sample_rows": 5
+}
 // →
 {
+  "path": "~/data/quarterly-sales.parquet",
+  "format_name": "Parquet",
+  "file_size_bytes": 1048576,
+  "row_count": 47832,
+  "initial_load_capped": false,
   "columns": [
     { "name": "region", "type": "Utf8" },
     { "name": "quarter", "type": "Utf8" },
@@ -30,26 +36,32 @@ Typical tool flow:
     { "name": "amount", "type": "Float64" },
     { "name": "currency", "type": "Utf8" }
   ],
-  "column_count": 5
+  "column_count": 5,
+  "sample_rows": [
+    ["EU", "Q1", 1001, 1234.50, "EUR"],
+    ["US", "Q1", 1002, 9876.00, "USD"],
+    …
+  ],
+  "sample_row_count": 5
 }
-
-// count_rows
-{ "path": "~/data/quarterly-sales.parquet" }
-// →
-{ "row_count": 47832, "initial_load_capped": false, "initial_load_cap": 1000000 }
-
-// read_table (sample)
-{ "path": "~/data/quarterly-sales.parquet", "limit": 10 }
-// → first 10 rows
 ```
 
 **Model response**:
 
-> The file is a Parquet table with 47,832 rows and 5 columns:
+> The file is a 1 MB Parquet table with 47,832 rows and 5 columns:
 > `region`, `quarter`, `product_id`, `amount`, `currency`. Looking
-> at the first 10 rows, regions include EU, US, and APAC; quarters
-> Q1 through Q4; amounts are in the low thousands. Want me to drill
+> at the first 5 rows, regions include EU and US; quarters Q1
+> through Q4; amounts are in the low thousands. Want me to drill
 > into any column?
+
+The older three-call dance (`schema` → `count_rows` → `read_table`)
+still works and is the right choice when you only want one of the
+three pieces, e.g. just the schema:
+
+```json
+{ "path": "~/data/quarterly-sales.parquet" }
+// → { "columns": [...], "column_count": 5 }
+```
 
 ## Multi-table database
 
@@ -112,6 +124,98 @@ aggregation:
 
 > Q4 totals: US led with $9.2M, EU $4.86M, APAC $3.22M. Want me to
 > break it down by product or quarter?
+
+## Multi-table JOIN across formats
+
+> **User**: Join `sales.parquet` against `customers.csv` and give
+> me the top spenders.
+
+A single [`run_sql`](tools/run_sql.md) call with `extra_tables`
+registers the CSV alongside the Parquet primary file and runs the
+JOIN in one shot:
+
+```json
+{
+  "path": "~/data/sales.parquet",
+  "extra_tables": [
+    { "name": "customers", "path": "~/data/customers.csv" }
+  ],
+  "query": "SELECT c.name, SUM(s.amount) AS total FROM data s JOIN customers c ON s.cid = c.cid GROUP BY c.name ORDER BY total DESC LIMIT 5"
+}
+```
+
+**Model response**:
+
+> Top 5 by spend: Carol ($300), Bob ($200), Alice ($150), Dan
+> ($120), Eve ($95). The breakdown matches all 4,832 transactions
+> across the 3 named customers.
+
+For multi-table sources (SQLite, DuckDB, Excel) prefer `attach`:
+
+```json
+{
+  "path": "~/data/sales.parquet",
+  "attach": [
+    { "alias": "wh", "path": "~/data/warehouse.duckdb" }
+  ],
+  "query": "SELECT count(*) FROM data d JOIN wh.main.products p ON d.cid = p.cid"
+}
+```
+
+After `ATTACH`, every inner table is reachable as
+`alias.schema.tbl`.
+
+## Persist a SQL result back to DuckDB
+
+> **User**: Roll up `sales.parquet` by region and stash the result
+> in our `analytics.duckdb` warehouse under `reports.q4_summary`.
+
+Pass `write_to` to `run_sql`; the SELECT result is written to the
+target instead of returned. The file is created if missing, and
+`create_schema_if_missing` builds the `reports` schema on first
+use.
+
+```json
+{
+  "path": "~/data/sales.parquet",
+  "query": "SELECT region, SUM(amount) AS total FROM data GROUP BY region",
+  "write_to": {
+    "path": "~/data/analytics.duckdb",
+    "schema": "reports",
+    "table": "q4_summary",
+    "mode": "create",
+    "create_schema_if_missing": true
+  }
+}
+// →
+{
+  "kind": "write_back",
+  "rows_written": 3,
+  "created_schema": true,
+  "target": "/home/u/data/analytics.duckdb | reports.q4_summary"
+}
+```
+
+**Model response**:
+
+> Wrote 3 rows to `analytics.duckdb | reports.q4_summary` (schema
+> created). Next quarter, set `"mode": "replace"` to refresh the
+> table or `"append"` to add to it.
+
+SQLite targets work identically. SQLite has no schemas so omit
+`schema` (or pass `null` / `"main"`):
+
+```json
+{
+  "path": "~/data/users.csv",
+  "query": "SELECT * FROM data WHERE active = 1",
+  "write_to": {
+    "path": "~/data/users.sqlite",
+    "table": "active_users",
+    "mode": "replace"
+  }
+}
+```
 
 ## Cross-format conversion
 
@@ -177,14 +281,27 @@ For very large filtered results, the model would likely:
 > **User**: Do `users-2023.parquet` and `users-2024.parquet` have
 > the same schema?
 
-```json
-// schema on file A
-{ "path": "~/data/users-2023.parquet" }
-// → 8 columns
+One [`compare_schemas`](tools/compare_schemas.md) call gives a
+structured answer:
 
-// schema on file B
-{ "path": "~/data/users-2024.parquet" }
-// → 9 columns
+```json
+{
+  "path_a": "~/data/users-2023.parquet",
+  "path_b": "~/data/users-2024.parquet"
+}
+// →
+{
+  "identical": false,
+  "common": [
+    { "name": "id", "type": "Int64" },
+    { "name": "email", "type": "Utf8" }
+  ],
+  "only_in_a": [],
+  "only_in_b": [
+    { "name": "signup_source", "type": "Utf8" }
+  ],
+  "type_mismatches": []
+}
 ```
 
 **Model response**:
@@ -192,6 +309,90 @@ For very large filtered results, the model would likely:
 > Almost: `users-2024.parquet` adds a `signup_source` column
 > (Utf8) that's not in the 2023 file. Everything else matches:
 > same names, same types.
+
+## Schema validation in a pipeline
+
+> **User**: Export the schema of `sales.parquet` and validate next
+> month's file against it.
+
+A two-step round trip. First, lock in the schema with
+[`export_schema`](tools/export_schema.md):
+
+```json
+{
+  "path": "~/data/sales.parquet",
+  "target": "json-schema"
+}
+// → { "code": "{ \"$schema\": …, \"properties\": { … } }" }
+```
+
+The model can save that string to `~/data/sales.schema.json`. Later,
+when a new file arrives, call
+[`validate_against_schema`](tools/validate_against_schema.md):
+
+```json
+{
+  "path": "~/data/sales-jan.parquet",
+  "schema_path": "~/data/sales.schema.json"
+}
+// →
+{
+  "matches": true,
+  "diff": {
+    "identical": true,
+    "common": [
+      { "name": "id", "type": "Int64" },
+      { "name": "region", "type": "Utf8" },
+      …
+    ],
+    "only_in_a": [],
+    "only_in_b": [],
+    "type_mismatches": []
+  },
+  "unparsed_types": []
+}
+```
+
+**Model response**:
+
+> `sales-jan.parquet` matches the locked schema exactly, with the same
+> columns and the same types. Safe to ingest.
+
+If the new file added a column or changed a type, `matches` would
+flip to `false` and `diff` would point to the exact deltas.
+
+## Primary-key reconnaissance
+
+> **User**: What columns in `events.parquet` could serve as a
+> primary key?
+
+Use [`unique_columns`](tools/unique_columns.md). Single columns are
+the cheap default; pass `max_combo_size: 2` to also test pairs:
+
+```json
+{
+  "path": "~/data/events.parquet",
+  "max_combo_size": 2
+}
+// →
+{
+  "total_rows": 1000000,
+  "single": [
+    { "column": "event_id", "distinct_count": 1000000, "null_count": 0, "is_unique": true },
+    { "column": "user_id", "distinct_count": 8732, "null_count": 0, "is_unique": false },
+    { "column": "ts", "distinct_count": 999132, "null_count": 0, "is_unique": false }
+  ],
+  "combos": [
+    { "columns": ["user_id", "ts"], "distinct_count": 1000000, "is_unique": true }
+  ]
+}
+```
+
+**Model response**:
+
+> `event_id` is unique on its own, so that's the natural primary key.
+> If you also need a "natural" composite key, `(user_id, ts)` is
+> also unique across all 1M rows.
 
 ## Big-file row count
 

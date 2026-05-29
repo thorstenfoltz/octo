@@ -135,10 +135,10 @@ opens a modal that:
    use as the dedupe **key**. The Apply button is greyed until at
    least one column is selected.
 2. Lets you pick what happens with the duplicates:
-   - **Highlight rows in place (Orange mark)** — every row whose key
-     matches another row gets an orange row mark in the active table.
+   - **Highlight rows in place (Orange mark)** marks every row whose key
+     matches another row with an orange row mark in the active table.
      Use **Edit → Mark → Clear all marks** to remove them.
-   - **Open duplicates in a new tab** — clones the columns and just
+   - **Open duplicates in a new tab** clones the columns and just
      the duplicate rows into a fresh scratch tab. The source tab is
      untouched. The new tab has no source path so a Save prompts
      for one.
@@ -146,7 +146,7 @@ opens a modal that:
 Two rows are duplicates when **every** checked column has the same
 displayed text. Hashing is text-based so it works across mixed types,
 but `Int(1)` and `Float(1.0)` render as `"1"` vs `"1.0"` and therefore
-do **not** dedupe — change the column type first if you need them to.
+do **not** dedupe. Change the column type first if you need them to.
 
 A row whose key only matches itself is **not** a duplicate. The
 result always comes in pairs (or larger groups).
@@ -250,6 +250,29 @@ tab…** when JSON or YAML shaped text lives *inside* a cell, row, or
 column of a tabular file and you want to lift it out into its own
 tree without touching the source tab.
 
+## Whitespace trimming on load
+
+By default, Octa strips **leading and trailing whitespace** from every
+string cell and column title when a file is opened. Interior
+whitespace (spaces between words) is left untouched, so `"  a  b  "`
+becomes `"a  b"`. This cleans up the common case of stray spaces that
+sneak in from manual data entry or exports.
+
+When trimming changes one or more columns, a dismissible banner appears
+above the table listing which columns were affected, e.g.
+*"Trimmed leading/trailing spaces in 2 column(s): name, city."*
+
+Both behaviours are configurable under
+[**Settings → File-Specific**](../reference/settings.md#file-specific):
+
+- **Trim whitespace on load** turns the trimming off entirely.
+- **Warn on whitespace trim** keeps trimming but silences the banner.
+
+Trimming runs before [date inference](../reference/date-inference.md),
+so a value like `" 2024-01-02 "` is still recognised as a date. For
+database-backed tables, the trimmed values become the save baseline, so
+trimming alone never produces spurious `UPDATE`s on save.
+
 ## Discard all edits
 
 **Edit → Discard All Edits** reverts every change since the file was
@@ -264,9 +287,9 @@ Right-click any table region for context-aware actions:
 
 | Click target  | Actions available                                                                                                                                                       |
 |---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Cell          | Copy / Cut / Paste, Mark, Insert / Delete / Move row, Rename / Insert / Delete / Move column, Sort A–Z / Z–A, Parse in new tab                                          |
+| Cell          | Copy / Cut / Paste, Mark, Insert / Delete / Move row, Rename / Insert / Delete / Move column, Sort A-Z / Z-A, Parse in new tab                                          |
 | Row number    | Copy / Cut / Paste row, Mark row, Insert / Delete / Move row                                                                                                            |
-| Column header | Rename, Copy / Cut / Paste, Mark column, Sort A–Z / Z–A, Insert / Delete column, **Change Type** (String / Int64 / Float64 / Boolean / Date32 / Timestamp), Move column |
+| Column header | Rename, Copy / Cut / Paste, Mark column, Sort A-Z / Z-A, Insert / Delete column, **Change Type** (String / Int64 / Float64 / Boolean / Date32 / Timestamp), Move column |
 
 ## See also
 

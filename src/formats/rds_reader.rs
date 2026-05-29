@@ -1,4 +1,4 @@
-//! Read R datasets (`.rds`, `.rdata`, `.rda`) — tabular subset only.
+//! Read R datasets (`.rds`, `.rdata`, `.rda`) - tabular subset only.
 //!
 //! Scope: `.rds` files whose root SEXP is a `data.frame` or `tibble`. Common
 //! column types are mapped: logical, integer, double, character, factor,
@@ -7,7 +7,7 @@
 //! rejected with a clear error rather than silently rendered as a single
 //! column.
 //!
-//! `.rdata` / `.rda` workspaces are not yet wired up — the rds2rust parser
+//! `.rdata` / `.rda` workspaces are not yet wired up - the rds2rust parser
 //! handles only the `X\n` magic of single-object RDS files, and a workspace
 //! adds a different `RDX2\n` envelope around a Pairlist of named bindings.
 //! Until that wrapper is implemented, opening one of those files returns
@@ -86,7 +86,7 @@ fn dataframe_to_table(path: &Path, df: DataFrameData) -> Result<DataTable> {
         col_cells.push(cells);
     }
 
-    // Pad short columns with Null so all columns have the same length —
+    // Pad short columns with Null so all columns have the same length -
     // an RDS data.frame should already have equal-length columns, but be
     // defensive against malformed input.
     for cells in col_cells.iter_mut() {
@@ -130,7 +130,7 @@ fn column_to_cells(obj: &RObject) -> Result<(&'static str, Vec<CellValue>)> {
         RObject::WithAttributes { object, attributes } => {
             decode_with_attributes(object, attributes)
         }
-        // Lists, complex types, etc. — render as a JSON-ish placeholder so
+        // Lists, complex types, etc. - render as a JSON-ish placeholder so
         // the row count stays correct but the user sees something for the
         // cell rather than a silent empty.
         other => {
@@ -248,7 +248,7 @@ fn decode_with_attributes(
         return Ok(("DateTime", posixct_cells(object)));
     }
 
-    // Unrecognized class — fall through to the underlying type.
+    // Unrecognized class - fall through to the underlying type.
     column_to_cells(object)
 }
 

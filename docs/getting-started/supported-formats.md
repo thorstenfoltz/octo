@@ -62,16 +62,16 @@ single call. Multi-million-row files open without delay; the bottom
 of the table fills in as you reach it.
 
 Parquet files written with very many small row groups
-(more than 32,767 — common with Spark or streaming ingest
+(more than 32,767, which is common with Spark or streaming ingest
 pipelines) used to fail the native arrow-parquet reader with
 `Row group ordinal 32768 exceeds i16 max value`. Octa now retries
-those reads through a DuckDB-backed reader automatically — same
-schema and types, no user action required.
+those reads through a DuckDB-backed reader automatically, with the same
+schema and types and no user action required.
 
 Files produced by **pandas** (`DataFrame.to_parquet`) embed the row
 index as an extra column on disk (`__index_level_0__` by default,
 or whatever you passed to `set_index`). Octa strips those columns
-on read so the table view shows only the real data columns — both
+on read so the table view shows only the real data columns. Both
 the Arrow schema metadata's `index_columns` entries and the
 default `__index_level_0__` name are honoured, including on files
 written by older pandas releases that didn't emit the metadata
@@ -149,6 +149,24 @@ to load. Single-table databases auto-load without the picker. From
 the MCP or CLI side, [`list_tables`](../mcp/tools/list_tables.md)
 gives you the same enumeration, and every result-bearing MCP tool
 accepts a `table` argument to pick one.
+
+### Excel multi-sheet workbooks
+
+Excel workbooks behave differently from databases: Octa treats each
+worksheet as a table and opens several at once, each in its
+own tab.
+
+- If the workbook has up to N sheets, all of them open
+  automatically. `N` is the Excel sheets to auto-open (default 5),
+  can be changed in
+  [**Settings → Performance**](../reference/settings.md#performance).
+- If it has more than N, a sheet picker appears listing every
+  sheet with the first `N` pre-checked. Tick the ones you want
+  (**Select all** / **Select none** help) and click **Open**. You
+  can pick any number of sheets, including all of them.
+
+The first row of each sheet is used as the header row, the same as the
+single-sheet behaviour.
 
 ## Format conversion
 

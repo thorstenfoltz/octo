@@ -1,6 +1,6 @@
-//! `octa --schema <FILE>` — print column metadata as a small table.
+//! `octa --schema <FILE>` - print column metadata as a small table.
 //!
-//! Always reads the *whole* schema (cheap — it's just the column list,
+//! Always reads the *whole* schema (cheap - it's just the column list,
 //! no row data is touched for binary formats like Parquet). Text formats
 //! do parse the header row to populate column count.
 
@@ -19,7 +19,7 @@ pub fn run(path: PathBuf, format: OutputFormat) -> anyhow::Result<()> {
 }
 
 /// Project a `DataTable`'s `columns` into a two-column table: `name`,
-/// `type`. Bypasses the registry — we already have the schema in memory.
+/// `type`. Bypasses the registry - we already have the schema in memory.
 fn build_schema_table(source: &DataTable) -> DataTable {
     let columns = vec![
         ColumnInfo {

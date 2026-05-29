@@ -76,7 +76,7 @@ pub(crate) fn render_update_dialog(app: &mut OctaApp, ctx: &egui::Context) {
                          permissions. Octa will run `pkexec` to ask for \
                          your password and copy the new binary into \
                          place. The downloaded file is already staged \
-                         locally — no further download will happen.",
+                         locally - no further download will happen.",
                         version
                     ));
                     ui.add_space(10.0);

@@ -5,7 +5,7 @@ proper CommonMark preview with bold / italic / strong / headings /
 lists / code blocks / blockquotes, plus a live-editing layout so
 you can author Markdown right in Octa.
 
-<!-- SCREENSHOT: markdown-view-split.png — Markdown view in Split mode: a TextEdit on the left with raw Markdown, a rendered preview on the right showing headings, bold text, a list, an inline code span. -->
+<!-- SCREENSHOT: markdown-view-split.png: Markdown view in Split mode: a TextEdit on the left with raw Markdown, a rendered preview on the right showing headings, bold text, a list, an inline code span. -->
 ![Markdown view in Split layout](../../assets/screenshots/markdown-view-split.png){ .screenshot-placeholder }
 
 ## Layout: Preview / Split / Edit

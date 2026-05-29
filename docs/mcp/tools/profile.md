@@ -71,8 +71,8 @@ output columns. Exact keys can vary slightly with DuckDB versions.
 
 ## See also
 
-- [`schema`](schema.md) — column names + types only, no statistics.
-- [`value_frequency`](value_frequency.md) — the value distribution of a
+- [`schema`](schema.md): column names + types only, no statistics.
+- [`value_frequency`](value_frequency.md): the value distribution of a
   single column.
-- [`run_sql`](run_sql.md) — run `SUMMARIZE data` or custom aggregates
+- [`run_sql`](run_sql.md): run `SUMMARIZE data` or custom aggregates
   yourself.

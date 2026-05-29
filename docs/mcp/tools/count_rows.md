@@ -12,11 +12,11 @@ count.
 
 ## Input schema
 
-| Parameter   | Type   | Required? | Default | Description                                                                        |
-|-------------|--------|-----------|---------|------------------------------------------------------------------------------------|
-| `path`      | string | yes       | —       | Path to the file                                                                   |
-| `table`     | string | no        | —       | Specific table for multi-table sources                                             |
-| `unlimited` | bool   | no        | `false` | Lift the 5,000,000-row file-loader cap so the count reflects every row in the file |
+| Parameter   | Type   | Required? | Default      | Description                                                                        |
+|-------------|--------|-----------|--------------|------------------------------------------------------------------------------------|
+| `path`      | string | yes       | (no default) | Path to the file                                                                   |
+| `table`     | string | no        | (no default) | Specific table for multi-table sources                                             |
+| `unlimited` | bool   | no        | `false`      | Lift the 5,000,000-row file-loader cap so the count reflects every row in the file |
 
 ## Response shape
 

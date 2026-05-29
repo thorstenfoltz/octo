@@ -5,7 +5,7 @@ for git-style line-by-line diffs, and **Row Hash Diff** for
 column-aware row-level comparison. Both work across formats, so you
 can compare a CSV to a Parquet by hashing matching columns.
 
-<!-- SCREENSHOT: compare-view-text-diff.png — Compare view in Text Diff mode. Two panes side-by-side with line numbers, +/-/~ markers in the gutter, added lines in green, removed in red, modified in yellow. -->
+<!-- SCREENSHOT: compare-view-text-diff.png: Compare view in Text Diff mode. Two panes side-by-side with line numbers, +/-/~ markers in the gutter, added lines in green, removed in red, modified in yellow. -->
 ![Compare view: Text Diff](../../assets/screenshots/compare-view-text-diff.png){ .screenshot-placeholder }
 
 ## Three ways to start a comparison
@@ -54,13 +54,13 @@ The default sub-mode picks itself based on inputs:
   - `-` for a line removed (present on the left only).
   - blank for unchanged.
 - A **500 ms timeout** kicks in against pathological inputs (the
-  diff algorithm has O(n²) worst-case): if the diff doesn't
+  diff algorithm has O(n²) worst-case). If the diff doesn't
   complete in time, Octa shows a *"diff too complex"* banner with a
   fallback to "first 100 lines of each."
 
 ## Row Hash Diff
 
-<!-- SCREENSHOT: compare-view-row-hash.png — Compare view in Row Hash Diff mode.
+<!-- SCREENSHOT: compare-view-row-hash.png: Compare view in Row Hash Diff mode.
 Three collapsible buckets visible: Left-only, Right-only, Shared. The Shared
 bucket is expanded showing actual cell content (e.g. 5 matched rows). A
 column-picker panel showing checkboxes for which columns to hash. -->
